@@ -1,7 +1,9 @@
 services:
   whoami:
     image: "traefik/whoami"
-    container_name: whoami_app
+    container_name: {{CONTAINER_NAME}}
+    labels:
+      - "snadboy.revp.80.domain={{DOMAIN_80}}.isnadboy.com"
     ports:
-      - "8000:80" # Exposes port 8000 on the host, mapping to port 80 in the container
+      - "{{PORT_80}}:80" # Exposes port {{PORT_80}} on the host to port 80 in the container
     restart: unless-stopped

@@ -6,6 +6,8 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
+    labels:
+      - snadboy.revp.7655=pulse-proxmox.isnadboy.com
     # environment:
       # NOTE: Env vars override UI settings. Remove env var to allow UI configuration.
       

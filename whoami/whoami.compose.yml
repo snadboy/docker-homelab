@@ -1,0 +1,7 @@
+services:
+  whoami:
+    image: "traefik/whoami"
+    container_name: whoami_app
+    ports:
+      - "8000:80" # Exposes port 8000 on the host, mapping to port 80 in the container
+    restart: unless-stopped

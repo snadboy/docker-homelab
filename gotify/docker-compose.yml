@@ -1,0 +1,14 @@
+services:
+  gotify:
+    image: gotify/server
+    container_name: gotify
+    ports:
+      - 8083:80
+    labels:
+      - snadboy.revp.80.domain=gotify.isnadboy.com,gotify.snadboy.com
+    environment:
+      - GOTIFY_DEFAULTUSER_PASS=${GOTIFY_DEFAULTUSER_PASS:-appleButter}
+    volumes:
+      - /mnt/docker/fabric/service-data/gotify/app-data:/app/data
+    restart: unless-stopped
+networks: {}

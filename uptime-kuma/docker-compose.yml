@@ -1,0 +1,14 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    labels:
+      - snadboy.revp.3001.domain=uptime-kuma.isnadboy.com
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/docker/fabric/service-data/uptime-kuma/app-data:/app/data
+    ports:
+      - 3001:3001 # <Host Port>:<Container Port>
+    restart: unless-stopped
+networks: {}

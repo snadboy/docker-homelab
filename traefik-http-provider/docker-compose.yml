@@ -85,8 +85,8 @@ services:
       - sb-traefik-http-provider
     environment:
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}  # IMPORTANT: Set in .env file or environment
-    env_file:
-      - .env  # Contains CF_DNS_API_TOKEN
+    # env_file:
+    #   - .env  # Contains CF_DNS_API_TOKEN
     labels:
       - "snadboy.revp.8080.domain=traefik.isnadboy.com"
     volumes:

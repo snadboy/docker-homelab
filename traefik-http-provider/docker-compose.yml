@@ -34,17 +34,19 @@ services:
       start_period: 40s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - type: volume
-        source: nas-data
-        target: /app/config
-        read_only: true
-        volume:
-          subpath: sb-traefik-http-provider/config
-      - type: volume
-        source: nas-data
-        target: /app/logs
-        volume:
-          subpath: sb-traefik-http-provider/logs
+      - /mnt/docker/traefik-http-provider/http-provider/config:/app/config
+      - /mnt/docker/traefik-http-provider/http-provider/logs:/app/logs
+      # - type: volume
+      #   source: nas-data
+      #   target: /app/config
+      #   read_only: true
+      #   volume:
+      #     subpath: sb-traefik-http-provider/config
+      # - type: volume
+      #   source: nas-data
+      #   target: /app/logs
+      #   volume:
+      #     subpath: sb-traefik-http-provider/logs
 
   # Traefik Instance
   traefik:
@@ -89,11 +91,12 @@ services:
       - "snadboy.revp.8080.domain=traefik.isnadboy.com"
     volumes:
       # - /var/run/docker.sock:/var/run/docker.sock:ro  #   Not needed unless using Docker provider
-      - type: volume
-        source: nas-data
-        target: /etc/traefik/dynamic
-        volume:
-          subpath: traefik/traefik-dynamic
+      - /nnt/docker/traefik/traefik-dynamic:/etc/traefik/dynamic
+      # - type: volume
+      #   source: nas-data
+      #   target: /etc/traefik/dynamic
+      #   volume:
+      #     subpath: traefik/traefik-dynamic
           
       # IMPORTANT: Let's Encrypt storage must be local (not NAS) for permissions
       - letsencrypt-data:/letsencrypt
@@ -105,8 +108,8 @@ services:
       start_period: 40s
 
 volumes:
-  nas-data:
-    external: true  # Created by volume-init-compose.yml
+  # nas-data:
+  #   external: true  # Created by volume-init-compose.yml
   letsencrypt-data:
     driver: local  # Local Docker volume for Let's Encrypt certificates
     # Note: Certificates stored locally, not on NAS, due to ACME permission requirements

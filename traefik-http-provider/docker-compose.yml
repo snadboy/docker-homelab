@@ -6,28 +6,30 @@ services:
     restart: unless-stopped
     # Docker will use host DNS configuration which includes Tailscale MagicDNS
     ports:
-      - "8081:8080"  # Expose provider API
+      - "8081:8080" # Expose provider API
     networks:
       - traefik
     environment:
       - LOG_LEVEL=INFO
       - LOG_DIR=/var/log/sb-traefik-provider
-      - LOG_JSON=false  # Set to true for JSON logging
+      - LOG_JSON=false # Set to true for JSON logging
       - PYTHONUNBUFFERED=1
-      - WORKERS=1  # Must use 1 worker with event listeners to avoid duplicates
+      - WORKERS=1 # Must use 1 worker with event listeners to avoid duplicates
       # DNS Health Check (optional)
-      - DNS_HEALTH_CHECK_ENABLED=false  # Set to true to enable
+      - DNS_HEALTH_CHECK_ENABLED=false # Set to true to enable
       - DNS_CHECK_NAME=sonarr.isnadboy.com
       - DNS_CHECK_NS_TS=100.65.231.21
       - DNS_CHECK_NS_LAN=192.168.86.76
       # - DNS_CHECK_ADMIN_URL=https://dns.isnadboy.com
       # Healthchecks.io Monitoring (optional)
-      - HEALTHCHECKS_ENABLED=false  # Set to true to enable Healthchecks.io monitoring
+      - HEALTHCHECKS_ENABLED=false # Set to true to enable Healthchecks.io monitoring
       # - HEALTHCHECKS_PING_URL=https://hc-ping.com/your-uuid-here
     labels:
-      - "snadboy.revp.8080.domain=sb-traefik-http-provider-api.isnadboy.com"
+      - "snadboy.revp.8080.domain.1=sb-traefik-http-provider-api.isnadboy.com"
+      - "snadboy.revp.8080.domain.2=sb-traefik-http-provider-dashboardsnadboy.com"
+      - "snadboy.revp.8080.backend-path.2=/static"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,7 +50,7 @@ services:
       #   volume:
       #     subpath: sb-traefik-http-provider/logs
 
-  # Traefik Instance
+      # Traefik Instance
   traefik:
     image: traefik:v3.2
     container_name: traefik
@@ -61,7 +63,7 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--providers.http.endpoint=http://sb-traefik-http-provider:8080/api/traefik/config"
       - "--providers.http.pollInterval=30s"
-      - "--providers.docker=false"  # Disable Docker provider since we use HTTP provider
+      - "--providers.docker=false" # Disable Docker provider since we use HTTP provider
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--log.level=INFO"
@@ -78,13 +80,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Traefik dashboard
+      - "8080:8080" # Traefik dashboard
     networks:
       - traefik
     depends_on:
       - sb-traefik-http-provider
     environment:
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}  # IMPORTANT: Set in .env file or environment
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # IMPORTANT: Set in .env file or environment
     # env_file:
     #   - .env  # Contains CF_DNS_API_TOKEN
     labels:
@@ -97,11 +99,11 @@ services:
       #   target: /etc/traefik/dynamic
       #   volume:
       #     subpath: traefik/traefik-dynamic
-          
+
       # IMPORTANT: Let's Encrypt storage must be local (not NAS) for permissions
       - letsencrypt-data:/letsencrypt
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/ping"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -111,7 +113,7 @@ volumes:
   # nas-data:
   #   external: true  # Created by volume-init-compose.yml
   letsencrypt-data:
-    driver: local  # Local Docker volume for Let's Encrypt certificates
+    driver: local # Local Docker volume for Let's Encrypt certificates
     # Note: Certificates stored locally, not on NAS, due to ACME permission requirements
 
 networks:

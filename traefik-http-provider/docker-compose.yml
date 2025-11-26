@@ -26,7 +26,7 @@ services:
       # - HEALTHCHECKS_PING_URL=https://hc-ping.com/your-uuid-here
     labels:
       - "snadboy.revp.8080.domain.1=sb-traefik-http-provider-api.isnadboy.com"
-      - "snadboy.revp.8080.domain.2=sb-traefik-http-provider-dashboardsnadboy.com"
+      - "snadboy.revp.8080.domain.2=sb-traefik-http-provider-dashboard.isnadboy.com"
       - "snadboy.revp.8080.backend-path.2=/static"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]

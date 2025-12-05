@@ -2,7 +2,7 @@ services:
   zigbee2mqtt-office:
     container_name: zigbee2mqtt-office
     labels:
-      - snadboy.revp.8080.domain=zigbee2mqtt-office.isnadboy.com
+      - "snadboy.revp.8080.domain=zigbee2mqtt-office.isnadboy.com"
     image: koenkk/zigbee2mqtt
     restart: unless-stopped
     volumes:

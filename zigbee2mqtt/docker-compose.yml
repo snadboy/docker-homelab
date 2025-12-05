@@ -1,0 +1,17 @@
+services:
+  zigbee2mqtt-office:
+    container_name: zigbee2mqtt-office
+    labels:
+      - snadboy.revp.8080.domain=zigbee2mqtt-office.isnadboy.com
+    image: koenkk/zigbee2mqtt
+    restart: unless-stopped
+    volumes:
+      - /home/snadboy/docker/volume/zigbee2mqtt-office/app-data:/app/data
+      # - /run/udev:/run/udev:ro
+      # network_mode: host
+    ports:
+      # Frontend port
+      - 8081:8080
+    environment:
+      - TZ=America/Chicago
+networks: {}

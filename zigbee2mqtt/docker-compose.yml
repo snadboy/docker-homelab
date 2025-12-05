@@ -6,7 +6,7 @@ services:
     image: koenkk/zigbee2mqtt
     restart: unless-stopped
     volumes:
-      - /home/snadboy/docker/volume/zigbee2mqtt-office/app-data:/app/data
+      - /mnt/docker/zigbee2mqtt/office/app-data:/app/data
       # - /run/udev:/run/udev:ro
       # network_mode: host
     ports:

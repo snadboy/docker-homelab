@@ -14,4 +14,9 @@ services:
       - 8082:8080
     environment:
       - TZ=America/Chicago
-networks: {}
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true

@@ -1,14 +1,14 @@
 services:
   # SB Traefik HTTP Provider Service
   sb-traefik-http-provider:
-    image: ghcr.io/snadboy/sb-traefik-http-provider:latest
+    image: ghcr.io/snadboy/sb-traefik-http-provider:${HTTP_PROVIDER_TAG:-latest}
     container_name: sb-traefik-http-provider
     restart: unless-stopped
     # Docker will use host DNS configuration which includes Tailscale MagicDNS
     ports:
       - "8081:8080" # Expose provider API
     networks:
-      - traefik
+      - ${TRAEFIK_NETWORK:-traefik}
     environment:
       - LOG_LEVEL=INFO
       - LOG_DIR=/var/log/sb-traefik-provider
@@ -50,7 +50,7 @@ services:
 
       # Traefik Instance
   traefik:
-    image: traefik:v3.2
+    image: traefik:${TRAEFIK_TAG:-v3.2}
     container_name: traefik
     restart: unless-stopped
     command:
@@ -80,7 +80,7 @@ services:
       - "443:443"
       - "8080:8080" # Traefik dashboard
     networks:
-      - traefik
+      - ${TRAEFIK_NETWORK:-traefik}
     depends_on:
       - sb-traefik-http-provider
     environment:
@@ -117,4 +117,4 @@ volumes:
 networks:
   traefik:
     driver: bridge
-    name: traefik
+    name: ${TRAEFIK_NETWORK:-traefik}

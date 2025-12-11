@@ -116,5 +116,5 @@ volumes:
 
 networks:
   traefik:
-    driver: bridge
+    external: true
     name: ${TRAEFIK_NETWORK:-traefik}

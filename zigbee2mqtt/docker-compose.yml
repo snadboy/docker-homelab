@@ -3,7 +3,8 @@ services:
     container_name: "${Z2M_NAME:-zigbee2mqtt}"
     hostname: "${Z2M_NAME:-zigbee2mqtt}"
     labels:
-      - "snadboy.revp.${Z2M_PORT:-8080}.domain=${Z2M_NAME:-zigbee2mqtt}.isnadboy.com"
+      # revp uses container's internal port (always 8080), Z2M_PORT is only for host mapping
+      - "snadboy.revp.8080.domain=${Z2M_NAME:-zigbee2mqtt}.isnadboy.com"
     image: koenkk/zigbee2mqtt
     restart: unless-stopped
     volumes:

@@ -1,8 +1,8 @@
 services:
-  zigbee2mqtt-office:
-    container_name: zigbee2mqtt-office
+  ${Z2M_NAME:-zigbee2mqtt}:
+    container_name: ${Z2M_NAME:-zigbee2mqtt}
     labels:
-      - "snadboy.revp.8080.domain=zigbee2mqtt-office.isnadboy.com"
+      - "snadboy.revp.${Z2M_PORT:-8080}.domain=${Z2M_NAME:-zigbee2mqtt}.isnadboy.com"
     image: koenkk/zigbee2mqtt
     restart: unless-stopped
     volumes:
@@ -11,7 +11,7 @@ services:
       # network_mode: host
     ports:
       # Frontend port
-      - 8082:8080
+      - ${Z2M_PORT:-8080}:8080
     environment:
       - TZ=America/Chicago
     networks:
@@ -20,3 +20,4 @@ services:
 networks:
   traefik:
     external: true
+    

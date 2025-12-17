@@ -3,7 +3,7 @@ services:
     image: louislam/uptime-kuma:latest
     container_name: uptime-kuma
     labels:
-      - snadboy.revp.3001.domain=uptime-kuma.isnadboy.com
+      - "snadboy.revp.3001.domain=uptime-kuma.isnadboy.com"
     environment:
       - TZ=America/Chicago
     user: "1000:1000"
@@ -13,4 +13,10 @@ services:
     ports:
       - 3001:3001 # <Host Port>:<Container Port>
     restart: unless-stopped
-networks: {}
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-bridge}
+    external: ${NETWORK_EXTERNAL:-false}

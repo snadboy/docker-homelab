@@ -6,8 +6,10 @@ services:
       - snadboy.revp.3001.domain=uptime-kuma.isnadboy.com
     environment:
       - TZ=America/Chicago
+    user: "1000:1000"
+    entrypoint: ["/usr/bin/dumb-init", "--", "node", "server/server.js"]
     volumes:
-      - /mnt/docker/fabric/service-data/uptime-kuma/app-data:/app/data
+      - /mnt/docker/uptime-kuma/app-data:/app/data
     ports:
       - 3001:3001 # <Host Port>:<Container Port>
     restart: unless-stopped

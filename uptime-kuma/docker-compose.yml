@@ -18,5 +18,5 @@ services:
 
 networks:
   app_network:
-    name: ${NETWORK_NAME:-bridge}
+    name: ${NETWORK_NAME:-uptime-kuma_default}
     external: ${NETWORK_EXTERNAL:-false}

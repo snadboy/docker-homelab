@@ -3,7 +3,7 @@ services:
     image: gotify/server
     container_name: gotify
     ports:
-      - 8083:80
+      - 8084:80
     labels:
       - "snadboy.revp.80.domain=gotify.isnadboy.com,gotify.snadboy.com"
     environment:
@@ -19,3 +19,4 @@ networks:
   app_network:
     name: ${NETWORK_NAME:-gotify_default}
     external: ${NETWORK_EXTERNAL:-false}
+

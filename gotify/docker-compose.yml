@@ -9,14 +9,36 @@ services:
     environment:
       - TZ=America/Chicago
       - GOTIFY_DEFAULTUSER_PASS=${GOTIFY_DEFAULTUSER_PASS:-appleButter}
+      - GOTIFY_DATABASE_DIALECT=postgres
+      - GOTIFY_DATABASE_CONNECTION=host=gotify-db port=5432 user=${POSTGRES_USER:-gotify} dbname=${POSTGRES_DB:-gotify} password=${POSTGRES_PASSWORD} sslmode=disable
     volumes:
       - /mnt/docker/gotify/app-data:/app/data
     restart: unless-stopped
     networks:
       - app_network
+    depends_on:
+      gotify-db:
+        condition: service_healthy
+
+  gotify-db:
+    image: postgres:16-alpine
+    container_name: gotify-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-gotify}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-gotify}
+    volumes:
+      - /mnt/docker/gotify/postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gotify} -d ${POSTGRES_DB:-gotify}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
   app_network:
     name: ${NETWORK_NAME:-gotify_default}
     external: ${NETWORK_EXTERNAL:-false}
-

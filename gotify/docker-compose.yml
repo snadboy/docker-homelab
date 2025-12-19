@@ -22,3 +22,5 @@ networks:
 
 volumes:
   gotify-data:
+    external: true
+    name: gotify_gotify-data

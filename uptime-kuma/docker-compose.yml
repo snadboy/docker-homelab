@@ -9,12 +9,19 @@ services:
     user: "1000:1000"
     entrypoint: ["/usr/bin/dumb-init", "--", "node", "server/server.js"]
     volumes:
-      - /mnt/docker/uptime-kuma/app-data:/app/data
+      # Use named volume for SQLite - CIFS/network storage causes locking issues
+      - uptime-kuma-data:/app/data
     ports:
       - 3001:3001 # <Host Port>:<Container Port>
     restart: unless-stopped
     networks:
       - app_network
+
+volumes:
+  uptime-kuma-data:
+    driver: local
+    # Data stored locally for reliable SQLite file locking
+    # Backup to NAS separately if needed
 
 networks:
   app_network:

@@ -1,0 +1,24 @@
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    labels:
+      - "snadboy.revp.8989.domain=sonarr.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/docker/sonarr/config:/config
+      - /mnt/media/TV Shows:/tv
+      - /mnt/docker/downloads:/downloads
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-sonarr_default}
+    external: ${NETWORK_EXTERNAL:-false}

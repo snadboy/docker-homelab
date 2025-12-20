@@ -1,0 +1,23 @@
+services:
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    labels:
+      - "snadboy.revp.8080.domain=sabnzbd.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/docker/sabnzbd/config:/config
+      - /mnt/media/downloads:/downloads
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-sabnzbd_default}
+    external: ${NETWORK_EXTERNAL:-false}

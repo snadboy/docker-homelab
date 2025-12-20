@@ -1,0 +1,24 @@
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    labels:
+      - "snadboy.revp.7878.domain=radarr.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/docker/radarr/config:/config
+      - /mnt/media/Movies:/movies
+      - /mnt/docker/downloads:/downloads
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-radarr_default}
+    external: ${NETWORK_EXTERNAL:-false}

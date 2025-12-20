@@ -10,7 +10,7 @@ services:
       - TZ=America/Chicago
     volumes:
       - /mnt/docker/sabnzbd/config:/config
-      - /mnt/media/downloads:/downloads
+      - /mnt/docker/downloads:/downloads
     ports:
       - 8080:8080
     restart: unless-stopped

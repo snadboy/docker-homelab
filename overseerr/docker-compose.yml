@@ -1,14 +1,15 @@
 services:
   overseerr:
-    image: sctx/overseerr:latest
+    image: lscr.io/linuxserver/overseerr:latest
     container_name: overseerr
     labels:
       - "snadboy.revp.5055.domain=overseerr.isnadboy.com"
     environment:
+      - PUID=1000
+      - PGID=1000
       - TZ=America/Chicago
-      - LOG_LEVEL=info
     volumes:
-      - /mnt/docker/overseerr/config:/app/config
+      - /mnt/docker/overseerr/config:/config
     ports:
       - 5055:5055
     restart: unless-stopped

@@ -9,7 +9,7 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/docker/radarr/config:/config
+      - radarr-data:/config
       - /mnt/media/Movies:/movies
       - /mnt/docker/downloads:/downloads
     ports:
@@ -17,6 +17,10 @@ services:
     restart: unless-stopped
     networks:
       - app_network
+
+volumes:
+  radarr-data:
+    external: true
 
 networks:
   app_network:

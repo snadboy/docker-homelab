@@ -9,7 +9,7 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/docker/sonarr/config:/config
+      - sonarr-data:/config
       - /mnt/media/TV Shows:/tv
       - /mnt/docker/downloads:/downloads
     ports:
@@ -17,6 +17,10 @@ services:
     restart: unless-stopped
     networks:
       - app_network
+
+volumes:
+  sonarr-data:
+    external: true
 
 networks:
   app_network:

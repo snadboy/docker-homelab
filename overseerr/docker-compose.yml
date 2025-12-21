@@ -1,0 +1,21 @@
+services:
+  overseerr:
+    image: sctx/overseerr:latest
+    container_name: overseerr
+    labels:
+      - "snadboy.revp.5055.domain=overseerr.isnadboy.com"
+    environment:
+      - TZ=America/Chicago
+      - LOG_LEVEL=info
+    volumes:
+      - /mnt/docker/overseerr/config:/app/config
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-overseerr_default}
+    external: ${NETWORK_EXTERNAL:-false}

@@ -1,0 +1,13 @@
+services:
+  cloudflare-overseerr:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare-overseerr
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-cloudflare-overseerr_default}
+    external: ${NETWORK_EXTERNAL:-false}

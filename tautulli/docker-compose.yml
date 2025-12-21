@@ -1,0 +1,22 @@
+services:
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    labels:
+      - "snadboy.revp.8181.domain=tautulli.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/docker/tautulli/config:/config
+    ports:
+      - 8181:8181
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-tautulli_default}
+    external: ${NETWORK_EXTERNAL:-false}

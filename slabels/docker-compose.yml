@@ -1,0 +1,23 @@
+services:
+  slabels:
+    image: ghcr.io/snadboy/slabels
+    container_name: slabels
+    labels:
+      - "snadboy.revp.8000.domain=slabels.isnadboy.com"
+    environment:
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - SONARR_URL=${SONARR_URL}
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - MAX_THREADS=5
+      - SYNC_INTERVAL_MINS=15
+    ports:
+      - 8400:8000
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-slabels_default}
+    external: ${NETWORK_EXTERNAL:-false}

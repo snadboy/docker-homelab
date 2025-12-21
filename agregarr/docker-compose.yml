@@ -5,12 +5,16 @@ services:
     labels:
       - "snadboy.revp.7171.domain=agregarr.isnadboy.com"
     volumes:
-      - /mnt/docker/agregarr/config:/app/config
+      - agregarr-data:/app/config
     ports:
       - 7171:7171
     restart: unless-stopped
     networks:
       - app_network
+
+volumes:
+  agregarr-data:
+    external: true
 
 networks:
   app_network:

@@ -9,12 +9,16 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/docker/overseerr/config:/config
+      - overseerr-data:/config
     ports:
       - 5055:5055
     restart: unless-stopped
     networks:
       - app_network
+
+volumes:
+  overseerr-data:
+    external: true
 
 networks:
   app_network:

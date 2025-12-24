@@ -34,8 +34,8 @@ services:
       start_period: 40s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /mnt/docker/traefik-http-provider/http-provider/config:/app/config
-      - /mnt/docker/traefik-http-provider/http-provider/logs:/app/logs
+      - traefik-http-provider-config:/app/config
+      - traefik-http-provider-logs:/app/logs
       # - type: volume
       #   source: nas-data
       #   target: /app/config
@@ -108,8 +108,10 @@ services:
       start_period: 40s
 
 volumes:
-  # nas-data:
-  #   external: true  # Created by volume-init-compose.yml
+  traefik-http-provider-config:
+    external: true
+  traefik-http-provider-logs:
+    external: true
   letsencrypt-data:
     driver: local # Local Docker volume for Let's Encrypt certificates
     # Note: Certificates stored locally, not on NAS, due to ACME permission requirements

@@ -4,11 +4,7 @@ services:
     image: ghcr.io/snadboy/sb-traefik-http-provider:${HTTP_PROVIDER_TAG:-latest}
     container_name: sb-traefik-http-provider
     restart: unless-stopped
-    # Docker will use host DNS configuration which includes Tailscale MagicDNS
-    ports:
-      - "8081:8080" # Expose provider API
-    networks:
-      - ${TRAEFIK_NETWORK:-traefik}
+    network_mode: host
     environment:
       - LOG_LEVEL=INFO
       - LOG_DIR=/var/log/sb-traefik-provider
@@ -36,32 +32,20 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-http-provider-config:/app/config
       - traefik-http-provider-logs:/app/logs
-      # - type: volume
-      #   source: nas-data
-      #   target: /app/config
-      #   read_only: true
-      #   volume:
-      #     subpath: sb-traefik-http-provider/config
-      # - type: volume
-      #   source: nas-data
-      #   target: /app/logs
-      #   volume:
-      #     subpath: sb-traefik-http-provider/logs
 
-      # Traefik Instance
+  # Traefik Instance
   traefik:
     image: traefik:${TRAEFIK_TAG:-v3.2}
     container_name: traefik
     restart: unless-stopped
-    dns:
-      - 192.168.86.76  # Technitium DNS - bypasses Tailscale MagicDNS issues
+    network_mode: host
     command:
       - "--api=true"
       - "--api.dashboard=true"
       - "--api.insecure=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--providers.http.endpoint=http://sb-traefik-http-provider:8080/api/traefik/config"
+      - "--providers.http.endpoint=http://localhost:8080/api/traefik/config"
       - "--providers.http.pollInterval=30s"
       - "--providers.docker=false" # Disable Docker provider since we use HTTP provider
       - "--providers.file.directory=/etc/traefik/dynamic"
@@ -77,29 +61,14 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory"
       # Uncomment for testing with staging:
       # - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080" # Traefik dashboard
-    networks:
-      - ${TRAEFIK_NETWORK:-traefik}
     depends_on:
       - sb-traefik-http-provider
     environment:
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # IMPORTANT: Set in .env file or environment
-    # env_file:
-    #   - .env  # Contains CF_DNS_API_TOKEN
     labels:
       - "snadboy.revp.8080.domain=traefik.isnadboy.com"
     volumes:
-      # - /var/run/docker.sock:/var/run/docker.sock:ro  #   Not needed unless using Docker provider
       - /nnt/docker/traefik/traefik-dynamic:/etc/traefik/dynamic
-      # - type: volume
-      #   source: nas-data
-      #   target: /etc/traefik/dynamic
-      #   volume:
-      #     subpath: traefik/traefik-dynamic
-
       # IMPORTANT: Let's Encrypt storage must be local (not NAS) for permissions
       - letsencrypt-data:/letsencrypt
     healthcheck:
@@ -116,9 +85,4 @@ volumes:
     external: true
   letsencrypt-data:
     driver: local # Local Docker volume for Let's Encrypt certificates
-    # Note: Certificates stored locally, not on NAS, due to ACME permission requirements
 
-networks:
-  traefik:
-    external: true
-    name: ${TRAEFIK_NETWORK:-traefik}

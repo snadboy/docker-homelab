@@ -1,0 +1,24 @@
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+      - VERSION=docker
+    volumes:
+      - plex-config:/config
+      - plex-transcode:/transcode
+      - /mnt/multimedia/Movies:/movies:ro
+      - /mnt/multimedia/TV:/tv:ro
+
+volumes:
+  plex-config:
+    external: true
+  plex-transcode:
+    external: true

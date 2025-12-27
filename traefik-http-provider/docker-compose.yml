@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
+      - PORT=8081  # Avoid conflict with Traefik dashboard on 8080
       - LOG_LEVEL=INFO
       - LOG_DIR=/var/log/sb-traefik-provider
       - LOG_JSON=false # Set to true for JSON logging
@@ -21,9 +22,9 @@ services:
       - HEALTHCHECKS_ENABLED=false # Set to true to enable Healthchecks.io monitoring
       # - HEALTHCHECKS_PING_URL=https://hc-ping.com/your-uuid-here
     labels:
-      - "snadboy.revp.8080.domain=sb-traefik.isnadboy.com"
+      - "snadboy.revp.8081.domain=sb-traefik.isnadboy.com"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -45,7 +46,7 @@ services:
       - "--api.insecure=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--providers.http.endpoint=http://localhost:8080/api/traefik/config"
+      - "--providers.http.endpoint=http://localhost:8081/api/traefik/config"
       - "--providers.http.pollInterval=30s"
       - "--providers.docker=false" # Disable Docker provider since we use HTTP provider
       - "--providers.file.directory=/etc/traefik/dynamic"

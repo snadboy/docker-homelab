@@ -12,13 +12,6 @@ services:
     volumes:
       - gotify-data:/app/data
     restart: unless-stopped
-    networks:
-      - app_network
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-gotify_default}
-    external: ${NETWORK_EXTERNAL:-false}
 
 volumes:
   gotify-data:

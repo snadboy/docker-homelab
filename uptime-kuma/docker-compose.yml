@@ -14,16 +14,9 @@ services:
     ports:
       - 3001:3001 # <Host Port>:<Container Port>
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   uptime-kuma-data:
     external: true
     # Pre-created volume for SQLite - CIFS/network storage causes locking issues
     # Create with: docker volume create uptime-kuma-data
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-uptime-kuma_default}
-    external: ${NETWORK_EXTERNAL:-false}

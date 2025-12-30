@@ -16,9 +16,3 @@ services:
       - "${Z2M_PORT:-8080}:8080"
     environment:
       - TZ=America/Chicago
-    networks:
-      - traefik
-
-networks:
-  traefik:
-    external: true

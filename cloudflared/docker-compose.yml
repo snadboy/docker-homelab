@@ -6,10 +6,3 @@ services:
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     restart: unless-stopped
-    networks:
-      - app_network
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-cloudflared_default}
-    external: ${NETWORK_EXTERNAL:-false}

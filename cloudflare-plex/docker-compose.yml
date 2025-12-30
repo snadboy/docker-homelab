@@ -4,10 +4,3 @@ services:
     container_name: cloudflare-plex
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     restart: unless-stopped
-    networks:
-      - app_network
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-cloudflare-plex_default}
-    external: ${NETWORK_EXTERNAL:-false}

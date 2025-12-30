@@ -4,7 +4,8 @@ services:
     image: ghcr.io/snadboy/sb-traefik-http-provider:${HTTP_PROVIDER_TAG:-latest}
     container_name: sb-traefik-http-provider
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - traefik
     environment:
       - LOG_LEVEL=INFO
       - LOG_DIR=/var/log/sb-traefik-provider
@@ -38,7 +39,12 @@ services:
     image: traefik:${TRAEFIK_TAG:-v3.2}
     container_name: traefik
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8088:8088"
     command:
       - "--api=true"
       - "--api.dashboard=true"
@@ -46,7 +52,7 @@ services:
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.traefik.address=:8088"
-      - "--providers.http.endpoint=http://localhost:8080/api/traefik/config"
+      - "--providers.http.endpoint=http://sb-traefik-http-provider:8080/api/traefik/config"
       - "--providers.http.pollInterval=30s"
       - "--providers.docker=false" # Disable Docker provider since we use HTTP provider
       - "--providers.file.directory=/etc/traefik/dynamic"
@@ -78,6 +84,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  traefik:
+    external: true
 
 volumes:
   traefik-http-provider-config:

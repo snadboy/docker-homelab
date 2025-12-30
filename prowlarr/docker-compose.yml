@@ -13,14 +13,7 @@ services:
     ports:
       - 9696:9696
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   prowlarr-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-prowlarr_default}
-    external: ${NETWORK_EXTERNAL:-false}

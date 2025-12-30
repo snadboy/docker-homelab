@@ -13,14 +13,7 @@ services:
     ports:
       - 5055:5055
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   overseerr-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-overseerr_default}
-    external: ${NETWORK_EXTERNAL:-false}

@@ -14,14 +14,7 @@ services:
     ports:
       - 8080:8080
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   sabnzbd-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-sabnzbd_default}
-    external: ${NETWORK_EXTERNAL:-false}

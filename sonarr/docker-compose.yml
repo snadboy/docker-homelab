@@ -15,14 +15,7 @@ services:
     ports:
       - 8989:8989
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   sonarr-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-sonarr_default}
-    external: ${NETWORK_EXTERNAL:-false}

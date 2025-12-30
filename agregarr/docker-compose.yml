@@ -9,14 +9,7 @@ services:
     ports:
       - 7171:7171
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   agregarr-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-agregarr_default}
-    external: ${NETWORK_EXTERNAL:-false}

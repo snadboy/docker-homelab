@@ -13,14 +13,7 @@ services:
     ports:
       - 8181:8181
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   tautulli-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-tautulli_default}
-    external: ${NETWORK_EXTERNAL:-false}

@@ -15,14 +15,7 @@ services:
     ports:
       - 7878:7878
     restart: unless-stopped
-    networks:
-      - app_network
 
 volumes:
   radarr-data:
     external: true
-
-networks:
-  app_network:
-    name: ${NETWORK_NAME:-radarr_default}
-    external: ${NETWORK_EXTERNAL:-false}

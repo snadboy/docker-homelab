@@ -16,4 +16,3 @@ services:
 volumes:
   gotify-data:
     external: true
-    name: gotify-data

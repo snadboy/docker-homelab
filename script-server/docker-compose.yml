@@ -2,6 +2,8 @@ services:
   script-server:
     image: bugy/script-server:latest
     container_name: script-server
+    labels:
+      - "snadboy.revp.5000.domain=script-server.isnadboy.com"
     environment:
       - PUID=1000
       - PGID=1000
@@ -14,4 +16,6 @@ services:
 
 volumes:
   script-server-config:
+    external: true
   script-server-scripts:
+    external: true

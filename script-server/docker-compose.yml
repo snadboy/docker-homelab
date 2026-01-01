@@ -1,0 +1,17 @@
+services:
+  script-server:
+    image: bugy/script-server:latest
+    container_name: script-server
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - script-server-config:/app/conf
+      - script-server-scripts:/app/scripts
+    ports:
+      - '5000:5000'
+    restart: unless-stopped
+
+volumes:
+  script-server-config:
+  script-server-scripts:

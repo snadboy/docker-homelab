@@ -1,0 +1,6 @@
+{
+  "name": "Portainer Backup to Google Drive",
+  "script_path": "/app/scripts/venv/bin/python /app/scripts/portainer_backup.py",
+  "description": "Exports all Portainer stacks and uploads to Google Drive",
+  "group": "Backups"
+}

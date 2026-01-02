@@ -1,0 +1,6 @@
+{
+  "name": "Sample - Pandas (Metrics Analysis)",
+  "script_path": "/app/scripts/venv/bin/python /app/scripts/sample_pandas.py",
+  "description": "Analyzes sample server metrics data using pandas and numpy",
+  "group": "Sample Scripts"
+}

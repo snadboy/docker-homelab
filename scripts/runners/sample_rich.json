@@ -1,0 +1,6 @@
+{
+  "name": "Sample - Rich (System Info)",
+  "script_path": "/app/scripts/venv/bin/python /app/scripts/sample_rich.py",
+  "description": "Displays formatted system information using the rich library",
+  "group": "Sample Scripts"
+}

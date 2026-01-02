@@ -1,0 +1,6 @@
+{
+  "name": "Sample - Requests (Joke Fetcher)",
+  "script_path": "/app/scripts/venv/bin/python /app/scripts/sample_requests.py",
+  "description": "Fetches a random joke from an API using the requests library",
+  "group": "Sample Scripts"
+}

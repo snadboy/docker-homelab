@@ -1,0 +1,20 @@
+services:
+  actual-budget:
+    image: actualbudget/actual-server:latest
+    container_name: actual-budget
+    labels:
+      - "snadboy.revp.5006.domain=actual.isnadboy.com"
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      # Use named volume for SQLite - CIFS/network storage causes locking issues
+      - actual-budget-data:/data
+    ports:
+      - 5006:5006
+    restart: unless-stopped
+
+volumes:
+  actual-budget-data:
+    external: true
+    # Pre-created volume for SQLite - CIFS/network storage causes locking issues
+    # Create with: docker volume create actual-budget-data

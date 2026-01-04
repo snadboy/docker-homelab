@@ -15,7 +15,7 @@ services:
       - SITE_OWNER=${SITE_OWNER}
       - APP_KEY=${APP_KEY}
       - DEFAULT_LANGUAGE=en_US
-      - DEFAULT_LOCALE=equal
+      - DEFAULT_LOCALE=en_US
       - TZ=America/Chicago
       - TRUSTED_PROXIES=**
       - LOG_CHANNEL=stack

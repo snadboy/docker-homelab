@@ -87,13 +87,16 @@ services:
     restart: unless-stopped
     depends_on:
       - firefly-iii
+      - firefly-importer
     command: >
       sh -c "
-        echo '0 5 * * * wget -qO- http://firefly-iii:8080/api/v1/cron/${STATIC_CRON_TOKEN}' | crontab - &&
+        (echo '0 5 * * * wget -qO- http://firefly-iii:8080/api/v1/cron/${STATIC_CRON_TOKEN}';
+         echo '0 6 * * * wget -qO- http://firefly-importer:8080/autoimport?secret=${AUTO_IMPORT_SECRET}') | crontab - &&
         crond -f -l 8
       "
     environment:
       - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN}
+      - AUTO_IMPORT_SECRET=${AUTO_IMPORT_SECRET}
     networks:
       - firefly-internal
 

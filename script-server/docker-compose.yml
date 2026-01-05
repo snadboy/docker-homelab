@@ -3,7 +3,7 @@ services:
     image: bugy/script-server:latest
     container_name: script-server
     labels:
-      - "snadboy.revp.5000.domain=script-server.isnadboy.com"
+      - "snadboy.revp.5000.domain=scripts-dev.snadboy.com"
     environment:
       - PUID=1000
       - PGID=1000

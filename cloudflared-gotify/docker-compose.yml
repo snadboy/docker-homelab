@@ -1,7 +1,7 @@
 services:
-  cloudflared:
+  cloudflared-gotify:
     image: cloudflare/cloudflared:latest
-    container_name: cloudflared
+    container_name: cloudflared-gotify
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}

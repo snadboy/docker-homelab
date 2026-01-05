@@ -1,7 +1,7 @@
 services:
   script-server:
     image: bugy/script-server:latest
-    container_name: script-server
+    container_name: script-server-dev
     labels:
       - "snadboy.revp.5000.domain=scripts-dev.snadboy.com"
     environment:

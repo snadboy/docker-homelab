@@ -1,0 +1,49 @@
+services:
+  autopulse:
+    image: ghcr.io/dan-online/autopulse
+    container_name: autopulse
+    labels:
+      - "snadboy.revp.2875.domain=autopulse.isnadboy.com"
+    restart: unless-stopped
+    depends_on:
+      autopulse-postgres:
+        condition: service_healthy
+    ports:
+      - 2875:2875
+    networks:
+      - db
+    volumes:
+      - autopulse-data:/app/config
+    environment:
+      - AUTOPULSE__APP__DATABASE_URL=postgres://autopulse:autopulse@autopulse-postgres/autopulse
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+
+  autopulse-postgres:
+    image: postgres:alpine
+    container_name: autopulse-postgres
+    restart: unless-stopped
+    networks:
+      - db
+    environment:
+      - POSTGRES_USER=autopulse
+      - POSTGRES_PASSWORD=autopulse
+      - POSTGRES_DB=autopulse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d autopulse -U autopulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - autopulse-db:/var/lib/postgresql/data
+
+networks:
+  db:
+    driver: bridge
+
+volumes:
+  autopulse-data:
+    external: true
+  autopulse-db:
+    external: true

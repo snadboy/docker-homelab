@@ -4,6 +4,8 @@ services:
     container_name: dockermon
     labels:
       - "snadboy.revp.3800.domain=dockermon.isnadboy.com"
+      - "snadboy.revp.3810.domain=dockermon-api.isnadboy.com"
+      - "snadboy.revp.3811.domain=dockermon-ws.isnadboy.com"
     environment:
       - PUID=1000
       - PGID=1000

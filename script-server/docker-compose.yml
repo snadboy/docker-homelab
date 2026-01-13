@@ -1,6 +1,6 @@
 services:
   script-server:
-    image: bugy/script-server:latest
+    image: ghcr.io/snadboy/script-server:latest
     container_name: script-server
     labels:
       - "snadboy.revp.5000.domain=script-server.isnadboy.com"

@@ -6,8 +6,8 @@ services:
       - "snadboy.revp.7171.domain=agregarr.isnadboy.com"
     volumes:
       - agregarr-data:/app/config
-      - /mnt/media/TV Shows/.placeholders:/placeholders/tv
-      - /mnt/media/Movies/.placeholders:/placeholders/movies
+      - /mnt/media/TV Shows:/tv:rw
+      - /mnt/media/Movies:/movies:rw
     ports:
       - 7171:7171
     restart: unless-stopped

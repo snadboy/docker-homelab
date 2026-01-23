@@ -4,52 +4,57 @@ services:
     container_name: placeholdarr
     restart: unless-stopped
     labels:
-      - "snadboy.revp.7272.domain=placeholdarr.isnadboy.com"
+      - "snadboy.revp.8000.domain=placeholdarr.isnadboy.com"
     environment:
+      # Server Configuration
+      - PLACEHOLDARR_HOST=0.0.0.0
+      - PLACEHOLDARR_PORT=8000
+      - PLACEHOLDARR_DEBUG=False
+      - PLACEHOLDARR_LOG_LEVEL=INFO
+      - WORKER_COUNT=4
+
       # Plex Configuration
       - PLEX_URL=http://host-plex.isnadboy.com:32400
       - PLEX_TOKEN=${PLEX_TOKEN}
       - PLEX_TV_SECTION_ID=2
       - PLEX_MOVIE_SECTION_ID=1
 
+      # Radarr Configuration
+      - RADARR_URL=http://host-arr.isnadboy.com:7878/api/v3
+      - RADARR_API_KEY=681c54f9962e42a8b6aa5082c074b939
+
       # Sonarr Configuration
-      - SONARR_URL=http://host-arr.isnadboy.com:8989
+      - SONARR_URL=http://host-arr.isnadboy.com:8989/api/v3
       - SONARR_API_KEY=36261001e1ac41d185b42028228b8f09
 
-      # Overseerr Configuration
-      - OVERSEERR_URL=http://host-arr.isnadboy.com:5055
-      - OVERSEERR_API_KEY=MTczMTA5NTE1Mzk0MzI4NGQxODI4LWM2MzQtNDlkNC1iNWMzLWE3NWIwMGE1NjQ1YQ==
+      # Library Paths (where placeholders will be created)
+      - MOVIE_LIBRARY_FOLDER=/placeholders/movies
+      - TV_LIBRARY_FOLDER=/placeholders/tv
 
-      # Calendar/Coming Soon Settings
-      - CALENDAR_LOOKAHEAD_DAYS=30
-      - CALENDAR_PLACEHOLDER_MODE=episode
-      - ENABLE_COMING_SOON=true
-
-      # Placeholder File Paths (inside container)
+      # Application Data
+      - APP_DATA_DIR=/config
       - DUMMY_FILE_PATH=/dummy/placeholder.mp4
-      - COMING_SOON_DUMMY_FILE_PATH=/dummy/coming-soon.mp4
+      - PLACEHOLDER_STRATEGY=hardlink
 
-      # Placeholder Output Paths
-      - TV_PLACEHOLDER_PATH=/placeholders/tv
-      - MOVIE_PLACEHOLDER_PATH=/placeholders/movies
-
-      # Sync Intervals (in minutes)
-      - CALENDAR_SYNC_INTERVAL=60
-      - QUEUE_SYNC_INTERVAL=5
-
-      # Timezone
-      - TZ=America/Chicago
+      # Queue Management
+      - TV_PLAY_MODE=episode
+      - MAX_MONITOR_TIME=120
+      - CHECK_INTERVAL=3
+      - CHECK_MAX_ATTEMPTS=1000
 
     volumes:
       # Placeholder output directories
       - /mnt/media/placeholders/tv:/placeholders/tv
       - /mnt/media/placeholders/movies:/placeholders/movies
 
-      # Dummy video files (create with create-dummy-videos.sh on arr host)
+      # Dummy video files
       - /home/snadboy/placeholdarr-dummy:/dummy
 
       # Config persistence
       - placeholdarr-config:/config
+
+    ports:
+      - 8000:8000
 
 volumes:
   placeholdarr-config:

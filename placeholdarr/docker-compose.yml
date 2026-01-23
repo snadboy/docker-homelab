@@ -46,7 +46,7 @@ services:
       - /mnt/media/placeholders/movies:/placeholders/movies
 
       # Dummy video files (create with create-dummy-videos.sh on arr host)
-      - ~/placeholdarr-dummy:/dummy
+      - /home/snadboy/placeholdarr-dummy:/dummy
 
       # Config persistence
       - placeholdarr-config:/config

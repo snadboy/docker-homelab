@@ -53,6 +53,9 @@ services:
       # Config persistence
       - placeholdarr-config:/config
 
+      # .env file (required by queue_monitoring version)
+      - /home/snadboy/placeholdarr.env:/app/.env:ro
+
     ports:
       - 8000:8000
 

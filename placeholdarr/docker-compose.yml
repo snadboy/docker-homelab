@@ -1,6 +1,6 @@
 services:
   placeholdarr:
-    image: ghcr.io/theindiearmy/placeholdarr:jellyfin_release-latest
+    image: ghcr.io/theindiearmy/placeholdarr:queue_monitoring-latest
     container_name: placeholdarr
     restart: unless-stopped
     labels:

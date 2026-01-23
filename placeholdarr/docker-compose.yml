@@ -1,0 +1,55 @@
+services:
+  placeholdarr:
+    image: theindearmy/placeholdarr:latest
+    container_name: placeholdarr
+    restart: unless-stopped
+    labels:
+      - "snadboy.revp.7272.domain=placeholdarr.isnadboy.com"
+    environment:
+      # Plex Configuration
+      - PLEX_URL=http://host-plex.isnadboy.com:32400
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - PLEX_TV_SECTION_ID=2
+      - PLEX_MOVIE_SECTION_ID=1
+
+      # Sonarr Configuration
+      - SONARR_URL=http://host-arr.isnadboy.com:8989
+      - SONARR_API_KEY=36261001e1ac41d185b42028228b8f09
+
+      # Overseerr Configuration
+      - OVERSEERR_URL=http://host-arr.isnadboy.com:5055
+      - OVERSEERR_API_KEY=MTczMTA5NTE1Mzk0MzI4NGQxODI4LWM2MzQtNDlkNC1iNWMzLWE3NWIwMGE1NjQ1YQ==
+
+      # Calendar/Coming Soon Settings
+      - CALENDAR_LOOKAHEAD_DAYS=30
+      - CALENDAR_PLACEHOLDER_MODE=episode
+      - ENABLE_COMING_SOON=true
+
+      # Placeholder File Paths (inside container)
+      - DUMMY_FILE_PATH=/dummy/placeholder.mp4
+      - COMING_SOON_DUMMY_FILE_PATH=/dummy/coming-soon.mp4
+
+      # Placeholder Output Paths
+      - TV_PLACEHOLDER_PATH=/placeholders/tv
+      - MOVIE_PLACEHOLDER_PATH=/placeholders/movies
+
+      # Sync Intervals (in minutes)
+      - CALENDAR_SYNC_INTERVAL=60
+      - QUEUE_SYNC_INTERVAL=5
+
+      # Timezone
+      - TZ=America/Chicago
+
+    volumes:
+      # Placeholder output directories
+      - /mnt/media/placeholders/tv:/placeholders/tv
+      - /mnt/media/placeholders/movies:/placeholders/movies
+
+      # Dummy video files (create with create-dummy-videos.sh on arr host)
+      - ~/placeholdarr-dummy:/dummy
+
+      # Config persistence
+      - placeholdarr-config:/config
+
+volumes:
+  placeholdarr-config:

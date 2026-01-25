@@ -1,0 +1,21 @@
+services:
+  dockhand:
+    image: fnsys/dockhand:latest
+    container_name: dockhand
+    labels:
+      - "snadboy.revp.3000.domain=dockhand.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dockhand-data:/app/data
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+
+volumes:
+  dockhand-data:
+    external: true

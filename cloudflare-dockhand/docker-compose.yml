@@ -1,0 +1,6 @@
+services:
+  cloudflare-dockhand:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare-dockhand
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    restart: unless-stopped

@@ -1,0 +1,23 @@
+services:
+  termix:
+    image: ghcr.io/lukegus/termix:latest
+    container_name: termix
+    labels:
+      - "snadboy.revp.8080.domain=termix.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+      - PORT=8080
+      - SALT=${SALT}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - DATABASE_KEY=${DATABASE_KEY:-}
+    volumes:
+      - termix-data:/app/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  termix-data:
+    external: true

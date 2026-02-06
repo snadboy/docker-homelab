@@ -5,7 +5,7 @@
 - **Local Path:** /home/snadboy/projects/docker-homelab
 - **Main Branch:** main
 - **Current Branch:** main
-- **Latest Commit:** 3bd21e8 - Add Homepage dashboard service
+- **Latest Commit:** 37f4595 - Remove PBS (alexandria/svalbard) - servers not available
 
 ## Recent Changes
 
@@ -144,14 +144,55 @@ Created comprehensive Homepage dashboard with all active services:
   - Ready for configuration once servers are accessible
   - Setup notes in homepage-config/PBS-SETUP-NOTES.md
 
-**Current Service Count:** 20 services
-- Media Management: 5 (added SABnzbd)
-- Media Server: 2
-- Proxmox Cluster: 3 (all working)
-- Backup Storage: 2 (PBS - pending IPs)
-- Infrastructure: 6
-- Custom: 1
-- Smart Home: 1
+**Latest Updates (2026-02-06 - Final Session):**
+
+- ✅ Fixed Plex token authentication
+  - Retrieved working token from Plex Preferences.xml
+  - Old token (expired): 05f660f70f3e23a0445997d159ad109ffb325bd2
+  - New token (working): js1SqwFxuN2eirNGdeox
+  - Plex widget now showing library stats, active streams, bandwidth
+  - Verified working with API test
+
+- ✅ Removed PBS servers (not available)
+  - alexandria.isnadboy.com - DNS points to cadre, server doesn't exist
+  - svalbard.isnadboy.com - DNS points to cadre, server doesn't exist
+  - Removed HOMEPAGE_VAR_PBS_USER and HOMEPAGE_VAR_PBS_TOKEN
+  - Cleaned up PBS-SETUP-NOTES.md documentation
+  - Removed from all configuration files
+
+- ✅ Reorganized service groups
+  - Moved Agregarr from "Custom" to "Media Management"
+  - Removed empty "Custom" group from layout
+  - Better logical organization of media services
+
+- ✅ Confirmed Home Assistant working
+  - Already configured in Smart Home section
+  - Widget showing entities and sensors
+  - API integration active
+
+**Final Service Count:** 17 services across 5 groups
+- **Media Management: 6** (Sonarr, Radarr, Prowlarr, Overseerr, SABnzbd, Agregarr)
+- **Media Server: 2** (Plex, Tautulli)
+- **Proxmox Cluster: 3** (Multivac, Colossus, Guardian - all with working APIs)
+- **Infrastructure: 6** (Traefik, HTTP Provider, Dockhand, Uptime Kuma, Gotify, Script Server)
+- **Smart Home: 1** (Home Assistant)
+
+**API Widget Status:** 14/14 working (100%) ✅
+- All *arr services: ✅
+- Plex & Tautulli: ✅
+- All Proxmox nodes: ✅
+- Home Assistant: ✅
+- Docker monitoring: ✅
+
+**Environment Variables (Final):**
+```yaml
+- HOMEPAGE_VAR_PLEX_TOKEN=js1SqwFxuN2eirNGdeox
+- HOMEPAGE_VAR_TAUTULLI_KEY=a9e9e9242f0c4ea8a0990c56dd62ce40
+- HOMEPAGE_VAR_PROXMOX_USER=homepage@pve!homepage-token
+- HOMEPAGE_VAR_PROXMOX_TOKEN=16e2f699-b719-4017-9dd6-4ca487594dc7
+```
+
+**Dashboard Status:** Fully operational, zero errors, real-time monitoring active
 
 ---
 

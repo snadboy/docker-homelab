@@ -117,6 +117,42 @@ Created comprehensive Homepage dashboard with all active services:
     - pve-guardian
   - Widgets show: VMs, LXCs, CPU, memory, storage per node
 
+**Final Updates (2026-02-06 - Late Evening):**
+- ✅ Fixed Proxmox API connectivity issues
+  - Changed from hostnames to Tailscale IPs
+  - pve-colossus: 100.64.193.33:8006
+  - pve-guardian: 100.109.201.46:8006
+  - pve-multivac: 100.69.91.74:8006
+  - All nodes now showing stats correctly
+
+- ✅ Fixed Plex API integration
+  - Added HOMEPAGE_VAR_PLEX_TOKEN environment variable
+  - Widget now showing library and stream stats
+
+- ✅ Reorganized services
+  - Moved SABnzbd from "Downloads" to "Media Management" group
+  - Better logical organization
+
+- ✅ Added Docker container monitoring
+  - Created docker.yaml for container state tracking
+  - Updated widgets.yaml with expanded Docker stats
+  - Shows running containers, CPU, memory per container
+
+- ✅ Added PBS placeholders
+  - alexandria.isnadboy.com:8007
+  - svalbard.isnadboy.com:8007
+  - Ready for configuration once servers are accessible
+  - Setup notes in homepage-config/PBS-SETUP-NOTES.md
+
+**Current Service Count:** 20 services
+- Media Management: 5 (added SABnzbd)
+- Media Server: 2
+- Proxmox Cluster: 3 (all working)
+- Backup Storage: 2 (PBS - pending IPs)
+- Infrastructure: 6
+- Custom: 1
+- Smart Home: 1
+
 ---
 
 ## Previous Changes

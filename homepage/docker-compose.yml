@@ -16,8 +16,6 @@ services:
       - HOMEPAGE_VAR_TAUTULLI_KEY=a9e9e9242f0c4ea8a0990c56dd62ce40
       - HOMEPAGE_VAR_PROXMOX_USER=homepage@pve!homepage-token
       - HOMEPAGE_VAR_PROXMOX_TOKEN=16e2f699-b719-4017-9dd6-4ca487594dc7
-      - HOMEPAGE_VAR_PBS_USER=admin@pbs
-      - HOMEPAGE_VAR_PBS_TOKEN=placeholder
     volumes:
       - homepage-config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

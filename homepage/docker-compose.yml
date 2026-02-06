@@ -12,7 +12,7 @@ services:
       - HOMEPAGE_VAR_TITLE=Homelab Dashboard
       - LOG_TARGETS=stdout
       - HOMEPAGE_ALLOWED_HOSTS=homepage.isnadboy.com
-      - HOMEPAGE_VAR_PLEX_TOKEN=05f660f70f3e23a0445997d159ad109ffb325bd2
+      - HOMEPAGE_VAR_PLEX_TOKEN=js1SqwFxuN2eirNGdeox
       - HOMEPAGE_VAR_TAUTULLI_KEY=a9e9e9242f0c4ea8a0990c56dd62ce40
       - HOMEPAGE_VAR_PROXMOX_USER=homepage@pve!homepage-token
       - HOMEPAGE_VAR_PROXMOX_TOKEN=16e2f699-b719-4017-9dd6-4ca487594dc7

@@ -54,6 +54,47 @@
 - Resolved SSH host key issue for utilities localhost access
 - Labels only apply when deploying from compose file (not stdin pipe)
 - Required provider restart to discover new container (~30 seconds for health check)
+- Fixed host validation by adding `HOMEPAGE_ALLOWED_HOSTS=homepage.isnadboy.com`
+
+**Configuration (2026-02-06):**
+Created comprehensive Homepage dashboard with all active services:
+
+**Service Groups Configured:**
+1. **Media Management** (5 services)
+   - Sonarr, Radarr, Prowlarr, Overseerr, Bazarr
+   - All with API widgets enabled
+
+2. **Media Server** (2 services)
+   - Plex (API widget enabled)
+   - Tautulli (widget pending API key)
+
+3. **Downloads** (1 service)
+   - SABnzbd (API widget enabled)
+
+4. **Infrastructure** (6 services)
+   - Traefik, Traefik HTTP Provider, Dockhand
+   - Uptime Kuma (widget pending slug), Gotify, Script Server
+
+5. **Custom** (1 service)
+   - Agregarr
+
+6. **Smart Home** (1 service)
+   - Home Assistant (API widget enabled)
+
+**Configuration Files Created:**
+- `services.yaml` - 16 services with API integrations
+- `widgets.yaml` - Resource monitoring, Docker stats, search
+- `bookmarks.yaml` - External links (GitHub, Tailscale, docs)
+- `settings.yaml` - Dark theme, boxed layout, grid organization
+- `README.md` - Configuration documentation
+
+**Features:**
+- Dark mode with slate color scheme
+- API widgets for real-time service stats
+- Docker integration for container monitoring
+- Organized grid layout by service category
+- Quick search with Google integration
+- Resource usage widgets (CPU, memory)
 
 ---
 

@@ -5,9 +5,59 @@
 - **Local Path:** /home/snadboy/projects/docker-homelab
 - **Main Branch:** main
 - **Current Branch:** main
-- **Latest Commit:** 34374ee - Add dockhand Docker management UI
+- **Latest Commit:** 3bd21e8 - Add Homepage dashboard service
 
 ## Recent Changes
+
+### 2026-02-06: Deployed Homepage Dashboard
+
+**Status:** ✅ Complete
+
+**Changes Made:**
+1. Created `homepage/docker-compose.yml` with Traefik integration
+2. Created `homepage/.env.example` for environment variables
+3. Committed and pushed to GitHub
+4. Added stack to Dockhand database (stack ID: 10)
+5. Created external volume `homepage-config` on utilities host
+6. Deployed via docker compose on utilities
+
+**Stack Details:**
+- **Name:** homepage
+- **Environment:** Utilities (Dockhand ID: 1)
+- **Container:** homepage
+- **Image:** ghcr.io/gethomepage/homepage:latest
+- **State:** running (healthy)
+- **Domain:** https://homepage.isnadboy.com
+- **Volume:** homepage-config (external)
+- **Port:** 3500:3000
+
+**Key Features:**
+- Read-only Docker socket mount for container stats
+- Traefik automatic HTTPS routing via `snadboy.revp.3000.domain` label
+- Auto-update and webhook enabled in Dockhand
+- Port 3000 exposed for web interface
+
+**Files Modified:**
+- `homepage/docker-compose.yml` (new)
+- `homepage/.env.example` (new)
+
+**Verification:**
+- Container health check: ✅ healthy
+- Docker socket access: ✅ read-only mount working
+- Traefik discovery: ✅ discovered by sb-traefik-http-provider
+- Traefik routing: ✅ HTTPS working at https://homepage.isnadboy.com (HTTP 200)
+- Volume persistence: ✅ mounted at /app/config
+- Dockhand sync: ✅ stack synced successfully
+
+**Deployment Notes:**
+- Fixed git ownership issue in Dockhand container with `git config --global --add safe.directory`
+- Resolved SSH host key issue for utilities localhost access
+- Labels only apply when deploying from compose file (not stdin pipe)
+- Required provider restart to discover new container (~30 seconds for health check)
+
+---
+
+## Previous Changes
 
 ### 2026-01-25: Deployed Dockhand Docker Management UI
 

@@ -96,6 +96,27 @@ Created comprehensive Homepage dashboard with all active services:
 - Quick search with Google integration
 - Resource usage widgets (CPU, memory)
 
+**Updates (2026-02-06 - Evening):**
+- ✅ Removed Bazarr service completely
+  - Deleted docker-compose.yml
+  - Stopped and removed container on arr host
+  - Removed bazarr-data volume
+  - Removed from Homepage configuration
+
+- ✅ Added Tautulli API integration
+  - API key: a9e9e9242f0c4ea8a0990c56dd62ce40
+  - Widget shows Plex analytics and stream stats
+
+- ✅ Added Proxmox cluster monitoring
+  - Created API user: homepage@pve
+  - API token: homepage@pve!homepage-token
+  - Role: PVEAuditor (read-only access)
+  - Monitoring 3 nodes:
+    - pve-multivac (192.168.86.104) - Plex host
+    - pve-colossus
+    - pve-guardian
+  - Widgets show: VMs, LXCs, CPU, memory, storage per node
+
 ---
 
 ## Previous Changes

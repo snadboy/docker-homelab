@@ -9,6 +9,9 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=America/New_York
+      - HOMEPAGE_VAR_TITLE=Homelab Dashboard
+      - LOG_TARGETS=stdout
+      - HOMEPAGE_ALLOWED_HOSTS=homepage.isnadboy.com
     volumes:
       - homepage-config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

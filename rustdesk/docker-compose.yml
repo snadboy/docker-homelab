@@ -1,0 +1,36 @@
+services:
+  rustdesk-hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: rustdesk-hbbs
+    command: hbbs
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - rustdesk-data:/root
+    ports:
+      - 21115:21115
+      - 21116:21116
+      - 21116:21116/udp
+      - 21118:21118
+    depends_on:
+      - rustdesk-hbbr
+    restart: unless-stopped
+
+  rustdesk-hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: rustdesk-hbbr
+    command: hbbr
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - rustdesk-data:/root
+    ports:
+      - 21117:21117
+      - 21119:21119
+    restart: unless-stopped
+
+volumes:
+  rustdesk-data:
+    external: true
+    # Pre-created volume for RustDesk server data (keys, etc.)
+    # Create with: docker volume create rustdesk-data

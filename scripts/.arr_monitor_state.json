@@ -1,0 +1,17 @@
+{
+  "services": {
+    "sabnzbd": {},
+    "sonarr": {},
+    "radarr": {
+      "health_issues": {
+        "active": true,
+        "since": "2026-01-04T14:36:00.537623",
+        "last_notified": "2026-01-04T14:36:00.537623"
+      }
+    },
+    "prowlarr": {},
+    "overseerr": {},
+    "agregarr": {}
+  },
+  "last_daily_summary": "2026-01-04T14:34:56.526366"
+}

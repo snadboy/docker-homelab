@@ -1,0 +1,14 @@
+{
+  "name": "ARR Health Monitor",
+  "script_path": "/app/scripts/venv/bin/python /app/scripts/arr_health_monitor.py",
+  "description": "Monitors SABnzbd, Sonarr, Radarr, Prowlarr, Overseerr, Agregarr. Auto-resumes SABnzbd if paused and disk space is OK. Sends Gotify notifications.",
+  "group": "Monitoring",
+  "scheduling": {
+    "enabled": true,
+    "auto_cleanup": true,
+    "schedule": {
+      "type": "cron",
+      "cron": "*/5 * * * *"
+    }
+  }
+}

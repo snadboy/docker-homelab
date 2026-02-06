@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
 """
-Portainer Stack Backup to Google Drive
+Portainer Stack Backup
 
-Exports all Portainer stacks (docker-compose files) and uploads to Google Drive.
-Uses PyDrive2 for Google Drive integration.
-
-Setup:
-1. Go to Google Cloud Console: https://console.cloud.google.com/
-2. Create a new project (or use existing)
-3. Enable Google Drive API
-4. Create OAuth 2.0 credentials (Desktop app)
-5. Download credentials and save as /app/scripts/gdrive_credentials.json
-6. First run will open browser for authentication (creates token)
+Exports all Portainer stacks (docker-compose files) to a local backup directory.
+Includes automatic backup retention to manage disk space.
 
 Environment variables (from /mnt/shareables/.claude/.env):
 - PORTAINER_URL
@@ -21,6 +13,7 @@ Environment variables (from /mnt/shareables/.claude/.env):
 import os
 import sys
 import json
+import shutil
 import requests
 from datetime import datetime
 from pathlib import Path
@@ -31,10 +24,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration
 SCRIPTS_DIR = Path("/app/scripts")
-BACKUP_DIR = SCRIPTS_DIR / "backups"
-GDRIVE_FOLDER = "Portainer-Backups"  # Folder name in Google Drive
-CREDENTIALS_FILE = SCRIPTS_DIR / "gdrive_credentials.json"
-TOKEN_FILE = SCRIPTS_DIR / "gdrive_token.json"
+BACKUP_DIR = Path("/mnt/shareables/backups/portainer")
+RETENTION_DAYS = 30  # Keep backups for this many days
+MAX_BACKUPS = 10     # Maximum number of backups to keep (regardless of age)
 
 def load_env():
     """Load environment variables from config file"""
@@ -158,125 +150,56 @@ def create_backup(stacks):
 
     return backup_path
 
-def upload_to_gdrive(backup_path):
-    """Upload backup folder to Google Drive using PyDrive2"""
-    try:
-        from pydrive2.auth import GoogleAuth
-        from pydrive2.drive import GoogleDrive
-    except ImportError:
-        print("\nERROR: PyDrive2 not installed. Install with:")
-        print("  pip install pydrive2")
-        return False
+def cleanup_old_backups():
+    """Remove old backups based on retention policy"""
+    if not BACKUP_DIR.exists():
+        return
 
-    if not CREDENTIALS_FILE.exists():
-        print(f"\nERROR: Google Drive credentials not found at {CREDENTIALS_FILE}")
-        print("\nSetup instructions:")
-        print("1. Go to https://console.cloud.google.com/")
-        print("2. Create/select a project")
-        print("3. Enable Google Drive API")
-        print("4. Go to Credentials > Create Credentials > OAuth client ID")
-        print("5. Choose 'Desktop app'")
-        print("6. Download JSON and save as:")
-        print(f"   {CREDENTIALS_FILE}")
-        return False
+    # Get all backup directories (they start with 'portainer_backup_')
+    backups = sorted(
+        [d for d in BACKUP_DIR.iterdir() if d.is_dir() and d.name.startswith("portainer_backup_")],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True  # Newest first
+    )
 
-    # Authenticate
-    gauth = GoogleAuth()
-    gauth.settings['client_config_file'] = str(CREDENTIALS_FILE)
+    if not backups:
+        return
 
-    # Try to load saved credentials
-    if TOKEN_FILE.exists():
-        gauth.LoadCredentialsFile(str(TOKEN_FILE))
+    now = datetime.now()
+    removed_count = 0
 
-    if gauth.credentials is None:
-        # First time - need browser auth
-        print("\nFirst-time authentication required.")
-        print("This will open a browser window for Google sign-in.")
-        gauth.LocalWebserverAuth()
-    elif gauth.access_token_expired:
-        gauth.Refresh()
+    for i, backup in enumerate(backups):
+        # Always keep at least the newest backup
+        if i == 0:
+            continue
+
+        # Check if we've exceeded max backups
+        if i >= MAX_BACKUPS:
+            print(f"  Removing (max backups exceeded): {backup.name}")
+            shutil.rmtree(backup)
+            removed_count += 1
+            continue
+
+        # Check age
+        backup_time = datetime.fromtimestamp(backup.stat().st_mtime)
+        age_days = (now - backup_time).days
+
+        if age_days > RETENTION_DAYS:
+            print(f"  Removing (older than {RETENTION_DAYS} days): {backup.name}")
+            shutil.rmtree(backup)
+            removed_count += 1
+
+    if removed_count > 0:
+        print(f"Cleaned up {removed_count} old backup(s)")
     else:
-        gauth.Authorize()
-
-    # Save credentials for next time
-    gauth.SaveCredentialsFile(str(TOKEN_FILE))
-
-    drive = GoogleDrive(gauth)
-
-    # Find or create backup folder
-    folder_query = f"title='{GDRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    folder_list = drive.ListFile({'q': folder_query}).GetList()
-
-    if folder_list:
-        folder_id = folder_list[0]['id']
-        print(f"\nUsing existing Google Drive folder: {GDRIVE_FOLDER}")
-    else:
-        folder_metadata = {
-            'title': GDRIVE_FOLDER,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        folder = drive.CreateFile(folder_metadata)
-        folder.Upload()
-        folder_id = folder['id']
-        print(f"\nCreated Google Drive folder: {GDRIVE_FOLDER}")
-
-    # Create subfolder for this backup
-    backup_folder_name = backup_path.name
-    subfolder_metadata = {
-        'title': backup_folder_name,
-        'mimeType': 'application/vnd.google-apps.folder',
-        'parents': [{'id': folder_id}]
-    }
-    subfolder = drive.CreateFile(subfolder_metadata)
-    subfolder.Upload()
-    subfolder_id = subfolder['id']
-
-    # Upload all files
-    uploaded_count = 0
-    for filepath in backup_path.rglob("*"):
-        if filepath.is_file():
-            relative_path = filepath.relative_to(backup_path)
-
-            # Determine parent folder
-            if len(relative_path.parts) > 1:
-                # Create intermediate folder if needed
-                parent_name = relative_path.parts[0]
-                parent_query = f"title='{parent_name}' and '{subfolder_id}' in parents and trashed=false"
-                parent_list = drive.ListFile({'q': parent_query}).GetList()
-
-                if parent_list:
-                    parent_id = parent_list[0]['id']
-                else:
-                    parent_meta = {
-                        'title': parent_name,
-                        'mimeType': 'application/vnd.google-apps.folder',
-                        'parents': [{'id': subfolder_id}]
-                    }
-                    parent_folder = drive.CreateFile(parent_meta)
-                    parent_folder.Upload()
-                    parent_id = parent_folder['id']
-            else:
-                parent_id = subfolder_id
-
-            # Upload file
-            file_metadata = {
-                'title': filepath.name,
-                'parents': [{'id': parent_id}]
-            }
-            gfile = drive.CreateFile(file_metadata)
-            gfile.SetContentFile(str(filepath))
-            gfile.Upload()
-            uploaded_count += 1
-            print(f"  Uploaded: {relative_path}")
-
-    print(f"\nUploaded {uploaded_count} files to Google Drive/{GDRIVE_FOLDER}/{backup_folder_name}/")
-    return True
+        print("No old backups to clean up")
 
 def main():
     print("=" * 50)
     print("Portainer Stack Backup")
     print("=" * 50)
-    print(f"Timestamp: {datetime.now().isoformat()}\n")
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    print(f"Backup location: {BACKUP_DIR}\n")
 
     # Load environment
     load_env()
@@ -289,22 +212,20 @@ def main():
         print("No stacks found!")
         return 1
 
-    # Create local backup
-    print("\nCreating local backup...")
+    # Create backup
+    print("\nCreating backup...")
     backup_path = create_backup(stacks)
 
-    # Upload to Google Drive
-    print("\nUploading to Google Drive...")
-    if upload_to_gdrive(backup_path):
-        print("\n" + "=" * 50)
-        print("Backup completed successfully!")
-        print("=" * 50)
-    else:
-        print("\n" + "=" * 50)
-        print("Local backup created, but Google Drive upload failed.")
-        print(f"Backup location: {backup_path}")
-        print("=" * 50)
-        return 1
+    # Cleanup old backups
+    print("\nChecking backup retention...")
+    cleanup_old_backups()
+
+    # Summary
+    print("\n" + "=" * 50)
+    print("Backup completed successfully!")
+    print(f"Location: {backup_path}")
+    print(f"Retention: {RETENTION_DAYS} days / max {MAX_BACKUPS} backups")
+    print("=" * 50)
 
     return 0
 

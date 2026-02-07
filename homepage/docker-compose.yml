@@ -17,9 +17,9 @@ services:
       - HOMEPAGE_VAR_PROXMOX_USER=homepage@pve!homepage-token
       - HOMEPAGE_VAR_PROXMOX_TOKEN=16e2f699-b719-4017-9dd6-4ca487594dc7
       - HOMEPAGE_VAR_PBS_ALEXANDRIA_USER=homepage@pbs!homepage-token
-      - HOMEPAGE_VAR_PBS_ALEXANDRIA_TOKEN=88b8c108-b5c5-4b48-9501-c6de248846c5
+      - HOMEPAGE_VAR_PBS_ALEXANDRIA_TOKEN=3260a33e-23b8-4fed-bd31-878c6077afd4
       - HOMEPAGE_VAR_PBS_SVALBARD_USER=homepage@pbs!homepage-token
-      - HOMEPAGE_VAR_PBS_SVALBARD_TOKEN=16d9300d-285a-43fc-88df-91d495fca317
+      - HOMEPAGE_VAR_PBS_SVALBARD_TOKEN=51b3d340-272c-487c-b100-6dc274caf30f
     volumes:
       - homepage-config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

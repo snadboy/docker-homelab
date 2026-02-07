@@ -9,6 +9,33 @@
 
 ## Recent Changes
 
+### 2026-02-07: Added Collapsible Groups to Homepage
+
+**Status:** ✅ Complete
+
+**Changes Made:**
+1. Updated `settings.yaml` with collapsible group configuration
+2. Set frequently accessed groups as expanded (Media Management, Media Server, Smart Home)
+3. Set infrastructure groups as collapsed by default (Proxmox Cluster, Backup Storage, Infrastructure)
+4. Created `homepage/COLLAPSIBLE-GROUPS.md` documentation
+5. Committed and pushed to GitHub (commit: 9abf07d)
+
+**Benefits:**
+- Reduced visual clutter on dashboard
+- Improved page load performance (collapsed groups don't render widgets initially)
+- Better organization - frequently used services always visible
+- Infrastructure monitoring available on-demand with click to expand
+
+**Group Configuration:**
+- **Always Expanded:** Media Management, Media Server, Smart Home
+- **Collapsed by Default:** Proxmox Cluster, Backup Storage, Infrastructure
+
+**Files Modified:**
+- `homepage/COLLAPSIBLE-GROUPS.md` (new)
+- Updated `settings.yaml` in homepage-config volume
+
+---
+
 ### 2026-02-06: Deployed Homepage Dashboard
 
 **Status:** ✅ Complete

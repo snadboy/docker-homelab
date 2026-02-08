@@ -20,6 +20,8 @@ services:
       - HOMEPAGE_VAR_PBS_ALEXANDRIA_TOKEN=3260a33e-23b8-4fed-bd31-878c6077afd4
       - HOMEPAGE_VAR_PBS_SVALBARD_USER=homepage@pbs!homepage-token
       - HOMEPAGE_VAR_PBS_SVALBARD_TOKEN=51b3d340-272c-487c-b100-6dc274caf30f
+      - HOMEPAGE_VAR_CLOUD_PBS_USER=9094815d6a404b2ca0a6@pbs
+      - HOMEPAGE_VAR_CLOUD_PBS_TOKEN=Cn7NTQbW5VOsqbIDdboP
     volumes:
       - homepage-config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

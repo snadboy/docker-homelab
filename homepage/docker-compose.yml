@@ -22,6 +22,7 @@ services:
       - HOMEPAGE_VAR_PBS_SVALBARD_TOKEN=51b3d340-272c-487c-b100-6dc274caf30f
       - HOMEPAGE_VAR_CLOUD_PBS_USER=9094815d6a404b2ca0a6@pbs!homepage-token
       - HOMEPAGE_VAR_CLOUD_PBS_TOKEN=9bf2dfba-d1fd-477b-8690-75d495881c5a
+      - HOMEPAGE_VAR_GOTIFY_CLIENT_TOKEN=C5ztju3ajWGg58d
     volumes:
       - homepage-config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

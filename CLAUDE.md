@@ -9,6 +9,37 @@
 
 ## Recent Changes
 
+### 2026-02-08: Trash Pickup Scheduler Workflow
+
+**Status:** ✅ Complete
+
+**Summary:** Created n8n workflow that schedules weekly trash pickup reminders on Google Calendar with holiday delay logic.
+
+**Workflow Created:**
+- **Trash Pickup Scheduler** (`D5R6GlhUDJTUGS8P`)
+  - Schedule: Every Sunday at 9 AM + Webhook: `GET /webhook/trash-pickup`
+  - Default trash day: Friday. Creates "Take trash out to curb" all-day event on Thursday (day before)
+  - Holiday detection: New Year's, Memorial Day, Independence Day, Labor Day, Thanksgiving, Christmas
+  - If holiday falls Mon-Fri of the week, trash is delayed one day (to Saturday) and an extra "Trash delay due to [holiday]" event is created
+  - Events created on "Anderson" calendar (`52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com`)
+  - Sends summary via Gotify notification
+
+**OAuth Scope Upgrade:**
+- Re-authorized Google OAuth2 with broader scopes:
+  - `https://mail.google.com/` (Gmail)
+  - `https://www.googleapis.com/auth/gmail.modify` + `gmail.labels`
+  - `https://www.googleapis.com/auth/calendar` (NEW)
+  - `https://www.googleapis.com/auth/contacts.readonly` (NEW)
+- Added `http://localhost:8888` redirect URI to Google Cloud Console OAuth client
+- New refresh token stored in `GOOGLE_REFRESH_TOKEN` env var
+
+**Verification:**
+- Trash Pickup Scheduler: ✅ Execution #83, success in 0.6s
+- Calendar event created correctly on Thursday Feb 12 (day before Friday pickup)
+- Test event cleaned up after verification
+
+---
+
 ### 2026-02-08: Gmail Cleanup & Labels+Contacts Workflows
 
 **Status:** ✅ Complete
@@ -32,11 +63,11 @@
 - n8n Code node sandbox blocks `this.helpers.httpRequestWithAuthentication()`
 - Solution: Set node passes `$env.GOOGLE_*` vars → Code node does manual OAuth2 token refresh via `this.helpers.httpRequest()` to Google's token endpoint
 - Google OAuth2 credentials stored as n8n env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
-- Current OAuth scopes: Gmail full access. People/Contacts API scope not yet added (contacts section may show errors)
+- OAuth scopes: Gmail full access, Calendar, Contacts (read-only)
 
 **Files Changed:**
 - `n8n/.env.example` - Added Google OAuth2 credential placeholders
-- `n8n/workflows/` - Exported all 6 workflows as JSON backups
+- `n8n/workflows/` - Exported all 7 workflows as JSON backups
 
 **Verification:**
 - Gmail Labels & Contacts: ✅ Execution #70, success in 3.7s

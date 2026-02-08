@@ -13,6 +13,21 @@ services:
       - N8N_HOST=n8n.isnadboy.com
       - N8N_PROTOCOL=https
       - N8N_PORT=5678
+      # Service URLs and API keys (referenced in workflows via $env)
+      - SONARR_URL=http://host-arr.isnadboy.com:8989
+      - SONARR_API_KEY=36261001e1ac41d185b42028228b8f09
+      - RADARR_URL=http://host-arr.isnadboy.com:7878
+      - RADARR_API_KEY=681c54f9962e42a8b6aa5082c074b939
+      - PROWLARR_URL=http://host-arr.isnadboy.com:9696
+      - PROWLARR_API_KEY=75cf7fa2001f4a0fae3266191456960a
+      - SABNZBD_URL=http://host-arr.isnadboy.com:8080
+      - SABNZBD_API_KEY=08c4abc526b548ab93b00862c7e46384
+      - OVERSEERR_URL=http://host-arr.isnadboy.com:5055
+      - OVERSEERR_API_KEY=MTczMTA5NTE1Mzk0MzI4NGQxODI4LWM2MzQtNDlkNC1iNWMzLWE3NWIwMGE1NjQ1YQ==
+      - PLEX_URL=http://host-plex.isnadboy.com:32400
+      - PLEX_TOKEN=05f660f70f3e23a0445997d159ad109ffb325bd2
+      - GOTIFY_URL=https://gotify.isnadboy.com
+      - GOTIFY_TOKEN=Ak_Q.1LMPHBZZsq
     volumes:
       - n8n-data:/home/node/.n8n
     labels:

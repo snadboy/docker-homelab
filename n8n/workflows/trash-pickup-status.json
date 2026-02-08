@@ -1,5 +1,6 @@
 {
   "name": "Trash Pickup Status",
+  "description": "Lightweight read-only endpoint for Homepage dashboard widget. Returns trash pickup status as JSON (pickup day, date, status, holiday delays). Pure date math, no API calls. Webhook: /webhook/trash-pickup-status",
   "nodes": [
     {
       "parameters": {

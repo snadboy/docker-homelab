@@ -1,5 +1,6 @@
 {
   "name": "Plex Recently Added",
+  "description": "Monitors Plex for recently added movies and TV episodes. Sends Gotify notification when new content is available.",
   "nodes": [
     {
       "parameters": {

@@ -1,5 +1,6 @@
 {
   "name": "Trash Pickup Scheduler",
+  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Detects 6 US holiday delays. Title configurable via TRASH_EVENT_TITLE env var. Webhook: /webhook/trash-pickup",
   "nodes": [
     {
       "parameters": {

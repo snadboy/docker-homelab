@@ -1,5 +1,6 @@
 {
   "name": "Arr Stack Health Check",
+  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs. Reports status via Gotify.",
   "nodes": [
     {
       "parameters": {

@@ -1,0 +1,23 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - WEBHOOK_URL=https://n8n.isnadboy.com/
+      - N8N_HOST=n8n.isnadboy.com
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+    volumes:
+      - n8n-data:/home/node/.n8n
+    labels:
+      - "snadboy.revp.5678.domain=n8n.isnadboy.com"
+
+volumes:
+  n8n-data:
+    external: true

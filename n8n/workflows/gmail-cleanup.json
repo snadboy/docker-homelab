@@ -13,8 +13,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        180,
-        180
+        192,
+        144
       ],
       "webhookId": "gmail-cleanup"
     },
@@ -29,8 +29,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        420,
-        100
+        384,
+        144
       ]
     },
     {
@@ -88,8 +88,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        420,
-        260
+        384,
+        288
       ]
     },
     {
@@ -103,8 +103,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        180,
-        420
+        176,
+        480
       ],
       "webhookId": "gmail-cleanup-dry"
     },
@@ -119,8 +119,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        420,
-        340
+        384,
+        480
       ]
     },
     {
@@ -178,8 +178,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        420,
-        500
+        384,
+        640
       ]
     },
     {
@@ -193,8 +193,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        180,
-        660
+        176,
+        832
       ],
       "webhookId": "gmail-cleanup-live"
     },
@@ -209,8 +209,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        420,
-        580
+        384,
+        832
       ]
     },
     {
@@ -268,8 +268,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        420,
-        740
+        384,
+        1008
       ]
     },
     {
@@ -281,8 +281,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        420
+        640,
+        640
       ]
     },
     {
@@ -308,7 +308,49 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
+        1020,
+        360
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        640
+      ],
+      "id": "660ec14c-0bdc-4983-918e-41f7fdbe57b8",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "errors-check",
+              "leftValue": "={{ $json.stats.errors }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-errors",
+      "name": "Has Errors?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        840,
         420
       ]
     }
@@ -399,11 +441,34 @@
       "main": [
         [
           {
-            "node": "Notify via Gotify",
+            "node": "Has Errors?",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Set Dry Run Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Errors?": {
+      "main": [
+        [
+          {
+            "node": "Notify via Gotify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

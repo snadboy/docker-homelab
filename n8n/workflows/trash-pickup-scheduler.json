@@ -17,38 +17,39 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        220,
-        300
+        240,
+        688
       ]
     },
     {
       "parameters": {
-        "httpMethod": "GET",
         "path": "trash-pickup",
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "options": {}
       },
       "id": "trash-webhook-trigger",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        220,
-        500
+        224,
+        512
       ],
       "webhookId": "trash-pickup"
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "Trash pickup scheduler triggered"
+        "responseBody": "Trash pickup scheduler triggered",
+        "options": {}
       },
       "id": "trash-respond-webhook",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        440,
-        380
+        448,
+        384
       ]
     },
     {
@@ -74,14 +75,15 @@
               "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "trash-set-creds",
       "name": "Set Credentials",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        440,
+        448,
         560
       ]
     },
@@ -94,7 +96,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        672,
         560
       ]
     },
@@ -113,7 +115,8 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 3 }) }}"
+        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 3 }) }}",
+        "options": {}
       },
       "id": "trash-gotify-notify",
       "name": "Notify via Gotify",
@@ -123,6 +126,17 @@
         880,
         560
       ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        864
+      ],
+      "id": "8a76c5c8-4564-42fb-90d7-6f4201ccb076",
+      "name": "When clicking \u2018Execute workflow\u2019"
     }
   ],
   "connections": {
@@ -169,6 +183,17 @@
         [
           {
             "node": "Notify via Gotify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Set Credentials",
             "type": "main",
             "index": 0
           }

@@ -5,9 +5,130 @@
 - **Local Path:** /home/snadboy/projects/docker-homelab
 - **Main Branch:** main
 - **Current Branch:** main
-- **Latest Commit:** 37f4595 - Remove PBS (alexandria/svalbard) - servers not available
+- **Latest Commit:** (see git log)
 
 ## Recent Changes
+
+### 2026-02-08: Gmail Cleanup & Labels+Contacts Workflows
+
+**Status:** ✅ Complete
+
+**Summary:** Ported gmail-trim cleanup logic to n8n as two JavaScript-based workflows, replacing the old "Gmail - List Labels" workflow.
+
+**Workflows Created:**
+1. **Gmail Cleanup** (`YvL90Tr5LhpyBV1D`) - Full cleanup logic with dry-run/live modes
+   - Webhook: `GET /webhook/gmail-cleanup?mode=dry-run&days=30`
+   - Discovers KEEP/KEEP_nnn labels, loads keeper contacts from People API
+   - Builds compound search query, scans threads, checks preservation rules
+   - Dry-run (default): reports what would be deleted. Live: trashes threads.
+   - Sends report via Gotify notification
+2. **Gmail Labels & Contacts** (`bf54qHDO8Gt82e0u`) - Discovery/reporting tool
+   - Webhook: `GET /webhook/gmail-labels-contacts`
+   - Lists all labels with message counts, keeper contact group members
+   - Sends report via Gotify notification
+3. **Deleted:** Old "Gmail - List Labels" (`jP5TmovCB2TlHSih`) - replaced by #2
+
+**Key Technical Details:**
+- n8n Code node sandbox blocks `this.helpers.httpRequestWithAuthentication()`
+- Solution: Set node passes `$env.GOOGLE_*` vars → Code node does manual OAuth2 token refresh via `this.helpers.httpRequest()` to Google's token endpoint
+- Google OAuth2 credentials stored as n8n env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
+- Current OAuth scopes: Gmail full access. People/Contacts API scope not yet added (contacts section may show errors)
+
+**Files Changed:**
+- `n8n/.env.example` - Added Google OAuth2 credential placeholders
+- `n8n/workflows/` - Exported all 6 workflows as JSON backups
+
+**Verification:**
+- Gmail Labels & Contacts: ✅ Execution #70, success in 3.7s
+- Gmail Cleanup (dry-run): ✅ Execution #71, success in 51.9s
+- Gotify notifications: ✅ Sent
+
+---
+
+### 2026-02-08: Fixed n8n Env Vars + Gmail Labels Workflow
+
+**Status:** ✅ Complete
+
+**Problem:** All n8n workflows failed at Gotify HTTP Request nodes because `process.env.X` doesn't work in n8n expression fields (={{ ... }}). The correct syntax is `$env.X`.
+
+**Changes Made:**
+1. Added `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` to `n8n/docker-compose.yml` (enables `$env` access)
+2. Updated all 4 workflows via API: HTTP Request nodes `process.env.X` → `$env.X`
+3. Redeployed n8n container on utilities host
+4. Created "Gmail - List Labels" workflow (ID: `jP5TmovCB2TlHSih`)
+
+**Workflows Fixed:**
+- Arr Stack Health Check (`qOZ6kS7MSlF9hOKb`)
+- Daily Media Digest (`puI2Gdj35nijpEey`)
+- Overseerr Request Notifier (`1bdxTCXlpam5yUco`)
+- Plex Recently Added (`NYdQlvUoz1x14bIZ`)
+
+**Key Fix Detail:**
+- Expression fields (={{ ... }}) in HTTP Request nodes: `process.env.X` → `$env.X`
+- Code nodes (jsCode): `process.env.X` stays as-is (works with `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`)
+
+**n8n API Notes:**
+- Create workflow: `POST /api/v1/workflows` (no `active` field - it's read-only)
+- Update workflow: `PUT /api/v1/workflows/{id}` (only `name`, `nodes`, `connections`, `settings` allowed)
+- Activate: `POST /api/v1/workflows/{id}/activate`
+- Deactivate: `POST /api/v1/workflows/{id}/deactivate`
+- No public API to manually execute workflows - use webhook triggers for testing
+
+**Verification:**
+- Overseerr Request Notifier: ✅ Triggered successfully after restart
+- Daily Media Digest: ✅ Tested via temporary webhook trigger, Gotify notification received
+- Env var test workflow: ✅ Created, verified `$env.GOTIFY_URL` resolved correctly, deleted
+
+**Gmail Labels Workflow:**
+- Created with Manual Trigger → Gmail Get Labels → Code Format → Gotify Notify
+- Node type: `n8n-nodes-base.gmail` (v2.1) with `resource: "label"` (not `gmailLabel`)
+- Gmail OAuth2 credential created in n8n UI (credential ID: `6wlAoJG85hyBlUo7`, name: "Gmail account")
+- OAuth client created in Google Cloud Console (project: gmtrim):
+  - Type: Web application, Name: n8n
+  - Client ID: `104439945788-mrb7k896tkd45btgm56jibobhpal1cnm.apps.googleusercontent.com`
+  - Redirect URI: `https://n8n.isnadboy.com/rest/oauth2-credential/callback`
+- ✅ Tested via webhook trigger - execution #39 succeeded, Gotify notification received
+
+**Next Steps:**
+- Build full Gmail cleanup workflow once label listing works
+
+---
+
+### 2026-02-08: Deployed n8n Workflow Automation
+
+**Status:** ✅ Complete
+
+**Changes Made:**
+1. Created `n8n/docker-compose.yml` with Traefik integration
+2. Created `n8n/.env.example` template
+3. Created external volume `n8n-data` on utilities host
+4. Deployed via docker compose on utilities
+5. Traefik HTTP provider discovered `n8n-5678` service automatically
+
+**Stack Details:**
+- **Name:** n8n
+- **Environment:** Utilities
+- **Container:** n8n
+- **Image:** docker.n8n.io/n8nio/n8n:latest (v2.6.4)
+- **State:** running
+- **Domain:** https://n8n.isnadboy.com
+- **Volume:** n8n-data (external, mounted at /home/node/.n8n)
+- **Port:** 5678:5678
+
+**Key Configuration:**
+- `WEBHOOK_URL=https://n8n.isnadboy.com/` - webhooks work through reverse proxy
+- `N8N_HOST=n8n.isnadboy.com` - correct host display
+- `N8N_PROTOCOL=https` - HTTPS via Traefik
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` - allows `$env.X` in expression fields
+- Traefik label: `snadboy.revp.5678.domain=n8n.isnadboy.com`
+
+**Verification:**
+- Container running: ✅
+- Traefik discovery: ✅ `n8n-5678: https://n8n.isnadboy.com -> http://host-utilities.isnadboy.com:5678/`
+- HTTPS access: ✅ HTTP 200
+- Workflows executing: ✅ All 4 workflows + Gmail Labels created
+
+---
 
 ### 2026-02-07: Added Collapsible Groups to Homepage
 

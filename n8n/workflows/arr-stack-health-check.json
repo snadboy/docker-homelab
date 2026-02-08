@@ -1,0 +1,155 @@
+{
+  "name": "Arr Stack Health Check",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "d0a0a001-0001-4001-a001-000000000001",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const services = [\n  { name: 'Sonarr', url: '${process.env.SONARR_URL}/api/v3/system/status', headers: { 'X-Api-Key': process.env.SONARR_API_KEY } },\n  { name: 'Radarr', url: '${process.env.RADARR_URL}/api/v3/system/status', headers: { 'X-Api-Key': process.env.RADARR_API_KEY } },\n  { name: 'Prowlarr', url: '${process.env.PROWLARR_URL}/api/v1/system/status', headers: { 'X-Api-Key': process.env.PROWLARR_API_KEY } },\n  { name: 'SABnzbd', url: '${process.env.SABNZBD_URL}/api?mode=version&apikey=${process.env.SABNZBD_API_KEY}', headers: {} },\n  { name: 'Overseerr', url: '${process.env.OVERSEERR_URL}/api/v1/status', headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY } }\n];\n\nconst results = [];\nconst failures = [];\n\nfor (const svc of services) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'GET',\n      url: svc.url,\n      headers: svc.headers,\n      timeout: 10000\n    });\n    results.push(`\u2705 ${svc.name}: OK`);\n  } catch (err) {\n    failures.push(svc.name);\n    results.push(`\u274c ${svc.name}: DOWN - ${err.message}`);\n  }\n}\n\nreturn [{\n  json: {\n    hasFailures: failures.length > 0,\n    failureCount: failures.length,\n    failedServices: failures.join(', '),\n    summary: results.join('\\n'),\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "d0a0a001-0001-4001-a001-000000000002",
+      "name": "Check All Services",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-health-001",
+              "leftValue": "={{ $json.hasFailures }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d0a0a001-0001-4001-a001-000000000003",
+      "name": "Any Failures?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOTIFY_URL }}/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Gotify-Key",
+              "value": "={{ $env.GOTIFY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: \"\u26a0\ufe0f Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
+        "options": {}
+      },
+      "id": "d0a0a001-0001-4001-a001-000000000004",
+      "name": "Gotify Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d0a0a001-0001-4001-a001-000000000005",
+      "name": "All Healthy",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Check All Services",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check All Services": {
+      "main": [
+        [
+          {
+            "node": "Any Failures?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Failures?": {
+      "main": [
+        [
+          {
+            "node": "Gotify Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Healthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

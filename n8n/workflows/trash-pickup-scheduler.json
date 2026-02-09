@@ -1,6 +1,6 @@
 {
   "name": "Trash Pickup Scheduler",
-  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Detects 6 US holiday delays. Title configurable via TRASH_EVENT_TITLE env var. Webhook: /webhook/trash-pickup",
+  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Calls Trash Day Calc sub-workflow for date math, then creates calendar events and sends Gotify notification. Webhook: /webhook/trash-pickup",
   "nodes": [
     {
       "parameters": {
@@ -94,14 +94,33 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst { googleClientId, googleClientSecret, googleRefreshToken, trashEventTitle } = items[0].json;\n\nconst EVENT_TITLE = trashEventTitle || 'Trash prep day';\n\nconst tokenBody = `client_id=${encodeURIComponent(googleClientId)}&client_secret=${encodeURIComponent(googleClientSecret)}&refresh_token=${encodeURIComponent(googleRefreshToken)}&grant_type=refresh_token`;\nconst tokenResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://oauth2.googleapis.com/token',\n  body: tokenBody,\n  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }\n});\nconst accessToken = tokenResp.access_token;\n\nconst CALENDAR_ID = '52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com';\n\nfunction formatDate(d) {\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\n\nfunction addDays(d, n) {\n  const result = new Date(d);\n  result.setDate(result.getDate() + n);\n  return result;\n}\n\nfunction getHolidays(year) {\n  const holidays = [];\n  let nyd = new Date(year, 0, 1);\n  if (nyd.getDay() === 0) nyd = new Date(year, 0, 2);\n  if (nyd.getDay() === 6) nyd = new Date(year - 1, 11, 31);\n  holidays.push({ date: nyd, name: \"New Year's Day\" });\n  let memDay = new Date(year, 4, 31);\n  while (memDay.getDay() !== 1) memDay.setDate(memDay.getDate() - 1);\n  holidays.push({ date: memDay, name: 'Memorial Day' });\n  let july4 = new Date(year, 6, 4);\n  if (july4.getDay() === 0) july4 = new Date(year, 6, 5);\n  if (july4.getDay() === 6) july4 = new Date(year, 6, 3);\n  holidays.push({ date: july4, name: 'Independence Day' });\n  let laborDay = new Date(year, 8, 1);\n  while (laborDay.getDay() !== 1) laborDay.setDate(laborDay.getDate() + 1);\n  holidays.push({ date: laborDay, name: 'Labor Day' });\n  let thanksgiving = new Date(year, 10, 1);\n  while (thanksgiving.getDay() !== 4) thanksgiving.setDate(thanksgiving.getDate() + 1);\n  thanksgiving.setDate(thanksgiving.getDate() + 21);\n  holidays.push({ date: thanksgiving, name: 'Thanksgiving' });\n  let xmas = new Date(year, 11, 25);\n  if (xmas.getDay() === 0) xmas = new Date(year, 11, 26);\n  if (xmas.getDay() === 6) xmas = new Date(year, 11, 24);\n  holidays.push({ date: xmas, name: 'Christmas Day' });\n  return holidays;\n}\n\nconst today = new Date();\nconst year = today.getFullYear();\nconst sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate());\nconst dow = today.getDay();\nif (dow !== 0) sunday.setDate(sunday.getDate() - dow);\nconst defaultTrashDay = addDays(sunday, 5);\n\nconst holidays = getHolidays(year);\nlet holidayThisWeek = null;\nfor (const holiday of holidays) {\n  const hDate = formatDate(holiday.date);\n  for (let d = 1; d <= 5; d++) {\n    if (formatDate(addDays(sunday, d)) === hDate) {\n      holidayThisWeek = { ...holiday, dateStr: hDate };\n      break;\n    }\n  }\n  if (holidayThisWeek) break;\n}\n\nlet actualTrashDay = defaultTrashDay;\nlet isDelayed = false;\nlet delayReason = '';\nif (holidayThisWeek) {\n  actualTrashDay = addDays(defaultTrashDay, 1);\n  isDelayed = true;\n  delayReason = holidayThisWeek.name;\n}\n\nconst takeOutDay = addDays(actualTrashDay, -1);\nconst takeOutDateStr = formatDate(takeOutDay);\nconst nextDateStr = formatDate(addDays(takeOutDay, 1));\n\nconst events = [];\nevents.push({\n  summary: EVENT_TITLE,\n  start: { date: takeOutDateStr },\n  end: { date: nextDateStr },\n  reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 540 }] }\n});\n\nif (isDelayed) {\n  const defaultTakeOutDay = addDays(defaultTrashDay, -1);\n  events.push({\n    summary: `Trash delay due to ${delayReason}`,\n    start: { date: formatDate(defaultTakeOutDay) },\n    end: { date: formatDate(defaultTrashDay) },\n    reminders: { useDefault: false }\n  });\n}\n\nconst results = [];\nfor (const event of events) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,\n      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(event)\n    });\n    results.push(`Created: ${event.summary} on ${event.start.date}`);\n  } catch (err) {\n    results.push(`Error creating '${event.summary}': ${err.message}`);\n  }\n}\n\nconst dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];\nlet summary = `Trash Pickup Schedule (week of ${formatDate(sunday)})\\n`;\nsummary += `Default pickup day: Friday ${formatDate(defaultTrashDay)}\\n`;\nif (isDelayed) {\n  summary += `Holiday: ${delayReason} (${holidayThisWeek.dateStr})\\n`;\n  summary += `Delayed pickup: ${dayNames[actualTrashDay.getDay()]} ${formatDate(actualTrashDay)}\\n`;\n}\nsummary += `Take out trash: ${dayNames[takeOutDay.getDay()]} ${takeOutDateStr}\\n\\n`;\nsummary += results.join('\\n');\n\nreturn [{ json: { title: 'Trash Pickup', message: summary, priority: 3 } }];"
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "9pRyazs5XHc1OBxG",
+          "mode": "list",
+          "cachedResultName": "Trash Day Calc"
+        }
       },
-      "id": "trash-pickup-code",
-      "name": "Code: Schedule Trash Pickup",
+      "id": "trash-exec-workflow",
+      "name": "Compute Trash Day",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const creds = $('Set Credentials').first().json;\nconst trashDay = $input.first().json;\n\nconst EVENT_TITLE = creds.trashEventTitle || 'Trash prep day';\n\nconst tokenBody = `client_id=${encodeURIComponent(creds.googleClientId)}&client_secret=${encodeURIComponent(creds.googleClientSecret)}&refresh_token=${encodeURIComponent(creds.googleRefreshToken)}&grant_type=refresh_token`;\nconst tokenResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://oauth2.googleapis.com/token',\n  body: tokenBody,\n  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }\n});\nconst accessToken = tokenResp.access_token;\n\nconst CALENDAR_ID = '52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com';\n\nfunction formatDate(d) {\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\n\nfunction addDays(dateStr, n) {\n  const d = new Date(dateStr + 'T00:00:00');\n  d.setDate(d.getDate() + n);\n  return formatDate(d);\n}\n\nconst takeOutDateStr = trashDay.takeOutDate;\nconst nextDateStr = addDays(takeOutDateStr, 1);\n\nconst events = [];\nevents.push({\n  summary: EVENT_TITLE,\n  start: { date: takeOutDateStr },\n  end: { date: nextDateStr },\n  reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 540 }] }\n});\n\nif (trashDay.delayed) {\n  // Create a delay notice event on the default (non-delayed) take-out day\n  const defaultTakeOutDate = addDays(trashDay.pickupDate, -2);\n  const defaultPickupDate = addDays(trashDay.pickupDate, -1);\n  events.push({\n    summary: `Trash delay due to ${trashDay.holiday}`,\n    start: { date: defaultTakeOutDate },\n    end: { date: defaultPickupDate },\n    reminders: { useDefault: false }\n  });\n}\n\nconst results = [];\nfor (const event of events) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,\n      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(event)\n    });\n    results.push(`Created: ${event.summary} on ${event.start.date}`);\n  } catch (err) {\n    results.push(`Error creating '${event.summary}': ${err.message}`);\n  }\n}\n\nlet summary = `Trash Pickup Schedule (week of ${trashDay.weekOf})\\n`;\nsummary += `Default pickup day: Friday\\n`;\nif (trashDay.delayed) {\n  summary += `Holiday: ${trashDay.holiday}\\n`;\n  summary += `Delayed pickup: ${trashDay.pickupDay} ${trashDay.pickupDate}\\n`;\n}\nsummary += `Take out trash: ${trashDay.takeOutDay} ${trashDay.takeOutDate}\\n\\n`;\nsummary += results.join('\\n');\n\nreturn [{ json: { title: 'Trash Pickup', message: summary, priority: 3 } }];"
+      },
+      "id": "trash-calendar-code",
+      "name": "Code: Create Calendar Events",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        880,
         560
       ]
     },
@@ -127,7 +146,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1100,
         560
       ]
     }
@@ -164,14 +183,25 @@
       "main": [
         [
           {
-            "node": "Code: Schedule Trash Pickup",
+            "node": "Compute Trash Day",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code: Schedule Trash Pickup": {
+    "Compute Trash Day": {
+      "main": [
+        [
+          {
+            "node": "Code: Create Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Create Calendar Events": {
       "main": [
         [
           {

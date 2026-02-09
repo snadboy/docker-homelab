@@ -9,6 +9,40 @@
 
 ## Recent Changes
 
+### 2026-02-09: Extract Trash Day Logic into Sub-Workflow
+
+**Status:** ✅ Complete
+
+**Summary:** Refactored duplicated date math logic (~60 lines: `formatDate`, `addDays`, `getHolidays`, holiday detection) from Trash Pickup Scheduler and Trash Pickup Status into a shared sub-workflow callable via Execute Workflow node.
+
+**Workflows:**
+- **Trash Day Calc** (`9pRyazs5XHc1OBxG`) — New sub-workflow with shared date logic
+  - `executeWorkflowTrigger` v1.1 with `inputSource: "passthrough"`
+  - Returns: pickupDay, pickupDate, takeOutDay, takeOutDate, status, delayed, holiday, daysUntil, weekOf
+- **Trash Pickup Status** (`ydLw1ilTg3sE8vXj`) — Modified to call sub-workflow
+  - Flow: Webhook → Execute Workflow (Compute Trash Day) → response
+  - `executeWorkflow` v1.1 with resource locator (`__rl`) format
+- **Trash Pickup Scheduler** (`D5R6GlhUDJTUGS8P`) — Modified to call sub-workflow
+  - Flow: Schedule/Webhook → Set Credentials → Execute Workflow → Code: Create Calendar Events → Gotify
+  - Calendar event creation + Gotify logic kept in Code node, date math removed
+
+**Key Technical Details:**
+- `executeWorkflowTrigger` v1.1 requires `inputSource: "passthrough"` (default is `workflowInputs` which requires schema)
+- `executeWorkflow` v1.1+ requires `workflowId` as resource locator object: `{"__rl": true, "value": "<id>", "mode": "list"}`
+- Sub-workflow `callerPolicy: "workflowsFromSameOwner"` (default)
+
+**Verification:**
+- `GET /webhook/trash-pickup-status` ✅ Returns JSON: `{"pickupDay":"Friday","pickupDate":"2026-02-13",...}`
+- `GET /webhook/trash-pickup` ✅ Triggers scheduler, creates calendar event, sends Gotify notification
+- Sub-workflow execution logs: ✅ Appears as child executions
+
+**Files Changed:**
+- `n8n/workflows/trash-day-calc.json` (new)
+- `n8n/workflows/trash-pickup-scheduler.json` (modified)
+- `n8n/workflows/trash-pickup-status.json` (modified)
+
+---
+
 ### 2026-02-08: Trash Pickup Scheduler Workflow
 
 **Status:** ✅ Complete

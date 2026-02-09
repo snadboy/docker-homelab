@@ -1,6 +1,6 @@
 {
   "name": "Trash Pickup Status",
-  "description": "Lightweight read-only endpoint for Homepage dashboard widget. Returns trash pickup status as JSON (pickup day, date, status, holiday delays). Pure date math, no API calls. Webhook: /webhook/trash-pickup-status",
+  "description": "Lightweight read-only endpoint for Homepage dashboard widget. Returns trash pickup status as JSON. Calls Trash Day Calc sub-workflow for date math. Webhook: /webhook/trash-pickup-status",
   "nodes": [
     {
       "parameters": {
@@ -20,12 +20,18 @@
     },
     {
       "parameters": {
-        "jsCode": "// Trash Pickup Status - lightweight endpoint for Homepage widget\n// No API calls, no calendar events - pure date math\n\nfunction formatDate(d) {\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\n\nfunction addDays(d, n) {\n  const result = new Date(d);\n  result.setDate(result.getDate() + n);\n  return result;\n}\n\nfunction getHolidays(year) {\n  const holidays = [];\n  let nyd = new Date(year, 0, 1);\n  if (nyd.getDay() === 0) nyd = new Date(year, 0, 2);\n  if (nyd.getDay() === 6) nyd = new Date(year - 1, 11, 31);\n  holidays.push({ date: nyd, name: \"New Year's Day\" });\n  let memDay = new Date(year, 4, 31);\n  while (memDay.getDay() !== 1) memDay.setDate(memDay.getDate() - 1);\n  holidays.push({ date: memDay, name: 'Memorial Day' });\n  let july4 = new Date(year, 6, 4);\n  if (july4.getDay() === 0) july4 = new Date(year, 6, 5);\n  if (july4.getDay() === 6) july4 = new Date(year, 6, 3);\n  holidays.push({ date: july4, name: 'Independence Day' });\n  let laborDay = new Date(year, 8, 1);\n  while (laborDay.getDay() !== 1) laborDay.setDate(laborDay.getDate() + 1);\n  holidays.push({ date: laborDay, name: 'Labor Day' });\n  let thanksgiving = new Date(year, 10, 1);\n  while (thanksgiving.getDay() !== 4) thanksgiving.setDate(thanksgiving.getDate() + 1);\n  thanksgiving.setDate(thanksgiving.getDate() + 21);\n  holidays.push({ date: thanksgiving, name: 'Thanksgiving' });\n  let xmas = new Date(year, 11, 25);\n  if (xmas.getDay() === 0) xmas = new Date(year, 11, 26);\n  if (xmas.getDay() === 6) xmas = new Date(year, 11, 24);\n  holidays.push({ date: xmas, name: 'Christmas Day' });\n  return holidays;\n}\n\nconst dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];\nconst today = new Date();\nconst todayStr = formatDate(today);\nconst dow = today.getDay(); // 0=Sun\n\n// Find the most recent Sunday (start of current week)\nconst sunday = addDays(today, -dow);\nconst defaultTrashDay = addDays(sunday, 5); // Friday\n\n// Check for holiday this week\nconst holidays = getHolidays(today.getFullYear());\nlet holidayThisWeek = null;\nfor (const h of holidays) {\n  const hStr = formatDate(h.date);\n  for (let d = 1; d <= 5; d++) {\n    if (formatDate(addDays(sunday, d)) === hStr) {\n      holidayThisWeek = { ...h, dateStr: hStr };\n      break;\n    }\n  }\n  if (holidayThisWeek) break;\n}\n\nlet pickupDay = defaultTrashDay;\nlet delayed = false;\nlet holiday = '';\nif (holidayThisWeek) {\n  pickupDay = addDays(defaultTrashDay, 1);\n  delayed = true;\n  holiday = holidayThisWeek.name;\n}\n\nconst takeOutDay = addDays(pickupDay, -1);\nconst pickupDayName = dayNames[pickupDay.getDay()];\nconst takeOutDayName = dayNames[takeOutDay.getDay()];\n\n// Days until pickup\nconst msPerDay = 86400000;\nconst daysUntilPickup = Math.ceil((pickupDay.getTime() - today.getTime()) / msPerDay);\nconst daysUntilTakeOut = Math.ceil((takeOutDay.getTime() - today.getTime()) / msPerDay);\n\nlet status;\nif (daysUntilPickup < 0) status = 'Done';\nelse if (daysUntilPickup === 0) status = 'Today!';\nelse if (daysUntilTakeOut === 0) status = 'Take out tonight';\nelse if (daysUntilPickup === 1) status = 'Tomorrow';\nelse status = `In ${daysUntilPickup} days`;\n\nreturn [{ json: {\n  pickupDay: pickupDayName,\n  pickupDate: formatDate(pickupDay),\n  takeOutDate: formatDate(takeOutDay),\n  status,\n  delayed,\n  holiday: holiday || 'None',\n  daysUntil: Math.max(0, daysUntilPickup)\n} }];"
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "9pRyazs5XHc1OBxG",
+          "mode": "list",
+          "cachedResultName": "Trash Day Calc"
+        }
       },
-      "id": "status-code",
+      "id": "status-exec-workflow",
       "name": "Compute Trash Day",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
       "position": [
         440,
         300

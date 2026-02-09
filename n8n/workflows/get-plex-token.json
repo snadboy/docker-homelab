@@ -1,0 +1,82 @@
+{
+  "name": "Get Plex Token",
+  "description": "Sub-workflow that fetches the current Plex auth token via SSH from the Plex host. Returns PLEX_URL and PLEX_TOKEN for use by calling workflows.",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d0a0a010-0010-4010-a010-000000000001",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "docker exec plex sed -n 's/.*PlexOnlineToken=\"\\([^\"]*\\)\".*/\\1/p' '/config/Library/Application Support/Plex Media Server/Preferences.xml'",
+        "cwd": "/home/snadboy"
+      },
+      "id": "d0a0a010-0010-4010-a010-000000000002",
+      "name": "SSH Read Token",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "6g4Tcr5sVJp0To9W",
+          "name": "Plex Host SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sshOutput = $input.first().json;\nconst token = (sshOutput.stdout || '').trim();\n\nif (!token) {\n  throw new Error(`Failed to get Plex token: stdout='${sshOutput.stdout}', stderr='${sshOutput.stderr}', keys=${Object.keys(sshOutput).join(',')}`);\n}\n\nreturn [{\n  json: {\n    PLEX_URL: $env.PLEX_URL,\n    PLEX_TOKEN: token\n  }\n}];"
+      },
+      "id": "d0a0a010-0010-4010-a010-000000000003",
+      "name": "Parse Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "SSH Read Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH Read Token": {
+      "main": [
+        [
+          {
+            "node": "Parse Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

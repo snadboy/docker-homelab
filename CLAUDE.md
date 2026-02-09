@@ -9,6 +9,51 @@
 
 ## Recent Changes
 
+### 2026-02-09: Dynamic Plex Token via SSH Sub-Workflow
+
+**Status:** ✅ Complete
+
+**Problem:** `PLEX_TOKEN` env var in n8n became stale when Plex rotated it, causing 401 errors in Plex Recently Added and Daily Media Digest workflows.
+
+**Solution:** Created a sub-workflow that dynamically fetches the current token from the Plex host via SSH, eliminating the need for a static `PLEX_TOKEN` env var.
+
+**Infrastructure:**
+- Enabled sshd on plex host (192.168.86.40) — was Tailscale SSH only
+- Generated ed25519 key pair for n8n → plex SSH access
+- Created "Plex Host SSH" credential in n8n (ID: `6g4Tcr5sVJp0To9W`)
+
+**Workflows:**
+- **Get Plex Token** (`AM7xbizoMlhMEp8x`) — New sub-workflow
+  - Flow: Execute Workflow Trigger → SSH Read Token → Parse Token
+  - SSH command: `docker exec plex sed -n 's/.*PlexOnlineToken="\([^"]*\)".*/\1/p' Preferences.xml`
+  - Returns: `{PLEX_URL, PLEX_TOKEN}`
+  - Note: Uses `sed` instead of `grep -oP` because n8n's SSH node mangles Perl regex `\K`
+- **Plex Recently Added** (`NYdQlvUoz1x14bIZ`) — Modified
+  - Replaced `Set Env Vars` node with `Execute Workflow` node calling Get Plex Token
+  - Flow: Schedule → Get Plex Token → Code → If → Gotify
+- **Daily Media Digest** (`puI2Gdj35nijpEey`) — Modified
+  - Removed PLEX_URL/PLEX_TOKEN from Set Env Vars (kept 8 other vars)
+  - Added Execute Workflow node between Set Env Vars and Code
+  - Code node merges both sources: `{...$('Set Env Vars').first().json, ...$input.first().json}`
+
+**Key Technical Details:**
+- SSH node requires `"authentication": "privateKey"` parameter (defaults to `"password"`)
+- SSH node returns `{code, signal, stdout, stderr}` not `{exitCode, stdout, stderr}`
+- `PLEX_TOKEN` removed from n8n `.env` (both local and remote utilities host)
+- `PLEX_URL` kept in `.env` since sub-workflow uses `$env.PLEX_URL`
+
+**Verification:**
+- Sub-workflow webhook test: ✅ Returns `{PLEX_URL, PLEX_TOKEN}` correctly
+- SSH connectivity from n8n container to plex:22: ✅
+
+**Files Changed:**
+- `n8n/workflows/get-plex-token.json` (new)
+- `n8n/workflows/plex-recently-added.json` (modified)
+- `n8n/workflows/daily-media-digest.json` (modified)
+- `n8n/.env` / `n8n/.env.example` (removed PLEX_TOKEN)
+
+---
+
 ### 2026-02-09: Extract Trash Day Logic into Sub-Workflow
 
 **Status:** ✅ Complete
@@ -40,6 +85,28 @@
 - `n8n/workflows/trash-day-calc.json` (new)
 - `n8n/workflows/trash-pickup-scheduler.json` (modified)
 - `n8n/workflows/trash-pickup-status.json` (modified)
+
+---
+
+### 2026-02-09: Fixed process.env in n8n Code Nodes
+
+**Status:** ✅ Complete
+
+**Problem:** Three workflows using `process.env.X` in Code nodes failed with `process is not defined [line 2]`. n8n's task runner sandbox executes Code nodes in isolated processes where the `process` global is unavailable, despite `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
+
+**Fix Pattern:** Added a "Set Env Vars" node before each Code node that resolves `$env.X` expressions (which work in n8n expression fields), then the Code node reads them via `$input.first().json.VARNAME`.
+
+**Workflows Fixed:**
+- **Arr Stack Health Check** (`qOZ6kS7MSlF9hOKb`) — 10 env vars (Sonarr, Radarr, Prowlarr, SABnzbd, Overseerr URLs + API keys)
+- **Plex Recently Added** (`NYdQlvUoz1x14bIZ`) — 2 env vars (PLEX_URL, PLEX_TOKEN)
+- **Daily Media Digest** (`puI2Gdj35nijpEey`) — 10 env vars (Sonarr, Radarr, SABnzbd, Plex, Overseerr URLs + API keys)
+
+**Additional Bug Fixed:** Some URLs used single quotes `'${process.env.X}/api/...'` instead of backticks, making `${}` a literal string instead of template interpolation.
+
+**Files Changed:**
+- `n8n/workflows/arr-stack-health-check.json`
+- `n8n/workflows/plex-recently-added.json`
+- `n8n/workflows/daily-media-digest.json`
 
 ---
 
@@ -130,7 +197,7 @@
 
 **Key Fix Detail:**
 - Expression fields (={{ ... }}) in HTTP Request nodes: `process.env.X` → `$env.X`
-- Code nodes (jsCode): `process.env.X` stays as-is (works with `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`)
+- Code nodes (jsCode): `process.env.X` does NOT work — n8n's task runner sandbox isolates Code nodes in processes where `process` is undefined. See 2026-02-09 fix below.
 
 **n8n API Notes:**
 - Create workflow: `POST /api/v1/workflows` (no `active` field - it's read-only)

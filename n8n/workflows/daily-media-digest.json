@@ -32,8 +32,6 @@
             { "id": "e4", "name": "RADARR_API_KEY", "value": "={{ $env.RADARR_API_KEY }}", "type": "string" },
             { "id": "e5", "name": "SABNZBD_URL", "value": "={{ $env.SABNZBD_URL }}", "type": "string" },
             { "id": "e6", "name": "SABNZBD_API_KEY", "value": "={{ $env.SABNZBD_API_KEY }}", "type": "string" },
-            { "id": "e7", "name": "PLEX_URL", "value": "={{ $env.PLEX_URL }}", "type": "string" },
-            { "id": "e8", "name": "PLEX_TOKEN", "value": "={{ $env.PLEX_TOKEN }}", "type": "string" },
             { "id": "e9", "name": "OVERSEERR_URL", "value": "={{ $env.OVERSEERR_URL }}", "type": "string" },
             { "id": "e10", "name": "OVERSEERR_API_KEY", "value": "={{ $env.OVERSEERR_API_KEY }}", "type": "string" }
           ]
@@ -50,14 +48,31 @@
     },
     {
       "parameters": {
-        "jsCode": "const env = $input.first().json;\nconst today = new Date();\nconst startDate = today.toISOString().split('T')[0];\nconst endDate = new Date(today.getTime() + 86400000).toISOString().split('T')[0];\n\nconst sections = [];\n\n// Sonarr - today's calendar\ntry {\n  const sonarrCal = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.SONARR_URL}/api/v3/calendar?start=${startDate}&end=${endDate}`,\n    headers: { 'X-Api-Key': env.SONARR_API_KEY },\n    timeout: 15000\n  });\n  if (sonarrCal.length > 0) {\n    const eps = sonarrCal.map(e => `  \u2022 ${e.series?.title || 'Unknown'} - S${String(e.seasonNumber).padStart(2,'0')}E${String(e.episodeNumber).padStart(2,'0')} - ${e.title || ''}`);\n    sections.push(`\ud83d\udcfa Today's Episodes (${sonarrCal.length}):\\n${eps.join('\\n')}`);\n  } else {\n    sections.push('\ud83d\udcfa No episodes scheduled today');\n  }\n} catch (err) {\n  sections.push(`\ud83d\udcfa Sonarr: Error - ${err.message}`);\n}\n\n// Radarr - queue (downloading)\ntry {\n  const radarrQueue = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.RADARR_URL}/api/v3/queue?pageSize=20`,\n    headers: { 'X-Api-Key': env.RADARR_API_KEY },\n    timeout: 15000\n  });\n  const records = radarrQueue.records || [];\n  if (records.length > 0) {\n    const movies = records.map(r => {\n      const pct = r.sizeleft && r.size ? Math.round((1 - r.sizeleft / r.size) * 100) : 0;\n      return `  \u2022 ${r.title || 'Unknown'} (${pct}%)`;\n    });\n    sections.push(`\ud83c\udfac Radarr Queue (${records.length}):\\n${movies.join('\\n')}`);\n  } else {\n    sections.push('\ud83c\udfac Radarr queue is empty');\n  }\n} catch (err) {\n  sections.push(`\ud83c\udfac Radarr: Error - ${err.message}`);\n}\n\n// SABnzbd - current queue\ntry {\n  const sabQueue = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.SABNZBD_URL}/api?mode=queue&output=json&apikey=${env.SABNZBD_API_KEY}`,\n    timeout: 15000\n  });\n  const queue = sabQueue.queue || {};\n  const slots = queue.slots || [];\n  const speed = queue.speed || '0';\n  if (slots.length > 0) {\n    sections.push(`\u2b07\ufe0f SABnzbd: ${slots.length} item(s) downloading at ${speed}/s`);\n  } else {\n    sections.push('\u2b07\ufe0f SABnzbd: Idle');\n  }\n} catch (err) {\n  sections.push(`\u2b07\ufe0f SABnzbd: Error - ${err.message}`);\n}\n\n// Plex - library stats\ntry {\n  const plexLibs = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.PLEX_URL}/library/sections`,\n    headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  const dirs = plexLibs?.MediaContainer?.Directory || [];\n  if (dirs.length > 0) {\n    const libs = dirs.map(d => `  \u2022 ${d.title}: ${d.type}`);\n    sections.push(`\ud83c\udf9e\ufe0f Plex Libraries:\\n${libs.join('\\n')}`);\n  }\n} catch (err) {\n  sections.push(`\ud83c\udf9e\ufe0f Plex: Error - ${err.message}`);\n}\n\n// Overseerr - pending requests\ntry {\n  const requests = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.OVERSEERR_URL}/api/v1/request?take=10&filter=pending`,\n    headers: { 'X-Api-Key': env.OVERSEERR_API_KEY },\n    timeout: 15000\n  });\n  const pending = requests.results || [];\n  if (pending.length > 0) {\n    sections.push(`\ud83d\udccb Overseerr: ${pending.length} pending request(s)`);\n  } else {\n    sections.push('\ud83d\udccb Overseerr: No pending requests');\n  }\n} catch (err) {\n  sections.push(`\ud83d\udccb Overseerr: Error - ${err.message}`);\n}\n\nconst message = sections.join('\\n\\n');\n\nreturn [{\n  json: {\n    title: `\ud83d\udcca Daily Media Digest - ${startDate}`,\n    message: message,\n    priority: 3\n  }\n}];"
+        "workflowId": {
+          "__rl": true,
+          "value": "AM7xbizoMlhMEp8x",
+          "mode": "list"
+        }
+      },
+      "id": "digest-get-token",
+      "name": "Get Plex Token",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = {...$('Set Env Vars').first().json, ...$input.first().json};\nconst today = new Date();\nconst startDate = today.toISOString().split('T')[0];\nconst endDate = new Date(today.getTime() + 86400000).toISOString().split('T')[0];\n\nconst sections = [];\n\n// Sonarr - today's calendar\ntry {\n  const sonarrCal = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.SONARR_URL}/api/v3/calendar?start=${startDate}&end=${endDate}`,\n    headers: { 'X-Api-Key': env.SONARR_API_KEY },\n    timeout: 15000\n  });\n  if (sonarrCal.length > 0) {\n    const eps = sonarrCal.map(e => `  \u2022 ${e.series?.title || 'Unknown'} - S${String(e.seasonNumber).padStart(2,'0')}E${String(e.episodeNumber).padStart(2,'0')} - ${e.title || ''}`);\n    sections.push(`\ud83d\udcfa Today's Episodes (${sonarrCal.length}):\\n${eps.join('\\n')}`);\n  } else {\n    sections.push('\ud83d\udcfa No episodes scheduled today');\n  }\n} catch (err) {\n  sections.push(`\ud83d\udcfa Sonarr: Error - ${err.message}`);\n}\n\n// Radarr - queue (downloading)\ntry {\n  const radarrQueue = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.RADARR_URL}/api/v3/queue?pageSize=20`,\n    headers: { 'X-Api-Key': env.RADARR_API_KEY },\n    timeout: 15000\n  });\n  const records = radarrQueue.records || [];\n  if (records.length > 0) {\n    const movies = records.map(r => {\n      const pct = r.sizeleft && r.size ? Math.round((1 - r.sizeleft / r.size) * 100) : 0;\n      return `  \u2022 ${r.title || 'Unknown'} (${pct}%)`;\n    });\n    sections.push(`\ud83c\udfac Radarr Queue (${records.length}):\\n${movies.join('\\n')}`);\n  } else {\n    sections.push('\ud83c\udfac Radarr queue is empty');\n  }\n} catch (err) {\n  sections.push(`\ud83c\udfac Radarr: Error - ${err.message}`);\n}\n\n// SABnzbd - current queue\ntry {\n  const sabQueue = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.SABNZBD_URL}/api?mode=queue&output=json&apikey=${env.SABNZBD_API_KEY}`,\n    timeout: 15000\n  });\n  const queue = sabQueue.queue || {};\n  const slots = queue.slots || [];\n  const speed = queue.speed || '0';\n  if (slots.length > 0) {\n    sections.push(`\u2b07\ufe0f SABnzbd: ${slots.length} item(s) downloading at ${speed}/s`);\n  } else {\n    sections.push('\u2b07\ufe0f SABnzbd: Idle');\n  }\n} catch (err) {\n  sections.push(`\u2b07\ufe0f SABnzbd: Error - ${err.message}`);\n}\n\n// Plex - library stats\ntry {\n  const plexLibs = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.PLEX_URL}/library/sections`,\n    headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  const dirs = plexLibs?.MediaContainer?.Directory || [];\n  if (dirs.length > 0) {\n    const libs = dirs.map(d => `  \u2022 ${d.title}: ${d.type}`);\n    sections.push(`\ud83c\udf9e\ufe0f Plex Libraries:\\n${libs.join('\\n')}`);\n  }\n} catch (err) {\n  sections.push(`\ud83c\udf9e\ufe0f Plex: Error - ${err.message}`);\n}\n\n// Overseerr - pending requests\ntry {\n  const requests = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.OVERSEERR_URL}/api/v1/request?take=10&filter=pending`,\n    headers: { 'X-Api-Key': env.OVERSEERR_API_KEY },\n    timeout: 15000\n  });\n  const pending = requests.results || [];\n  if (pending.length > 0) {\n    sections.push(`\ud83d\udccb Overseerr: ${pending.length} pending request(s)`);\n  } else {\n    sections.push('\ud83d\udccb Overseerr: No pending requests');\n  }\n} catch (err) {\n  sections.push(`\ud83d\udccb Overseerr: Error - ${err.message}`);\n}\n\nconst message = sections.join('\\n\\n');\n\nreturn [{\n  json: {\n    title: `\ud83d\udcca Daily Media Digest - ${startDate}`,\n    message: message,\n    priority: 3\n  }\n}];"
       },
       "id": "d0a0a002-0002-4002-a002-000000000002",
       "name": "Gather Media Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        660,
         304
       ]
     },
@@ -84,7 +99,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        880,
         304
       ]
     }
@@ -102,6 +117,17 @@
       ]
     },
     "Set Env Vars": {
+      "main": [
+        [
+          {
+            "node": "Get Plex Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Plex Token": {
       "main": [
         [
           {

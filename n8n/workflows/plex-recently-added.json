@@ -24,17 +24,16 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            { "id": "e1", "name": "PLEX_URL", "value": "={{ $env.PLEX_URL }}", "type": "string" },
-            { "id": "e2", "name": "PLEX_TOKEN", "value": "={{ $env.PLEX_TOKEN }}", "type": "string" }
-          ]
+        "workflowId": {
+          "__rl": true,
+          "value": "AM7xbizoMlhMEp8x",
+          "mode": "list"
         }
       },
-      "id": "plex-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "id": "plex-get-token",
+      "name": "Get Plex Token",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
       "position": [
         220,
         300
@@ -129,14 +128,14 @@
       "main": [
         [
           {
-            "node": "Set Env Vars",
+            "node": "Get Plex Token",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set Env Vars": {
+    "Get Plex Token": {
       "main": [
         [
           {

@@ -313,15 +313,113 @@
       ]
     },
     {
-      "parameters": {},
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
+      "parameters": {
+        "path": "gmail-cleanup-form",
+        "formTitle": "Gmail Cleanup",
+        "formDescription": "Select mode and options, then submit to run cleanup.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Mode",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "dry-run" },
+                  { "option": "live" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Days",
+              "fieldType": "number",
+              "requiredField": false,
+              "placeholder": "30"
+            },
+            {
+              "fieldLabel": "Max Threads",
+              "fieldType": "number",
+              "requiredField": false,
+              "placeholder": "500"
+            }
+          ]
+        },
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Gmail Cleanup started \u2014 check Gotify for results."
+            }
+          }
+        }
+      },
+      "id": "form-trigger",
+      "name": "Cleanup Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
       "position": [
         176,
-        640
+        1150
       ],
-      "id": "660ec14c-0bdc-4983-918e-41f7fdbe57b8",
-      "name": "When clicking \u2018Execute workflow\u2019"
+      "webhookId": "gmail-cleanup-form"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mode",
+              "name": "mode",
+              "value": "={{ $json[\"Mode\"] || 'dry-run' }}",
+              "type": "string"
+            },
+            {
+              "id": "days",
+              "name": "days",
+              "value": "={{ $json[\"Days\"] || '30' }}",
+              "type": "string"
+            },
+            {
+              "id": "max",
+              "name": "max",
+              "value": "={{ $json[\"Max Threads\"] || '500' }}",
+              "type": "string"
+            },
+            {
+              "id": "keepLabel",
+              "name": "keepLabel",
+              "value": "KEEP",
+              "type": "string"
+            },
+            {
+              "id": "gci",
+              "name": "googleClientId",
+              "value": "={{ $env.GOOGLE_CLIENT_ID }}",
+              "type": "string"
+            },
+            {
+              "id": "gcs",
+              "name": "googleClientSecret",
+              "value": "={{ $env.GOOGLE_CLIENT_SECRET }}",
+              "type": "string"
+            },
+            {
+              "id": "grt",
+              "name": "googleRefreshToken",
+              "value": "={{ $env.GOOGLE_REFRESH_TOKEN }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-form-config",
+      "name": "Set Form Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        1150
+      ]
     },
     {
       "parameters": {
@@ -448,11 +546,22 @@
         ]
       ]
     },
-    "When clicking \u2018Execute workflow\u2019": {
+    "Cleanup Form": {
       "main": [
         [
           {
-            "node": "Set Dry Run Config",
+            "node": "Set Form Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Form Config": {
+      "main": [
+        [
+          {
+            "node": "Code: Gmail Cleanup",
             "type": "main",
             "index": 0
           }

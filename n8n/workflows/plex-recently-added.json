@@ -24,14 +24,32 @@
     },
     {
       "parameters": {
-        "jsCode": "// Check Plex recently added items (last 2 hours)\nconst twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;\n\nconst sections = [];\nlet totalNew = 0;\n\n// Get all library sections first\nlet libraries;\ntry {\n  const libResp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: '${process.env.PLEX_URL}/library/sections',\n    headers: { 'X-Plex-Token': process.env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  libraries = libResp?.MediaContainer?.Directory || [];\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nfor (const lib of libraries) {\n  try {\n    const recentResp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${process.env.PLEX_URL}/library/sections/${lib.key}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=20`,\n      headers: { 'X-Plex-Token': process.env.PLEX_TOKEN, 'Accept': 'application/json' },\n      timeout: 15000\n    });\n    const items = recentResp?.MediaContainer?.Metadata || [];\n    const newItems = items.filter(i => i.addedAt > twoHoursAgo);\n    \n    if (newItems.length > 0) {\n      totalNew += newItems.length;\n      const emoji = lib.type === 'movie' ? '\ud83c\udfac' : lib.type === 'show' ? '\ud83d\udcfa' : '\ud83c\udfb5';\n      const itemList = newItems.map(i => {\n        if (lib.type === 'show') {\n          return `  \u2022 ${i.grandparentTitle || i.parentTitle || i.title} - ${i.title}`;\n        }\n        return `  \u2022 ${i.title}${i.year ? ` (${i.year})` : ''}`;\n      });\n      sections.push(`${emoji} ${lib.title} (${newItems.length} new):\\n${itemList.join('\\n')}`);\n    }\n  } catch (err) {\n    // Skip failed library\n  }\n}\n\nif (totalNew === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\nreturn [{\n  json: {\n    hasNew: true,\n    title: `\ud83c\udf9e\ufe0f ${totalNew} New Item(s) Added to Plex`,\n    message: sections.join('\\n\\n'),\n    priority: 3\n  }\n}];"
+        "assignments": {
+          "assignments": [
+            { "id": "e1", "name": "PLEX_URL", "value": "={{ $env.PLEX_URL }}", "type": "string" },
+            { "id": "e2", "name": "PLEX_TOKEN", "value": "={{ $env.PLEX_TOKEN }}", "type": "string" }
+          ]
+        }
+      },
+      "id": "plex-set-env",
+      "name": "Set Env Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check Plex recently added items (last 2 hours)\nconst env = $input.first().json;\nconst twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;\n\nconst sections = [];\nlet totalNew = 0;\n\n// Get all library sections first\nlet libraries;\ntry {\n  const libResp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.PLEX_URL}/library/sections`,\n    headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  libraries = libResp?.MediaContainer?.Directory || [];\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nfor (const lib of libraries) {\n  try {\n    const recentResp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${env.PLEX_URL}/library/sections/${lib.key}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=20`,\n      headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n      timeout: 15000\n    });\n    const items = recentResp?.MediaContainer?.Metadata || [];\n    const newItems = items.filter(i => i.addedAt > twoHoursAgo);\n    \n    if (newItems.length > 0) {\n      totalNew += newItems.length;\n      const emoji = lib.type === 'movie' ? '\ud83c\udfac' : lib.type === 'show' ? '\ud83d\udcfa' : '\ud83c\udfb5';\n      const itemList = newItems.map(i => {\n        if (lib.type === 'show') {\n          return `  \u2022 ${i.grandparentTitle || i.parentTitle || i.title} - ${i.title}`;\n        }\n        return `  \u2022 ${i.title}${i.year ? ` (${i.year})` : ''}`;\n      });\n      sections.push(`${emoji} ${lib.title} (${newItems.length} new):\\n${itemList.join('\\n')}`);\n    }\n  } catch (err) {\n    // Skip failed library\n  }\n}\n\nif (totalNew === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\nreturn [{\n  json: {\n    hasNew: true,\n    title: `\ud83c\udf9e\ufe0f ${totalNew} New Item(s) Added to Plex`,\n    message: sections.join('\\n\\n'),\n    priority: 3\n  }\n}];"
       },
       "id": "d0a0a004-0004-4004-a004-000000000002",
       "name": "Check Recently Added",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        260,
+        440,
         300
       ]
     },
@@ -63,7 +81,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        520,
+        660,
         300
       ]
     },
@@ -90,7 +108,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        780,
+        880,
         200
       ]
     },
@@ -101,13 +119,24 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        780,
+        880,
         400
       ]
     }
   ],
   "connections": {
     "Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "Set Env Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Env Vars": {
       "main": [
         [
           {

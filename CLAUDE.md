@@ -9,6 +9,76 @@
 
 ## Recent Changes
 
+### 2026-02-09: Proxmox/VM Monitoring & Ubuntu Update Management
+
+**Status:** ✅ Complete
+
+**Summary:** Set up 3 n8n monitoring workflows with Discord alerts, distributed SSH keys for update checking, configured unattended-upgrades on all Ubuntu hosts.
+
+**New Workflows:**
+- **Proxmox Health Monitor** (`Cs4Vu1hmLj82uBCQ`) — Every 15 min
+  - Checks node memory (>85%), disk (>80%), CPU (>90%)
+  - Checks guest memory (>90%), disk (>85%)
+  - Detects unexpected stops for 11 expected-running guests
+  - 1-hour deduplication cooldown per unique alert
+  - Alerts to Discord (red embed) only when thresholds exceeded
+- **Daily Proxmox Summary** (`Fc1CXcJUU3LZ46G2`) — Daily at 8:15 AM
+  - Reports CPU/Mem/Disk/Uptime/VM+CT counts per node
+  - Blue embed to Discord with footer summary
+- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — Daily at 8:30 AM
+  - SSH to 7 hosts (plex, arr, cadre, ns, utilities, iot, ha)
+  - Reports pending apt packages and reboot-required status
+  - Yellow embed to Discord (green if all up to date)
+
+**New SSH Credentials (n8n):**
+| Name | ID | Host | User |
+|------|----|------|------|
+| plex SSH | C13DCoHPT9ECBLYJ | host-plex.isnadboy.com | snadboy |
+| arr SSH | eoD78OvooU5xNszV | host-arr.isnadboy.com | snadboy |
+| cadre SSH | H1zhHsKxDwEDOSRk | host-cadre.isnadboy.com | snadboy |
+| ns SSH | SOdVhtzBbhi13lEl | host-ns.isnadboy.com | root |
+| utilities SSH | n8816WsRbTEbFnjD | host-utilities.isnadboy.com | snadboy |
+| iot SSH | DjfY1P2avir6zmei | host-iot.isnadboy.com | snadboy |
+| ha SSH | YgRW8lB1lXMvtPjF | host-homeassistant.isnadboy.com | snadboy |
+
+**SSH Key:** `n8n-updates@utilities` (ed25519, private key stored in each n8n SSH credential)
+- Authorized on: plex, arr, cadre, ns (root), utilities, iot, homeassistant
+- Also distributed the existing `n8n@utilities` key to arr, cadre, utilities, iot, homeassistant, ns (root)
+
+**Unattended Upgrades:**
+- Configured on: plex, arr, cadre, ns, utilities, iot
+- Config: `/etc/apt/apt.conf.d/52unattended-upgrades-local`
+- Auto-reboot enabled at 04:00
+- homeassistant skipped (Alpine Linux, not Ubuntu)
+
+**New Environment Variables (n8n/.env):**
+- `PVE_API_URL=https://100.69.91.74:8006`
+- `PVE_API_TOKEN=homepage@pve!homepage-token=<token>`
+- `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+
+**Discord Webhook:** All monitoring goes to a single Discord channel webhook
+
+**Files Changed:**
+- `n8n/workflows/proxmox-health-monitor.json` (new)
+- `n8n/workflows/proxmox-daily-summary.json` (new)
+- `n8n/workflows/pending-updates-monitor.json` (new)
+- `n8n/.env` (added PVE_API_URL, PVE_API_TOKEN, DISCORD_WEBHOOK_URL)
+- `n8n/.env.example` (added placeholders)
+
+**Verification:**
+- Health Monitor: ✅ First execution succeeded (0.7s) — correctly reported "All Healthy" at normal thresholds
+- Daily Summary: ✅ Test message sent to Discord with correct format (3 nodes, all stats)
+- Pending Updates: ✅ Test message sent to Discord (6 hosts reporting pending packages)
+- Discord Webhook: ✅ All three message formats verified (red alert, blue summary, yellow updates)
+- Unattended Upgrades: ✅ Enabled on 6 Ubuntu hosts with auto-reboot at 4 AM
+
+**Architecture Note:**
+- Pending Updates Monitor uses individual SSH nodes per host (not a loop), because n8n's SSH credentials are per-host
+- Each SSH node has `onError: continueRegularOutput` so one failing host doesn't break the whole workflow
+- The Merge node in append mode collects all SSH outputs before formatting
+
+---
+
 ### 2026-02-09: Dynamic Plex Token via SSH Sub-Workflow
 
 **Status:** ✅ Complete

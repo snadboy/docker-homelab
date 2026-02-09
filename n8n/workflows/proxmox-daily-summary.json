@@ -1,0 +1,89 @@
+{
+  "name": "Daily Proxmox Summary",
+  "description": "Sends a daily cluster status report to Discord at 8:15 AM.",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "15 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "pds-trigger",
+      "name": "Daily 8:15 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "e1", "name": "PVE_API_URL", "value": "={{ $env.PVE_API_URL }}", "type": "string" },
+            { "id": "e2", "name": "PVE_API_TOKEN", "value": "={{ $env.PVE_API_TOKEN }}", "type": "string" },
+            { "id": "e3", "name": "DISCORD_WEBHOOK_URL", "value": "={{ $env.DISCORD_WEBHOOK_URL }}", "type": "string" }
+          ]
+        }
+      },
+      "id": "pds-set-env",
+      "name": "Set Env Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nconst PVE = env.PVE_API_URL;\nconst TOKEN = env.PVE_API_TOKEN;\nconst headers = { Authorization: `PVEAPIToken=${TOKEN}` };\nconst opts = { method: 'GET', headers, skipSslCertificateValidation: true, timeout: 15000 };\n\nfunction formatUptime(seconds) {\n  const d = Math.floor(seconds / 86400);\n  const h = Math.floor((seconds % 86400) / 3600);\n  if (d > 0) return `${d}d ${h}h`;\n  return `${h}h`;\n}\n\nfunction formatBytes(bytes) {\n  const gb = bytes / (1024 * 1024 * 1024);\n  if (gb >= 1024) return `${(gb / 1024).toFixed(1)} TB`;\n  return `${gb.toFixed(1)} GB`;\n}\n\nconst fields = [];\nlet totalVmsRunning = 0, totalVmsTotal = 0;\nlet totalCtsRunning = 0, totalCtsTotal = 0;\nlet nodesOnline = 0;\n\ntry {\n  const nodesResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes` });\n  const nodes = (nodesResp.data || []).sort((a, b) => a.node.localeCompare(b.node));\n\n  for (const node of nodes) {\n    const name = node.node;\n\n    if (node.status !== 'online') {\n      fields.push({ name: `🔴 ${name}`, value: 'OFFLINE', inline: false });\n      continue;\n    }\n    nodesOnline++;\n\n    const cpuPct = Math.round(node.cpu * 100);\n    const memPct = Math.round((node.mem / node.maxmem) * 100);\n    const diskPct = Math.round((node.disk / node.maxdisk) * 100);\n    const uptime = formatUptime(node.uptime);\n\n    // Count VMs and CTs on this node\n    let vmRunning = 0, vmTotal = 0, ctRunning = 0, ctTotal = 0;\n\n    for (const guestType of ['qemu', 'lxc']) {\n      try {\n        const resp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes/${name}/${guestType}` });\n        const guests = resp.data || [];\n        for (const g of guests) {\n          if (g.template) continue;\n          if (guestType === 'qemu') {\n            vmTotal++;\n            totalVmsTotal++;\n            if (g.status === 'running') { vmRunning++; totalVmsRunning++; }\n          } else {\n            ctTotal++;\n            totalCtsTotal++;\n            if (g.status === 'running') { ctRunning++; totalCtsRunning++; }\n          }\n        }\n      } catch (e) { /* skip */ }\n    }\n\n    const memUsed = formatBytes(node.mem);\n    const memMax = formatBytes(node.maxmem);\n    const guestStr = [];\n    if (vmTotal > 0) guestStr.push(`VMs: ${vmRunning}/${vmTotal}`);\n    if (ctTotal > 0) guestStr.push(`CTs: ${ctRunning}/${ctTotal}`);\n\n    fields.push({\n      name: `🖥️ ${name}`,\n      value: `CPU: ${cpuPct}% | Mem: ${memPct}% (${memUsed}/${memMax}) | Disk: ${diskPct}% | Up: ${uptime} | ${guestStr.join(' | ')}`,\n      inline: false\n    });\n  }\n} catch (err) {\n  fields.push({ name: '❌ Error', value: `Failed to query Proxmox API: ${err.message}`, inline: false });\n}\n\nconst today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'America/New_York' });\n\nreturn [{\n  json: {\n    title: `📊 Daily Proxmox Report — ${today}`,\n    color: 3447003,\n    fields,\n    footer: `${nodesOnline} nodes online | ${totalVmsRunning} VMs running | ${totalCtsRunning} CTs running`,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "pds-code",
+      "name": "Gather All Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.title, color: $json.color, fields: $json.fields, footer: { text: $json.footer }, timestamp: $json.timestamp }] }) }}",
+        "options": {}
+      },
+      "id": "pds-discord",
+      "name": "Discord Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    }
+  ],
+  "connections": {
+    "Daily 8:15 AM": {
+      "main": [[{ "node": "Set Env Vars", "type": "main", "index": 0 }]]
+    },
+    "Set Env Vars": {
+      "main": [[{ "node": "Gather All Stats", "type": "main", "index": 0 }]]
+    },
+    "Gather All Stats": {
+      "main": [[{ "node": "Discord Summary", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

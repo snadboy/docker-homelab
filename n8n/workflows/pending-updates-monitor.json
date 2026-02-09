@@ -1,0 +1,270 @@
+{
+  "name": "Pending Updates Monitor",
+  "description": "Checks Ubuntu hosts for pending apt updates via SSH daily at 8:30 AM. Reports to Discord.",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "pum-trigger",
+      "name": "Daily 8:30 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "e1", "name": "DISCORD_WEBHOOK_URL", "value": "={{ $env.DISCORD_WEBHOOK_URL }}", "type": "string" }
+          ]
+        }
+      },
+      "id": "pum-set-env",
+      "name": "Set Env Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"plex|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-plex",
+      "name": "SSH plex",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "C13DCoHPT9ECBLYJ",
+          "name": "plex SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"arr|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-arr",
+      "name": "SSH arr",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 100],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "eoD78OvooU5xNszV",
+          "name": "arr SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"cadre|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-cadre",
+      "name": "SSH cadre",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 200],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"ns|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-ns",
+      "name": "SSH ns",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 300],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "SOdVhtzBbhi13lEl",
+          "name": "ns SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"utilities|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-utilities",
+      "name": "SSH utilities",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 400],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"iot|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-iot",
+      "name": "SSH iot",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 500],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "DjfY1P2avir6zmei",
+          "name": "iot SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"ha|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "pum-ssh-ha",
+      "name": "SSH ha",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 600],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "YgRW8lB1lXMvtPjF",
+          "name": "ha SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "pum-merge",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst fields = [];\nlet anyPending = false;\n\nfor (const item of items) {\n  const stdout = (item.json.stdout || '').trim();\n  const stderr = (item.json.stderr || '').trim();\n\n  // Parse: hostname|count|reboot\n  const parts = stdout.split('|');\n  if (parts.length < 3) {\n    // Error case — try to determine host from error context\n    const errorMsg = stderr || stdout || 'unknown error';\n    fields.push({ name: '❓ Unknown Host', value: `❌ SSH failed: ${errorMsg.substring(0, 100)}`, inline: true });\n    anyPending = true;\n    continue;\n  }\n\n  const hostName = parts[0];\n  const pendingCount = parseInt(parts[1] || '0', 10);\n  const rebootRequired = (parts[2] || '').trim() === 'yes';\n\n  if (pendingCount > 0 || rebootRequired) {\n    anyPending = true;\n    let value = `${pendingCount} packages pending`;\n    if (rebootRequired) value += ' ⚠️ reboot required';\n    fields.push({ name: hostName, value, inline: true });\n  } else {\n    fields.push({ name: hostName, value: '✅ Up to date', inline: true });\n  }\n}\n\n// Sort fields alphabetically by host name\nfields.sort((a, b) => a.name.localeCompare(b.name));\n\nconst today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'America/New_York' });\n\nreturn [{\n  json: {\n    hasUpdates: anyPending,\n    title: `📦 Pending Updates Report — ${today}`,\n    color: anyPending ? 16776960 : 3066993,\n    fields,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "pum-format",
+      "name": "Format Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.title, color: $json.color, fields: $json.fields, timestamp: $json.timestamp }] }) }}",
+        "options": {}
+      },
+      "id": "pum-discord",
+      "name": "Discord Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300]
+    }
+  ],
+  "connections": {
+    "Daily 8:30 AM": {
+      "main": [[{ "node": "Set Env Vars", "type": "main", "index": 0 }]]
+    },
+    "Set Env Vars": {
+      "main": [[
+        { "node": "SSH plex", "type": "main", "index": 0 },
+        { "node": "SSH arr", "type": "main", "index": 0 },
+        { "node": "SSH cadre", "type": "main", "index": 0 },
+        { "node": "SSH ns", "type": "main", "index": 0 },
+        { "node": "SSH utilities", "type": "main", "index": 0 },
+        { "node": "SSH iot", "type": "main", "index": 0 },
+        { "node": "SSH ha", "type": "main", "index": 0 }
+      ]]
+    },
+    "SSH plex": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH arr": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH cadre": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH ns": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH utilities": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH iot": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "SSH ha": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "Merge Results": {
+      "main": [[{ "node": "Format Results", "type": "main", "index": 0 }]]
+    },
+    "Format Results": {
+      "main": [[{ "node": "Discord Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

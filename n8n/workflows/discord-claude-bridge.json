@@ -1,0 +1,367 @@
+{
+  "name": "Discord Claude Bridge",
+  "description": "Bridges Discord messages to Claude Code CLI on sdevs via SSH. Each user gets a persistent session with conversation context. Say 'done' to end session.",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["messageCreate"]
+      },
+      "id": "dcb-trigger",
+      "name": "Discord Trigger",
+      "type": "n8n-nodes-base.discordTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "credentials": {
+        "discordBotTokenApi": {
+          "id": "",
+          "name": "Discord Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-not-bot",
+              "leftValue": "={{ $json.author?.bot }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dcb-filter-bot",
+      "name": "Filter Bot",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-channel",
+              "leftValue": "={{ $json.channel_id }}",
+              "rightValue": "={{ $env.DISCORD_CHANNEL_ID }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dcb-filter-channel",
+      "name": "Filter Channel",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "e1", "name": "DISCORD_BOT_TOKEN", "value": "={{ $env.DISCORD_BOT_TOKEN }}", "type": "string" },
+            { "id": "e2", "name": "DISCORD_CHANNEL_ID", "value": "={{ $env.DISCORD_CHANNEL_ID }}", "type": "string" },
+            { "id": "e3", "name": "CLAUDE_WORK_DIR", "value": "={{ $env.CLAUDE_WORK_DIR }}", "type": "string" },
+            { "id": "e4", "name": "content", "value": "={{ $('Discord Trigger').first().json.content }}", "type": "string" },
+            { "id": "e5", "name": "userId", "value": "={{ $('Discord Trigger').first().json.author.id }}", "type": "string" },
+            { "id": "e6", "name": "username", "value": "={{ $('Discord Trigger').first().json.author.username }}", "type": "string" },
+            { "id": "e7", "name": "channelId", "value": "={{ $('Discord Trigger').first().json.channel_id }}", "type": "string" }
+          ]
+        }
+      },
+      "id": "dcb-set-env",
+      "name": "Set Env Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst userId = input.userId;\nconst username = input.username;\nconst message = input.content;\nconst workDir = input.CLAUDE_WORK_DIR || '/home/snadboy/projects';\n\n// Session management via workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\n\nconst now = Date.now();\nconst FOUR_HOURS = 4 * 60 * 60 * 1000;\n\n// Auto-prune sessions inactive >4 hours\nfor (const [uid, session] of Object.entries(staticData.sessions)) {\n  if (now - session.lastActivity > FOUR_HOURS) {\n    delete staticData.sessions[uid];\n  }\n}\n\n// Check for end-session commands\nconst trimmed = message.trim().toLowerCase();\nif (['done', 'end', 'quit', 'exit'].includes(trimmed)) {\n  const session = staticData.sessions[userId];\n  const sessionId = session ? session.sessionId : null;\n  delete staticData.sessions[userId];\n  return [{\n    json: {\n      action: 'end_session',\n      sessionId,\n      userId,\n      username\n    }\n  }];\n}\n\n// Generate UUID v4\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nlet session = staticData.sessions[userId];\nlet isNewSession = false;\n\nif (!session) {\n  // New session\n  session = {\n    sessionId: uuidv4(),\n    createdAt: new Date().toISOString(),\n    lastActivity: now,\n    username\n  };\n  staticData.sessions[userId] = session;\n  isNewSession = true;\n} else {\n  session.lastActivity = now;\n}\n\n// Base64-encode the message to avoid shell escaping issues\nconst base64Msg = Buffer.from(message, 'utf-8').toString('base64');\n\n// Build the SSH command\nlet cmd;\nif (isNewSession) {\n  cmd = `cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude -p --session-id '${session.sessionId}'\"`;\n} else {\n  cmd = `cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude --resume '${session.sessionId}' -p\"`;\n}\n\nreturn [{\n  json: {\n    action: 'send_claude',\n    command: cmd,\n    sessionId: session.sessionId,\n    isNewSession,\n    userId,\n    username\n  }\n}];"
+      },
+      "id": "dcb-session-mgr",
+      "name": "Session Manager",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-end",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "end_session",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dcb-route",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $('Set Env Vars').first().json.channelId }}/typing",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bot {{ $('Set Env Vars').first().json.DISCORD_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "dcb-typing",
+      "name": "Typing Indicator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 400],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeCommand",
+        "command": "={{ $('Session Manager').first().json.command }}",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "dcb-ssh-claude",
+      "name": "SSH Claude Code",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [1540, 400],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "",
+          "name": "sdevs SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ssh = $input.first().json;\nconst session = $('Session Manager').first().json;\nconst env = $('Set Env Vars').first().json;\n\nlet response = '';\n\n// Check for errors\nif (ssh.stderr && ssh.stderr.trim() && (!ssh.stdout || !ssh.stdout.trim())) {\n  response = `**Error:** ${ssh.stderr.trim()}`;\n} else if (ssh.code === 124) {\n  response = '**Timed out** — Claude took longer than 5 minutes to respond. Try a simpler request.';\n} else if (ssh.code !== 0 && ssh.code !== null && (!ssh.stdout || !ssh.stdout.trim())) {\n  response = `**Error (exit code ${ssh.code}):** ${(ssh.stderr || 'Unknown error').trim()}`;\n} else {\n  response = (ssh.stdout || '').trim();\n}\n\nif (!response) {\n  response = '*No response from Claude.*';\n}\n\n// Footer with session info\nconst footer = session.isNewSession\n  ? `\\n-# Session: \\`${session.sessionId.substring(0, 8)}\\` (new) | Say \"done\" to end`\n  : `\\n-# Session: \\`${session.sessionId.substring(0, 8)}\\` | Say \"done\" to end`;\n\nresponse += footer;\n\n// Split into chunks of <=2000 chars (Discord limit)\nconst MAX_LEN = 2000;\nconst chunks = [];\n\nif (response.length <= MAX_LEN) {\n  chunks.push(response);\n} else {\n  // Remove footer, split body, add footer to last chunk\n  const body = response.substring(0, response.length - footer.length);\n  let remaining = body;\n\n  while (remaining.length > 0) {\n    if (remaining.length <= MAX_LEN - footer.length) {\n      chunks.push(remaining);\n      remaining = '';\n    } else {\n      // Find last newline before limit\n      let splitAt = remaining.lastIndexOf('\\n', MAX_LEN);\n      if (splitAt <= 0) splitAt = MAX_LEN;\n      chunks.push(remaining.substring(0, splitAt));\n      remaining = remaining.substring(splitAt).replace(/^\\n/, '');\n    }\n  }\n\n  // Add footer to last chunk\n  const last = chunks[chunks.length - 1];\n  if ((last + footer).length <= MAX_LEN) {\n    chunks[chunks.length - 1] = last + footer;\n  } else {\n    chunks.push(footer.trim());\n  }\n}\n\nreturn chunks.map((chunk, i) => ({\n  json: {\n    content: chunk,\n    channelId: env.channelId,\n    botToken: env.DISCORD_BOT_TOKEN,\n    chunkIndex: i,\n    totalChunks: chunks.length\n  }\n}));"
+      },
+      "id": "dcb-format",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $json.channelId }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bot {{ $json.botToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.content }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "dcb-send-msg",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $('Set Env Vars').first().json.channelId }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bot {{ $('Set Env Vars').first().json.DISCORD_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: '**Session ended.** Start a new conversation anytime by sending a message.' }) }}",
+        "options": {}
+      },
+      "id": "dcb-send-end",
+      "name": "Send End Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 200]
+    }
+  ],
+  "connections": {
+    "Discord Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter Bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Bot": {
+      "main": [
+        [
+          {
+            "node": "Filter Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Channel": {
+      "main": [
+        [
+          {
+            "node": "Set Env Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Env Vars": {
+      "main": [
+        [
+          {
+            "node": "Session Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Manager": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Send End Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Typing Indicator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Typing Indicator": {
+      "main": [
+        [
+          {
+            "node": "SSH Claude Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH Claude Code": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

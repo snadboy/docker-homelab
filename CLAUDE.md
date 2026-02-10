@@ -9,6 +9,31 @@
 
 ## Recent Changes
 
+### 2026-02-10: Traefik Update v3.2 → v3.6
+
+**Status:** ✅ Complete
+
+**Summary:** Updated Traefik from v3.2.5 to v3.6.7 as part of a homelab-wide version audit. No breaking changes for our config (HTTP provider, ACME/Cloudflare DNS challenge, dashboard).
+
+**Changes:**
+- Updated default image tag in `traefik-http-provider/docker-compose.yml` from `v3.2` to `v3.6`
+- Pulled new image and redeployed on cadre
+- v3.6.7 includes CVE-2025-66490 fix (encoded character handling, opt-in by default)
+
+**Verification:**
+- Container running and healthy: ✅
+- 35 services discovered by HTTP provider: ✅
+- Routing confirmed (traefik dashboard 200, sonarr 302, overseerr 307): ✅
+
+**Note:** HTTP provider initially hung on `devs` host SSH timeout during restart; recovered after a `docker restart sb-traefik-http-provider`.
+
+**Files Changed:**
+- `traefik-http-provider/docker-compose.yml` — image tag `v3.2` → `v3.6`
+
+**Commit:** `eb057b4` — Update Traefik from v3.2 to v3.6
+
+---
+
 ### 2026-02-10: UniFi Network & Cloudflare Tunnel Monitoring
 
 **Status:** ✅ Complete

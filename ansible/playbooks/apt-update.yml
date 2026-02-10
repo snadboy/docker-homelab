@@ -1,0 +1,46 @@
+- name: Apply system updates (SSH hosts)
+  hosts: apt_hosts
+  become: true
+  serial: "50%"
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: true
+        autoclean: true
+      register: upgrade_result
+
+    - name: Check if reboot required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_file
+
+    - name: Display upgrade summary
+      debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ upgrade_result.stdout_lines | select('match', '.*upgraded.*') | list | first | default('No changes') }}.
+          Reboot required: {{ reboot_file.stat.exists | default(false) }}
+
+- name: Apply system updates (LXC containers via pct exec)
+  hosts: lxc_containers
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Run apt update and upgrade in container
+      delegate_to: "{{ pve_host }}"
+      become: false
+      ansible.builtin.shell: |
+        pct exec {{ pve_vmid }} -- bash -c 'export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get upgrade -y -qq && apt-get autoremove -y -qq'
+      register: lxc_result
+      vars:
+        ansible_user: root
+
+    - name: Display LXC upgrade output
+      debug:
+        msg: "{{ inventory_hostname }} (CT {{ pve_vmid }}): {{ lxc_result.stdout_lines | last | default('Done') }}"

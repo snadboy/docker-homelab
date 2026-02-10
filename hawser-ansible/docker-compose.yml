@@ -1,0 +1,16 @@
+services:
+  hawser:
+    image: ghcr.io/finsys/hawser:latest
+    container_name: hawser-agent
+    environment:
+      - DOCKHAND_SERVER_URL=wss://dockhand.isnadboy.com/api/hawser/connect
+      - TOKEN=${HAWSER_TOKEN}
+      - TLS_SKIP_VERIFY=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - hawser-data:/data
+    restart: unless-stopped
+
+volumes:
+  hawser-data:
+    external: true

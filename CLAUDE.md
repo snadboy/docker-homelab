@@ -9,23 +9,47 @@
 
 ## Recent Changes
 
-### 2026-02-10: Traefik Update v3.2 → v3.6
+### 2026-02-10: Homelab Version Audit & Updates
 
 **Status:** ✅ Complete
 
-**Summary:** Updated Traefik from v3.2.5 to v3.6.7 as part of a homelab-wide version audit. No breaking changes for our config (HTTP provider, ACME/Cloudflare DNS challenge, dashboard).
+**Summary:** Audited all key services across the homelab for version currency. Updated Traefik, Technitium DNS (all 3 servers). Plex and all other services confirmed current.
 
-**Changes:**
+**Traefik v3.2.5 → v3.6.7 (cadre):**
 - Updated default image tag in `traefik-http-provider/docker-compose.yml` from `v3.2` to `v3.6`
 - Pulled new image and redeployed on cadre
 - v3.6.7 includes CVE-2025-66490 fix (encoded character handling, opt-in by default)
+- No breaking changes for our config (HTTP provider, ACME/Cloudflare DNS challenge, dashboard)
+- HTTP provider initially hung on `devs` host SSH timeout during restart; recovered after `docker restart sb-traefik-http-provider`
+- Verified: container healthy, 35 services discovered, routing confirmed ✅
 
-**Verification:**
-- Container running and healthy: ✅
-- 35 services discovered by HTTP provider: ✅
-- Routing confirmed (traefik dashboard 200, sonarr 302, overseerr 307): ✅
+**Technitium DNS v14.0 → v14.3 (ns, ns-secundus):**
+- Updated via official `curl -sSL https://download.technitium.com/dns/install.sh | bash`
+- ns (primary, bare metal, service: `dns`) — updated and restarted ✅
+- ns-secundus (secondary, bare metal, service: `technitium`) — updated and restarted ✅
+- ns-tertius (CT 112) was already on v14.3 — no update needed
+- DNS resolution verified (internal + external queries working) ✅
+- v14.3 adds dark mode, catalog zone updates, DHCP scope config improvements
 
-**Note:** HTTP provider initially hung on `devs` host SSH timeout during restart; recovered after a `docker restart sb-traefik-http-provider`.
+**Plex 1.42.2 (plex) — already current:**
+- Pulled latest linuxserver image — still resolves to 1.42.2
+- Plex 1.43.0 was released publicly but pulled back due to package signing issues
+- 1.42.2 remains the latest stable `latest` tag from linuxserver
+
+**All confirmed current (no update needed):**
+
+| Service | Version | Host |
+|---------|---------|------|
+| PVE | 9.1.5 | colossus, guardian, multivac |
+| Tailscale | 1.94.1 | All 12 hosts |
+| Sonarr | 4.0.16.2944 | arr |
+| Radarr | 6.0.4.10291 | arr |
+| Prowlarr | 2.3.0.5236 | arr |
+| Overseerr | v1.34.0 | arr |
+| SABnzbd | 4.5.5 | arr |
+| Tautulli | v2.16.0 | arr |
+| Zigbee2MQTT | 2.8.0 | cadre |
+| Plex | 1.42.2 | plex |
 
 **Files Changed:**
 - `traefik-http-provider/docker-compose.yml` — image tag `v3.2` → `v3.6`

@@ -9,6 +9,34 @@
 
 ## Recent Changes
 
+### 2026-02-09: Full Portainer Removal
+
+**Status:** ✅ Complete
+
+**Summary:** Removed Portainer server and all satellite agents from all 6 Docker hosts. Dockhand is now the sole container management layer.
+
+**What was removed:**
+
+| Host | Containers | Volumes | Images |
+|------|-----------|---------|--------|
+| **cadre** | `portainer` (server) + `portainer_agent` | `portainer-data`, `portainer_data` | portainer-ce:latest, agent:latest |
+| **arr** | `portainer_agent` | — | agent:latest |
+| **plex** | `portainer_agent` | — | agent:2.33.6 |
+| **iot** | `portainer_agent` | — | agent:latest |
+| **utilities** | `portainer_agent` | — | agent:latest |
+| **devs** | (already clean) | — | — |
+
+**Details:**
+- Portainer server was on **cadre** (not utilities as initially assumed)
+- Devs also had a Portainer server instance but was already cleaned up prior
+- All containers stopped, removed; all volumes removed; all images removed
+- Verified zero Portainer presence across all 6 hosts
+- Dockhand (on utilities) confirmed running and operational beforehand
+
+**Note:** The Portainer API key and URL in `/mnt/shareables/.claude/.env` are now defunct. The `portainer` Claude Code skill will no longer function. The `scripts/portainer_backup.py` script is also obsolete.
+
+---
+
 ### 2026-02-09: Proxmox/VM Monitoring & Ubuntu Update Management
 
 **Status:** ✅ Complete

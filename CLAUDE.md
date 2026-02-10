@@ -20,8 +20,12 @@
 - Pulled new image and redeployed on cadre
 - v3.6.7 includes CVE-2025-66490 fix (encoded character handling, opt-in by default)
 - No breaking changes for our config (HTTP provider, ACME/Cloudflare DNS challenge, dashboard)
-- HTTP provider initially hung on `devs` host SSH timeout during restart; recovered after `docker restart sb-traefik-http-provider`
 - Verified: container healthy, 35 services discovered, routing confirmed ✅
+
+**Disabled `devs` in HTTP provider SSH hosts:**
+- `devs` VM is no longer in use — provider was timing out 30s on SSH every config generation
+- Set `enabled: false` in `/app/config/ssh-hosts.yaml` (volume-persisted config)
+- Provider now starts cleanly without the timeout delay
 
 **Technitium DNS v14.0 → v14.3 (ns, ns-secundus):**
 - Updated via official `curl -sSL https://download.technitium.com/dns/install.sh | bash`

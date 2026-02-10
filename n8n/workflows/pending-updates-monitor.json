@@ -1,6 +1,5 @@
 {
   "name": "Pending Updates Monitor",
-  "description": "Checks Ubuntu hosts for pending apt updates via SSH daily at 8:30 AM. Reports to Discord.",
   "nodes": [
     {
       "parameters": {
@@ -35,7 +34,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"plex|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -55,7 +55,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"arr|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -75,7 +76,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"cadre|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -95,7 +97,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"ns|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -115,7 +118,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"utilities|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -135,7 +139,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"iot|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -155,7 +160,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"ha|${PENDING}|${REBOOT}\"",
         "authentication": "privateKey",
         "options": {}
@@ -176,6 +182,7 @@
     {
       "parameters": {
         "mode": "append",
+        "numberInputs": 7,
         "options": {}
       },
       "id": "pum-merge",
@@ -238,22 +245,22 @@
       "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
     },
     "SSH arr": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 1 }]]
     },
     "SSH cadre": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 2 }]]
     },
     "SSH ns": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 3 }]]
     },
     "SSH utilities": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 4 }]]
     },
     "SSH iot": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 5 }]]
     },
     "SSH ha": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 6 }]]
     },
     "Merge Results": {
       "main": [[{ "node": "Format Results", "type": "main", "index": 0 }]]

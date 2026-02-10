@@ -12,8 +12,8 @@
       "typeVersion": 1,
       "position": [0, 300],
       "credentials": {
-        "discordBotTokenApi": {
-          "id": "",
+        "discordBotApi": {
+          "id": "AZmPOR1usnaJBCna",
           "name": "Discord Bot Token"
         }
       }
@@ -173,7 +173,7 @@
       "position": [1540, 400],
       "credentials": {
         "sshPrivateKey": {
-          "id": "",
+          "id": "biwSA51JSiJamqaz",
           "name": "sdevs SSH"
         }
       },

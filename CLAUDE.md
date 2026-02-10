@@ -9,6 +9,66 @@
 
 ## Recent Changes
 
+### 2026-02-10: UniFi Network & Cloudflare Tunnel Monitoring
+
+**Status:** ✅ Complete
+
+**Summary:** Set up 2 n8n workflows monitoring UniFi network health (WAN, devices, WiFi) and Cloudflare tunnel status via SSH, with Discord alerts.
+
+**New Workflows:**
+- **Network Health Monitor** (`tFQDbJFTrwwYVJKu`) — Every 15 min
+  - Checks WAN status (primary Metronet + backup T-Mobile)
+  - Checks gateway CPU (>80%) and memory (>80%)
+  - Detects offline APs/switches
+  - WiFi quality: alerts if >3 clients with satisfaction <50%
+  - Cloudflare tunnel status via SSH to cadre + utilities hosts
+  - 1-hour deduplication cooldown per unique alert
+  - Red embed to Discord only when thresholds exceeded
+- **Daily Network Summary** (`ppH7nKbAfGkObNAk`) — Daily at 8:00 AM
+  - WAN IPs, latency, ISP info for both WANs
+  - Gateway CPU/mem/uptime/firmware
+  - Latest speedtest per WAN
+  - Device counts (APs, switches) and WiFi client stats
+  - Cloudflare tunnel status (4/4 running)
+  - Blue embed to Discord with footer
+
+**Cloudflare Tunnels Monitored:**
+| Tunnel | Host | Service |
+|--------|------|---------|
+| cloudflare-plex | cadre | Plex |
+| cloudflare-overseerr | cadre | Overseerr |
+| cloudflared-gotify | cadre | Gotify |
+| cloudflare-dockhand | utilities | Dockhand |
+
+**New Environment Variables (n8n/.env):**
+- `UNIFI_URL=https://192.168.86.1`
+- `UNIFI_USERNAME=claude`
+- `UNIFI_PASSWORD=708Anderson.!.Claude`
+
+**Key Technical Discoveries:**
+- **n8n SSH node operation**: Must use `"resource": "command", "operation": "execute"` (NOT `"operation": "executeCommand"`)
+- **n8n Merge v3 append mode**: Multiple sources connecting to same input index triggers downstream separately per source. Fix: use `numberInputs: N` and connect each source to a different index (0, 1, 2, ...)
+- **UniFi API auth**: Session-based with cookie from `set-cookie` header. Use `httpRequest.bind(this.helpers)` in Code nodes. Don't use `json: true` on GET requests — let response auto-detect
+- **n8n API**: `description` field rejected on workflow create/update. Only send `name`, `nodes`, `connections`, `settings`
+
+**Also Fixed:**
+- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — Fixed same SSH `executeCommand` bug and merge index issue (7 SSH nodes now use indexes 0-6)
+
+**Files Changed:**
+- `n8n/workflows/network-health-monitor.json` (new)
+- `n8n/workflows/network-daily-summary.json` (new)
+- `n8n/workflows/pending-updates-monitor.json` (fixed SSH operation + merge)
+- `n8n/.env` (added UNIFI_URL, UNIFI_USERNAME, UNIFI_PASSWORD)
+- `n8n/.env.example` (added placeholders)
+
+**Verification:**
+- Daily Summary: ✅ All 6 fields populated correctly — WAN IPs, gateway stats, speedtest, devices, 4/4 tunnels
+- Health Monitor: ✅ Deployed and active (15-min schedule)
+- SSH tunnels: ✅ cadre returns 3 containers, utilities returns 1
+- Discord: ✅ Single embed per run (not 3 separate messages)
+
+---
+
 ### 2026-02-09: Full Portainer Removal
 
 **Status:** ✅ Complete

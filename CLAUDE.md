@@ -1,182 +1,160 @@
-# docker-homelab Session Notes
+# Ansible Controller + Semaphore - Session Notes
 
-## Repository Information
-- **URL:** https://github.com/snadboy/docker-homelab
-- **Local Path:** /home/snadboy/projects/docker-homelab
-- **Main Branch:** main
-- **Current Branch:** main
-- **Latest Commit:** (see git log)
+## Overview
 
-## Recent Changes
+Rebuilt ansible-controller VM (ID 200) on guardian from scratch and deployed Semaphore UI for Ansible automation. Created apt-update playbook with biweekly schedule covering all homelab hosts. Full playbook run verified — 14/14 hosts successful.
 
-### 2026-02-11: n8n Backup Workflow
-
-**Status:** ✅ Complete
-
-**Summary:** Automated daily backup of n8n workflows and credentials. Workflows are exported to a private GitHub repo (`snadboy/n8n-workflows`), credentials are decrypted and saved to shareables.
-
-**Workflow:** n8n Backup (`dVt3Th1wvWvutg0a`) — Daily at 3 AM
-- 5 nodes: Schedule → Globals → SSH Export Credentials → Code Export to GitHub → Gotify
-- Credentials: SQLite query on host → pipe through `docker exec n8n node` for AES decryption → write to `/mnt/shareables/BAK/n8n/credentials-YYYY-MM-DD.json` (7-day retention)
-- Workflows: n8n API → GitHub Contents API PUT for each workflow → `workflows/{name}--{id}.json`
-
-**Globals Credential Updated:** Added `GITHUB_TOKEN` and `N8N_API_KEY` (total: 30 constants)
-
-**Verification:** 14 credentials exported, 28 workflows pushed, Gotify notification sent
-
-**Files Changed:**
-- `n8n/workflows/n8n-backup.json` (new)
+**Status:** ✅ Complete - 2026-02-10
 
 ---
 
-### 2026-02-11: Migrate n8n Workflows to Global Constants
+## ansible-controller VM
 
-**Status:** ✅ Complete
+| Property | Value |
+|----------|-------|
+| VMID | 200 |
+| Node | guardian |
+| Profile | small (2 cores, 2GB RAM, 20GB disk) |
+| OS | Ubuntu 24.04.4 LTS (kernel 6.8.0-100) |
+| LAN IP | 192.168.86.203 |
+| Tailscale IP | 100.114.25.16 |
+| Tailscale Tags | tag:ansible, tag:docker |
+| SSH | snadboy@192.168.86.203 |
+| Mounts | /mnt/shareables (CIFS) |
 
-**Summary:** Migrated all 14 active n8n workflows from Docker environment variables (`$env.X` / `process.env.X`) to the `n8n-nodes-globals` community node. All workflow constants are now stored in a single "Homelab Constants" credential editable from the n8n UI — no more SSH + `.env` editing + container restarts to change a value.
-
-**What Changed:**
-- Installed `n8n-nodes-globals` community package in n8n container
-- Created "Homelab Constants" credential (ID: `kt9rQnvdyaBeZlR2`) with 28 key-value constants
-- Each workflow gets a "Globals" node that loads constants from the credential
-- All `$env.X` expression references replaced with `$('Globals').first().json.X`
-- All `process.env.X` in Code nodes replaced with `$('Globals').first().json.X`
-- "Set Env Vars" / "Set Credentials" nodes removed where they only passed env vars through
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` set in docker-compose.yml (blocks `$env` access)
-- `.env` on utilities host stripped to comments only (no workflow vars)
-- `.env.example` updated to reference Global Constants
-
-**Workflows Updated (14):**
-
-| Workflow | Pattern | Notes |
-|----------|---------|-------|
-| arr-stack-health-check | Replace Set with Globals | |
-| daily-media-digest | Replace Set with Globals | Code refs updated |
-| discord-claude-bridge | Keep Set, add Globals | Set still carries trigger data |
-| get-plex-token | Add Globals sequentially | Trigger -> Globals -> SSH -> Parse |
-| gmail-cleanup | Set Config -> Globals -> Code | 4 triggers share 1 Globals node |
-| gmail-labels-and-contacts | Replace Set with Globals | OAuth reads from Globals |
-| network-daily-summary | Replace Set with Globals | |
-| network-health-monitor | Replace Set with Globals | |
-| overseerr-request-notifier | Add Globals, fix Code | Fixed process.env + URL bug |
-| plex-recently-added | Add Globals sequentially | |
-| proxmox-daily-summary | Replace Set with Globals | |
-| proxmox-health-monitor | Replace Set with Globals | |
-| trash-pickup-scheduler | Replace Set with Globals | Calendar creds from Globals |
-| weekly-version-audit | Replace Set with Globals | |
-
-**Constants Stored (28):**
-GOTIFY_URL/TOKEN, DISCORD_WEBHOOK_URL/BOT_TOKEN/CHANNEL_ID, GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN, SONARR/RADARR/PROWLARR/SABNZBD/OVERSEERR URLs + API keys, PLEX_URL, PVE_API_URL/TOKEN, UNIFI_URL/USERNAME/PASSWORD, TECHNITIUM_URL/TOKEN, TRASH_EVENT_TITLE, CLAUDE_WORK_DIR
-
-**Key Technical Details:**
-- Globals node parameter `putAllInOneKey` must be `false` for top-level JSON keys
-- Credential type: `globalConstantsApi` with `format: "string"` and `globalConstants` field
-- n8n public API doesn't support creating credentials with custom data — created via direct SQLite insert with CryptoJS AES encryption
-- Globals node must be SEQUENTIAL (not parallel side branch) before any node that reads `$('Globals')` — parallel branches cause "Node 'Globals' hasn't been executed" errors
-
-**Bugs Fixed During Migration:**
-- **overseerr-request-notifier**: `process.env.X` (broken in sandbox), single-quote URL template literal, `this.getWorkflowStaticData` -> `$getWorkflowStaticData`
-- **Side-branch Globals race condition**: Fixed 4 workflows where Globals was parallel instead of sequential
-
-**Verification:**
-- All 14 workflows deployed and verified via n8n API
-- Arr Stack Health Check: ✅ (15-min schedule, execution 1294)
-- Network Health Monitor: ✅ (15-min schedule, execution 1295)
-- Proxmox Health Monitor: ✅ (15-min schedule, execution 1293)
-- Overseerr Request Notifier: ✅ (10-min schedule, execution 1296 — was failing, now fixed)
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` confirmed — `$env` no longer resolves
-
-**Files Changed:**
-- `n8n/workflows/*.json` — 14 workflow files updated
-- `n8n/docker-compose.yml` — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`
-- `n8n/.env.example` — stripped to system vars + note about Globals
-- `n8n/migrate-to-globals.py` — migration script (new)
-
-**Commit:** `fedca50` — Migrate n8n workflows from Docker env vars to Global Constants
+### Installed Software
+- qemu-guest-agent
+- Docker (with docker compose)
+- Tailscale (SSH enabled)
 
 ---
 
-### 2026-02-10: Weekly Version Audit Workflow
+## Semaphore UI
 
-**Status:** ✅ Complete
+| Property | Value |
+|----------|-------|
+| URL | https://semaphore.isnadboy.com |
+| Direct | http://192.168.86.203:3000 |
+| Container | semaphore (semaphoreui/semaphore:latest) |
+| DB | BoltDB (/var/lib/semaphore/database.boltdb) |
+| Volume | semaphore-data (external) |
+| Login | admin / changeme123 |
+| Version | v2.16.51 |
 
-**Summary:** Created n8n workflow that automates the manual version audit performed earlier today. Runs weekly (Sundays 9 AM), checks all Docker container versions against latest GitHub releases, PVE and Technitium versions, and APT update status across 7 hosts. Posts two Discord embeds. Replaces the old Pending Updates Monitor.
-
-**New Workflow:**
-- **Weekly Version Audit** (`BXBsZXozpqxLZyoa`) — Sunday 9 AM
-  - 17 nodes: 7 APT SSH + 4 Docker SSH + 1 Code (API checks) + Merge + Format + Discord
-  - Docker containers (10): sonarr, radarr, prowlarr, overseerr, sabnzbd, tautulli, plex, traefik, zigbee2mqtt, n8n
-  - Compares running `org.opencontainers.image.version` labels vs GitHub `/releases/latest`
-  - Zigbee2mqtt: `docker exec` reads `/app/package.json` (no OCI labels, container named `zigbee2mqtt-office`)
-  - PVE version from `/api2/json/version` (PVEAuditor token)
-  - Technitium DNS version from `/api/settings/get`
-  - APT updates on 7 SSH hosts (plex, arr, cadre, ns, utilities, iot, ha)
-  - Version normalization: strips `-ls\d+` suffixes, `v` prefixes, Plex build hashes
-  - Embed 1: Software Versions (green=current, yellow=update available)
-  - Embed 2: System Updates (green=up to date, yellow=pending)
-  - Footer: `10 containers | 7 hosts | 3 PVE nodes`
-
-**Old Workflow Deactivated:**
-- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — deactivated (APT checking now subset of new workflow)
-
-**New Environment Variables (n8n/.env):**
-- `TECHNITIUM_URL=http://192.168.86.76:5380`
-- `TECHNITIUM_TOKEN=<api-token>`
-
-**Design Notes:**
-- PVE APT updates not checked via API (requires `Sys.Modify`, token only has `PVEAuditor`). PVE nodes managed by biweekly Ansible apt-update playbook instead.
-- GitHub API: unauthenticated, 60 req/hour limit — 10 lookups per weekly run is well within limits.
-- Reuses all 7 existing SSH credentials from the old Pending Updates Monitor.
-
-**Verification:**
-- 3 test executions, all succeeded (~6-7s each)
-- Discord output verified: all 10 containers, PVE 9.1.5, Technitium v14.3, 7 host APT status ✅
-
-**Files Changed:**
-- `n8n/workflows/weekly-version-audit.json` (new)
-- `n8n/.env.example` (added Technitium placeholders)
-
-**Commit:** `88b8eb9` — Add Weekly Version Audit workflow, replace Pending Updates Monitor
+### Semaphore Configuration
+- **Project:** homelab (ID: 1)
+- **SSH Key:** snadboy-ssh (ID: 2) — snadboy@devs ed25519 key
+- **Repository:** docker-homelab (ID: 1) — https://github.com/snadboy/docker-homelab.git (main)
+- **Inventory:** homelab-hosts (ID: 1) — ansible/inventory/hosts.yml (file type)
+- **Template:** apt-update (ID: 2) — ansible/playbooks/apt-update.yml
+- **Schedule:** Biweekly apt update (ID: 1) — `0 4 */14 * *` (active)
 
 ---
 
-### 2026-02-10: Homelab Version Audit & Updates
+## Ansible Inventory
+
+### Host Groups
+| Group | Hosts | SSH User |
+|-------|-------|----------|
+| pve_nodes | pve-colossus, pve-guardian, pve-multivac (Tailscale FQDNs) | root |
+| pbs_servers | host-svalbard, host-alexandria | root |
+| ubuntu_vms | arr, cadre, plex, iot, utilities | snadboy |
+| managed_locally | ansible-controller (excluded from apt_hosts) | snadboy |
+| debian_containers | host-ns | root |
+| lxc_containers | ns-secundus (CT 108), ns-tertius (CT 112), pve-scripts-local (CT 104) | via pct exec |
+| apt_hosts | pve_nodes + pbs_servers + ubuntu_vms + debian_containers | (varies) |
+
+### apt-update Playbook
+- SSH hosts: `apt update && apt dist-upgrade` with autoremove/autoclean, 50% serial
+- LXC containers: delegated to parent PVE node via `pct exec`, serial 1
+- Reports reboot-required status
+- **Verified:** 14/14 hosts pass (11 SSH + 3 LXC)
+
+---
+
+## Traefik Routing
+
+Added `ansible-controller` to sb-traefik-http-provider SSH hosts:
+- SSH host key: `ansible-controller` (Tailscale SSH)
+- Backend hostname: `host-ansible-controller.isnadboy.com` (A record in Technitium → 192.168.86.203)
+- Route: `semaphore-3000: https://semaphore.isnadboy.com -> http://192.168.86.203:3000/`
+
+---
+
+## Issues Fixed During Testing
+
+### cadre SSH drops during apt upgrade
+- **Problem:** SSH connections dropped during long-running apt dist-upgrade on cadre
+- **Root cause:** cadre had no openssh-server — all SSH was via Tailscale SSH, which dropped during long operations
+- **Fix:** Installed openssh-server on cadre, authorized snadboy@devs key in `~/.ssh/authorized_keys`. Ansible now connects via regular sshd on LAN IP (192.168.86.22) with `ServerAliveInterval=30` keepalive from ansible.cfg.
+
+### ns-tertius DNS resolution failure
+- **Problem:** `pct exec` apt update failed with "Temporary failure resolving 'archive.ubuntu.com'" inside CT 112
+- **Root cause:** Tailscale inside ns-tertius had `--accept-dns=false` (`CorpDNS: false`). The container's resolv.conf pointed to 100.100.100.100 (MagicDNS, inherited from PVE host), but the container's tailscaled wasn't handling DNS queries — returning SERVFAIL.
+- **Fix:** `tailscale set --accept-dns` inside ns-tertius. Now MagicDNS properly forwards public DNS queries via split DNS. (ns-secundus already had accept-dns enabled, which is why it worked.)
+
+### Other fixes applied during earlier testing
+- PVE node hostnames changed to Tailscale FQDNs (`pve-X.tail65635.ts.net`)
+- ansible-controller moved to `managed_locally` group (no sudo in Semaphore container)
+- Added NOPASSWD sudoers for snadboy on cadre
+- Authorized snadboy@devs SSH key on host-ns (CT 103) via `pct exec`
+- Added SSH keepalive (`ServerAliveInterval=30`, `ServerAliveCountMax=10`) and pipelining to ansible.cfg
+
+---
+
+## Files Created/Modified
+
+- `docker-homelab/semaphore/docker-compose.yml` (new)
+- `docker-homelab/semaphore/.env.example` (new)
+- `docker-homelab/hawser-ansible/docker-compose.yml` (new)
+- `docker-homelab/ansible/inventory/hosts.yml` (new)
+- `docker-homelab/ansible/playbooks/apt-update.yml` (new)
+- `docker-homelab/ansible/ansible.cfg` (new)
+
+## Commits
+- `f6e54cd` — Add Semaphore, hawser-ansible, and Ansible playbooks for ansible-controller
+- `7aee190` — Fix PVE node hostnames to use Tailscale FQDNs in Ansible inventory
+- `b4dca26` — Add SSH keepalive and pipelining to ansible.cfg
+- `06588f5` — Move ansible-controller to managed_locally group, exclude from apt_hosts
+
+---
+
+## Dockhand Integration
+
+| Property | Value |
+|----------|-------|
+| Environment | ansible-controller (ID: 9) |
+| Hawser Agent | ghcr.io/finsys/hawser:latest v0.2.27 |
+| Git Stacks | semaphore (ID: 11), hawser-ansible (ID: 12) |
+| Auto-update | Daily @ 03:00, webhook enabled |
+| Sync Status | Synced (commit 06588f5) |
+
+## Unattended Upgrades
+
+Configured with auto-reboot at 04:00 (`/etc/apt/apt.conf.d/52unattended-upgrades-local`), matching other Ubuntu hosts.
+
+---
+
+## Homelab Version Audit & Updates (2026-02-10)
 
 **Status:** ✅ Complete
 
-**Summary:** Audited all key services across the homelab for version currency. Updated Traefik, Technitium DNS (all 3 servers). Plex and all other services confirmed current.
+Audited all key services across the homelab for version currency and updated what was out of date.
 
-**Traefik v3.2.5 → v3.6.7 (cadre):**
-- Updated default image tag in `traefik-http-provider/docker-compose.yml` from `v3.2` to `v3.6`
-- Pulled new image and redeployed on cadre
-- v3.6.7 includes CVE-2025-66490 fix (encoded character handling, opt-in by default)
-- No breaking changes for our config (HTTP provider, ACME/Cloudflare DNS challenge, dashboard)
-- Verified: container healthy, 35 services discovered, routing confirmed ✅
+### Updates Performed
 
-**Disabled `devs` in HTTP provider SSH hosts:**
-- `devs` VM is no longer in use — provider was timing out 30s on SSH every config generation
-- Set `enabled: false` in `/app/config/ssh-hosts.yaml` (volume-persisted config)
-- Provider now starts cleanly without the timeout delay
+| Service | Host(s) | Old Version | New Version | Method |
+|---------|---------|-------------|-------------|--------|
+| **Traefik** | cadre | v3.2.5 | v3.6.7 | Updated image tag in compose, pushed to git, redeployed |
+| **Technitium DNS** | ns | v14.0 (Nov 22) | v14.3 (Dec 20) | `install.sh` update script |
+| **Technitium DNS** | ns-secundus | v14.0 (Nov 22) | v14.3 (Dec 20) | `install.sh` update script |
 
-**Technitium DNS v14.0 → v14.3 (ns, ns-secundus):**
-- Updated via official `curl -sSL https://download.technitium.com/dns/install.sh | bash`
-- ns (primary, bare metal, service: `dns`) — updated and restarted ✅
-- ns-secundus (secondary, bare metal, service: `technitium`) — updated and restarted ✅
-- ns-tertius (CT 112) was already on v14.3 — no update needed
-- DNS resolution verified (internal + external queries working) ✅
-- v14.3 adds dark mode, catalog zone updates, DHCP scope config improvements
+### Already Current
 
-**Plex 1.42.2 (plex) — already current:**
-- Pulled latest linuxserver image — still resolves to 1.42.2
-- Plex 1.43.0 was released publicly but pulled back due to package signing issues
-- 1.42.2 remains the latest stable `latest` tag from linuxserver
-
-**All confirmed current (no update needed):**
-
-| Service | Version | Host |
-|---------|---------|------|
-| PVE | 9.1.5 | colossus, guardian, multivac |
-| Tailscale | 1.94.1 | All 12 hosts |
+| Service | Version | Hosts |
+|---------|---------|-------|
+| Proxmox VE | 9.1.5 | colossus, guardian, multivac |
+| Tailscale | 1.94.1 | All 12 hosts (auto-update) |
 | Sonarr | 4.0.16.2944 | arr |
 | Radarr | 6.0.4.10291 | arr |
 | Prowlarr | 2.3.0.5236 | arr |
@@ -184,750 +162,153 @@ GOTIFY_URL/TOKEN, DISCORD_WEBHOOK_URL/BOT_TOKEN/CHANNEL_ID, GOOGLE_CLIENT_ID/SEC
 | SABnzbd | 4.5.5 | arr |
 | Tautulli | v2.16.0 | arr |
 | Zigbee2MQTT | 2.8.0 | cadre |
-| Plex | 1.42.2 | plex |
+| Plex | 1.42.2 (latest stable) | plex |
 
-**Files Changed:**
-- `traefik-http-provider/docker-compose.yml` — image tag `v3.2` → `v3.6`
+### Notes
+- **Technitium ns-tertius** (CT 112) was already on v14.3 — no update needed
+- **Plex 1.43.0** exists but was pulled back by linuxserver due to package signing issues; 1.42.2 remains the latest stable `latest` tag
+- **Traefik v3.6.7** includes CVE-2025-66490 fix; no breaking changes for our HTTP provider + ACME/Cloudflare config
+- **devs** VM no longer in use — disabled in HTTP provider `ssh-hosts.yaml` to eliminate 30s SSH timeout on every config generation
 
-**Commit:** `eb057b4` — Update Traefik from v3.2 to v3.6
+### Files Changed
+- `docker-homelab/traefik-http-provider/docker-compose.yml` — Traefik image tag `v3.2` → `v3.6`
+- HTTP provider `ssh-hosts.yaml` (volume config on cadre) — `devs` set to `enabled: false`
 
----
-
-### 2026-02-10: UniFi Network & Cloudflare Tunnel Monitoring
-
-**Status:** ✅ Complete
-
-**Summary:** Set up 2 n8n workflows monitoring UniFi network health (WAN, devices, WiFi) and Cloudflare tunnel status via SSH, with Discord alerts.
-
-**New Workflows:**
-- **Network Health Monitor** (`tFQDbJFTrwwYVJKu`) — Every 15 min
-  - Checks WAN status (primary Metronet + backup T-Mobile)
-  - Checks gateway CPU (>80%) and memory (>80%)
-  - Detects offline APs/switches
-  - WiFi quality: alerts if >3 clients with satisfaction <50%
-  - Cloudflare tunnel status via SSH to cadre + utilities hosts
-  - 1-hour deduplication cooldown per unique alert
-  - Red embed to Discord only when thresholds exceeded
-- **Daily Network Summary** (`ppH7nKbAfGkObNAk`) — Daily at 8:00 AM
-  - WAN IPs, latency, ISP info for both WANs
-  - Gateway CPU/mem/uptime/firmware
-  - Latest speedtest per WAN
-  - Device counts (APs, switches) and WiFi client stats
-  - Cloudflare tunnel status (4/4 running)
-  - Blue embed to Discord with footer
-
-**Cloudflare Tunnels Monitored:**
-| Tunnel | Host | Service |
-|--------|------|---------|
-| cloudflare-plex | cadre | Plex |
-| cloudflare-overseerr | cadre | Overseerr |
-| cloudflared-gotify | cadre | Gotify |
-| cloudflare-dockhand | utilities | Dockhand |
-
-**New Environment Variables (n8n/.env):**
-- `UNIFI_URL=https://192.168.86.1`
-- `UNIFI_USERNAME=claude`
-- `UNIFI_PASSWORD=708Anderson.!.Claude`
-
-**Key Technical Discoveries:**
-- **n8n SSH node operation**: Must use `"resource": "command", "operation": "execute"` (NOT `"operation": "executeCommand"`)
-- **n8n Merge v3 append mode**: Multiple sources connecting to same input index triggers downstream separately per source. Fix: use `numberInputs: N` and connect each source to a different index (0, 1, 2, ...)
-- **UniFi API auth**: Session-based with cookie from `set-cookie` header. Use `httpRequest.bind(this.helpers)` in Code nodes. Don't use `json: true` on GET requests — let response auto-detect
-- **n8n API**: `description` field rejected on workflow create/update. Only send `name`, `nodes`, `connections`, `settings`
-
-**Also Fixed:**
-- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — Fixed same SSH `executeCommand` bug and merge index issue (7 SSH nodes now use indexes 0-6)
-
-**Files Changed:**
-- `n8n/workflows/network-health-monitor.json` (new)
-- `n8n/workflows/network-daily-summary.json` (new)
-- `n8n/workflows/pending-updates-monitor.json` (fixed SSH operation + merge)
-- `n8n/.env` (added UNIFI_URL, UNIFI_USERNAME, UNIFI_PASSWORD)
-- `n8n/.env.example` (added placeholders)
-
-**Verification:**
-- Daily Summary: ✅ All 6 fields populated correctly — WAN IPs, gateway stats, speedtest, devices, 4/4 tunnels
-- Health Monitor: ✅ Deployed and active (15-min schedule)
-- SSH tunnels: ✅ cadre returns 3 containers, utilities returns 1
-- Discord: ✅ Single embed per run (not 3 separate messages)
+### Commits
+- `eb057b4` — Update Traefik from v3.2 to v3.6
+- `a50ca7a` — Update session notes: disable devs in HTTP provider
 
 ---
 
-### 2026-02-09: Full Portainer Removal
+## Weekly Version Audit Workflow (2026-02-10)
 
 **Status:** ✅ Complete
 
-**Summary:** Removed Portainer server and all satellite agents from all 6 Docker hosts. Dockhand is now the sole container management layer.
+Automated weekly version audit replaces manual checks and the old Pending Updates Monitor.
 
-**What was removed:**
+| Property | Value |
+|----------|-------|
+| Workflow ID | BXBsZXozpqxLZyoa |
+| Schedule | Sunday 9 AM (`0 9 * * 0`) |
+| Nodes | 17 (7 APT SSH + 4 Docker SSH + 1 Code API + Merge + Format + Discord) |
+| Replaced | Pending Updates Monitor (`mc4XV3qJ1FWNKVJO`, deactivated) |
 
-| Host | Containers | Volumes | Images |
-|------|-----------|---------|--------|
-| **cadre** | `portainer` (server) + `portainer_agent` | `portainer-data`, `portainer_data` | portainer-ce:latest, agent:latest |
-| **arr** | `portainer_agent` | — | agent:latest |
-| **plex** | `portainer_agent` | — | agent:2.33.6 |
-| **iot** | `portainer_agent` | — | agent:latest |
-| **utilities** | `portainer_agent` | — | agent:latest |
-| **devs** | (already clean) | — | — |
+### What It Checks
+- **Docker containers** (10): sonarr, radarr, prowlarr, overseerr, sabnzbd, tautulli, plex, traefik, zigbee2mqtt, n8n
+- **Running vs latest**: Compares `org.opencontainers.image.version` label against GitHub releases API
+- **Zigbee2mqtt**: Uses `docker exec` to read `/app/package.json` (no OCI labels)
+- **PVE version**: From `/api2/json/version` (PVEAuditor token)
+- **Technitium DNS version**: From `/api/settings/get` API
+- **APT updates**: 7 SSH hosts (plex, arr, cadre, ns, utilities, iot, ha)
 
-**Details:**
-- Portainer server was on **cadre** (not utilities as initially assumed)
-- Devs also had a Portainer server instance but was already cleaned up prior
-- All containers stopped, removed; all volumes removed; all images removed
-- Verified zero Portainer presence across all 6 hosts
-- Dockhand (on utilities) confirmed running and operational beforehand
+### Discord Output
+Two embeds per message:
+1. **Software Versions** (green/yellow) — Docker container versions + PVE + Technitium
+2. **System Updates** (green/yellow) — APT pending counts per host
 
-**Note:** The Portainer API key and URL in `/mnt/shareables/.claude/.env` are now defunct. The `portainer` Claude Code skill will no longer function. The `scripts/portainer_backup.py` script is also obsolete.
+### New n8n Environment Variables
+- `TECHNITIUM_URL=http://192.168.86.76:5380`
+- `TECHNITIUM_TOKEN=<api-token>`
+
+### Notes
+- PVE APT updates not checked (requires `Sys.Modify`, token only has `PVEAuditor`)
+- PVE nodes managed by biweekly Ansible apt-update playbook instead
+- Container names on cadre: `zigbee2mqtt-office`, `zigbee2mqtt-laundry` (not `zigbee2mqtt`)
+- Version normalization strips `-ls\d+` suffix, `v` prefix, Plex build hashes
+
+### Files Changed
+- `n8n/workflows/weekly-version-audit.json` (new)
+- `n8n/.env.example` (added Technitium placeholders)
+
+### Commit
+- `88b8eb9` — Add Weekly Version Audit workflow, replace Pending Updates Monitor
 
 ---
 
-### 2026-02-09: Proxmox/VM Monitoring & Ubuntu Update Management
+## n8n Backup Workflow (2026-02-11)
 
 **Status:** ✅ Complete
 
-**Summary:** Set up 3 n8n monitoring workflows with Discord alerts, distributed SSH keys for update checking, configured unattended-upgrades on all Ubuntu hosts.
+Automated daily backup of n8n workflow definitions to GitHub and credential data to shareables.
 
-**New Workflows:**
-- **Proxmox Health Monitor** (`Cs4Vu1hmLj82uBCQ`) — Every 15 min
-  - Checks node memory (>85%), disk (>80%), CPU (>90%)
-  - Checks guest memory (>90%), disk (>85%)
-  - Detects unexpected stops for 11 expected-running guests
-  - 1-hour deduplication cooldown per unique alert
-  - Alerts to Discord (red embed) only when thresholds exceeded
-- **Daily Proxmox Summary** (`Fc1CXcJUU3LZ46G2`) — Daily at 8:15 AM
-  - Reports CPU/Mem/Disk/Uptime/VM+CT counts per node
-  - Blue embed to Discord with footer summary
-- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — Daily at 8:30 AM
-  - SSH to 7 hosts (plex, arr, cadre, ns, utilities, iot, ha)
-  - Reports pending apt packages and reboot-required status
-  - Yellow embed to Discord (green if all up to date)
+| Property | Value |
+|----------|-------|
+| Workflow ID | dVt3Th1wvWvutg0a |
+| Schedule | Daily at 3 AM (`0 3 * * *`) |
+| Nodes | 5 (Schedule + Globals + SSH + Code + Gotify) |
+| GitHub Repo | snadboy/n8n-workflows (private) |
+| Credential Backup | /mnt/shareables/BAK/n8n/credentials-YYYY-MM-DD.json |
+| Retention | 7 days |
 
-**New SSH Credentials (n8n):**
-| Name | ID | Host | User |
-|------|----|------|------|
-| plex SSH | C13DCoHPT9ECBLYJ | host-plex.isnadboy.com | snadboy |
-| arr SSH | eoD78OvooU5xNszV | host-arr.isnadboy.com | snadboy |
-| cadre SSH | H1zhHsKxDwEDOSRk | host-cadre.isnadboy.com | snadboy |
-| ns SSH | SOdVhtzBbhi13lEl | host-ns.isnadboy.com | root |
-| utilities SSH | n8816WsRbTEbFnjD | host-utilities.isnadboy.com | snadboy |
-| iot SSH | DjfY1P2avir6zmei | host-iot.isnadboy.com | snadboy |
-| ha SSH | YgRW8lB1lXMvtPjF | host-homeassistant.isnadboy.com | snadboy |
+### What It Does
+1. **Credential export**: SSH into utilities, queries SQLite on host, decrypts via `docker exec n8n node` using CryptoJS AES (EVP_BytesToKey KDF), writes to shareables mount
+2. **Workflow export**: Code node fetches all workflows via n8n API (localhost:5678), pushes each as JSON to GitHub via Contents API
+3. **Notification**: Gotify summary with credential count and workflow count
 
-**SSH Key:** `n8n-updates@utilities` (ed25519, private key stored in each n8n SSH credential)
-- Authorized on: plex, arr, cadre, ns (root), utilities, iot, homeassistant
-- Also distributed the existing `n8n@utilities` key to arr, cadre, utilities, iot, homeassistant, ns (root)
+### Globals Credential Updated
+Added 2 new constants to "Homelab Constants" (ID: `kt9rQnvdyaBeZlR2`):
+- `GITHUB_TOKEN` — GitHub PAT for repo access
+- `N8N_API_KEY` — n8n public API key
+- Total constants: 30 (was 28)
 
-**Unattended Upgrades:**
-- Configured on: plex, arr, cadre, ns, utilities, iot
-- Config: `/etc/apt/apt.conf.d/52unattended-upgrades-local`
-- Auto-reboot enabled at 04:00
-- homeassistant skipped (Alpine Linux, not Ubuntu)
+### Technical Details
+- Workflow filenames include workflow ID to prevent name collisions: `{name}--{id}.json`
+- SSH credential export uses `cat <<'DECRYPTJS'` heredoc to write Node.js decryption script to temp file, `docker cp` into container, then pipes sqlite3 output through it
+- `grep -c '"id"'` counts credentials instead of python3 (avoids nested quoting issues in SSH command)
+- n8n API not accessible through Traefik (404), use `http://localhost:5678` from Code node or `http://host-utilities.isnadboy.com:5678` externally
+- Gotify URL hardcoded to `http://host-utilities.isnadboy.com:8084` (HTTPS via Traefik returns 404 — pre-existing issue)
 
-**New Environment Variables (n8n/.env):**
-- `PVE_API_URL=https://100.69.91.74:8006`
-- `PVE_API_TOKEN=homepage@pve!homepage-token=<token>`
-- `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+### Verification
+- Execution 1449: ✅ All 5 nodes passed
+  - 14 credentials exported to shareables
+  - 28 workflows pushed to GitHub (28 unique files with ID suffixes)
+  - Gotify notification received
 
-**Discord Webhook:** All monitoring goes to a single Discord channel webhook
-
-**Files Changed:**
-- `n8n/workflows/proxmox-health-monitor.json` (new)
-- `n8n/workflows/proxmox-daily-summary.json` (new)
-- `n8n/workflows/pending-updates-monitor.json` (new)
-- `n8n/.env` (added PVE_API_URL, PVE_API_TOKEN, DISCORD_WEBHOOK_URL)
-- `n8n/.env.example` (added placeholders)
-
-**Verification:**
-- Health Monitor: ✅ First execution succeeded (0.7s) — correctly reported "All Healthy" at normal thresholds
-- Daily Summary: ✅ Test message sent to Discord with correct format (3 nodes, all stats)
-- Pending Updates: ✅ Test message sent to Discord (6 hosts reporting pending packages)
-- Discord Webhook: ✅ All three message formats verified (red alert, blue summary, yellow updates)
-- Unattended Upgrades: ✅ Enabled on 6 Ubuntu hosts with auto-reboot at 4 AM
-
-**Architecture Note:**
-- Pending Updates Monitor uses individual SSH nodes per host (not a loop), because n8n's SSH credentials are per-host
-- Each SSH node has `onError: continueRegularOutput` so one failing host doesn't break the whole workflow
-- The Merge node in append mode collects all SSH outputs before formatting
+### Files Changed
+- `n8n/workflows/n8n-backup.json` (new)
+- Globals credential updated via SQLite (GITHUB_TOKEN, N8N_API_KEY)
 
 ---
 
-### 2026-02-09: Dynamic Plex Token via SSH Sub-Workflow
+## Traefik HTTP Provider DNS Fix (2026-02-11)
 
 **Status:** ✅ Complete
 
-**Problem:** `PLEX_TOKEN` env var in n8n became stale when Plex rotated it, causing 401 errors in Plex Recently Added and Daily Media Digest workflows.
+Fixed both `homepage.isnadboy.com` returning 404 and unreliable detection of Docker container restarts on remote hosts.
 
-**Solution:** Created a sub-workflow that dynamically fetches the current token from the Plex host via SSH, eliminating the need for a static `PLEX_TOKEN` env var.
+### Root Cause
 
-**Infrastructure:**
-- Enabled sshd on plex host (192.168.86.40) — was Tailscale SSH only
-- Generated ed25519 key pair for n8n → plex SSH access
-- Created "Plex Host SSH" credential in n8n (ID: `6g4Tcr5sVJp0To9W`)
+Docker containers on user-defined networks (`traefik`) don't inherit the host's Tailscale DNS search domain. The `sb-traefik-http-provider` container's `resolv.conf` had `search localdomain` instead of `search tail65635.ts.net`. The `snadboy-ssh-docker` library uses the dict keys from `ssh-hosts.yaml` (e.g., `arr`, `utilities`) directly as SSH hostnames. On the host, these resolve via the Tailscale search domain (`arr` → `arr.tail65635.ts.net`). Inside the container, they couldn't resolve at all.
 
-**Workflows:**
-- **Get Plex Token** (`AM7xbizoMlhMEp8x`) — New sub-workflow
-  - Flow: Execute Workflow Trigger → SSH Read Token → Parse Token
-  - SSH command: `docker exec plex sed -n 's/.*PlexOnlineToken="\([^"]*\)".*/\1/p' Preferences.xml`
-  - Returns: `{PLEX_URL, PLEX_TOKEN}`
-  - Note: Uses `sed` instead of `grep -oP` because n8n's SSH node mangles Perl regex `\K`
-- **Plex Recently Added** (`NYdQlvUoz1x14bIZ`) — Modified
-  - Replaced `Set Env Vars` node with `Execute Workflow` node calling Get Plex Token
-  - Flow: Schedule → Get Plex Token → Code → If → Gotify
-- **Daily Media Digest** (`puI2Gdj35nijpEey`) — Modified
-  - Removed PLEX_URL/PLEX_TOKEN from Set Env Vars (kept 8 other vars)
-  - Added Execute Workflow node between Set Env Vars and Code
-  - Code node merges both sources: `{...$('Set Env Vars').first().json, ...$input.first().json}`
+### Impact Before Fix
 
-**Key Technical Details:**
-- SSH node requires `"authentication": "privateKey"` parameter (defaults to `"password"`)
-- SSH node returns `{code, signal, stdout, stderr}` not `{exitCode, stdout, stderr}`
-- `PLEX_TOKEN` removed from n8n `.env` (both local and remote utilities host)
-- `PLEX_URL` kept in `.env` since sub-workflow uses `$env.PLEX_URL`
+- **Container discovery broken** for all remote hosts — only 15 services (4 local + 11 static) instead of 35
+- **All event listeners failing** — SSH to remote Docker event streams failed with "Could not resolve hostname"
+- **homepage.isnadboy.com 404** — homepage runs on utilities, which wasn't being discovered
 
-**Verification:**
-- Sub-workflow webhook test: ✅ Returns `{PLEX_URL, PLEX_TOKEN}` correctly
-- SSH connectivity from n8n container to plex:22: ✅
+### Fix Applied
 
-**Files Changed:**
-- `n8n/workflows/get-plex-token.json` (new)
-- `n8n/workflows/plex-recently-added.json` (modified)
-- `n8n/workflows/daily-media-digest.json` (modified)
-- `n8n/.env` / `n8n/.env.example` (removed PLEX_TOKEN)
+Added `dns_search: ["tail65635.ts.net"]` to the `sb-traefik-http-provider` service in `docker-compose.yml`. This ensures short Tailscale hostnames resolve inside the container.
+
+### Results After Fix
+
+- 35 services discovered (was 15)
+- All 5 event listeners connected (arr, cadre, utilities, iot, ansible-controller)
+- homepage.isnadboy.com → HTTP 200
+- Zero errors in logs
+
+### Files Changed
+- `docker-homelab/traefik-http-provider/docker-compose.yml` — Added `dns_search: ["tail65635.ts.net"]`
+
+### Commit
+- `e01ffca` — Add Tailscale DNS search domain to HTTP provider container
 
 ---
 
-### 2026-02-09: Extract Trash Day Logic into Sub-Workflow
+## Outstanding Items
 
-**Status:** ✅ Complete
-
-**Summary:** Refactored duplicated date math logic (~60 lines: `formatDate`, `addDays`, `getHolidays`, holiday detection) from Trash Pickup Scheduler and Trash Pickup Status into a shared sub-workflow callable via Execute Workflow node.
-
-**Workflows:**
-- **Trash Day Calc** (`9pRyazs5XHc1OBxG`) — New sub-workflow with shared date logic
-  - `executeWorkflowTrigger` v1.1 with `inputSource: "passthrough"`
-  - Returns: pickupDay, pickupDate, takeOutDay, takeOutDate, status, delayed, holiday, daysUntil, weekOf
-- **Trash Pickup Status** (`ydLw1ilTg3sE8vXj`) — Modified to call sub-workflow
-  - Flow: Webhook → Execute Workflow (Compute Trash Day) → response
-  - `executeWorkflow` v1.1 with resource locator (`__rl`) format
-- **Trash Pickup Scheduler** (`D5R6GlhUDJTUGS8P`) — Modified to call sub-workflow
-  - Flow: Schedule/Webhook → Set Credentials → Execute Workflow → Code: Create Calendar Events → Gotify
-  - Calendar event creation + Gotify logic kept in Code node, date math removed
-
-**Key Technical Details:**
-- `executeWorkflowTrigger` v1.1 requires `inputSource: "passthrough"` (default is `workflowInputs` which requires schema)
-- `executeWorkflow` v1.1+ requires `workflowId` as resource locator object: `{"__rl": true, "value": "<id>", "mode": "list"}`
-- Sub-workflow `callerPolicy: "workflowsFromSameOwner"` (default)
-
-**Verification:**
-- `GET /webhook/trash-pickup-status` ✅ Returns JSON: `{"pickupDay":"Friday","pickupDate":"2026-02-13",...}`
-- `GET /webhook/trash-pickup` ✅ Triggers scheduler, creates calendar event, sends Gotify notification
-- Sub-workflow execution logs: ✅ Appears as child executions
-
-**Files Changed:**
-- `n8n/workflows/trash-day-calc.json` (new)
-- `n8n/workflows/trash-pickup-scheduler.json` (modified)
-- `n8n/workflows/trash-pickup-status.json` (modified)
+- **Gotify HTTPS routing**: `https://gotify.isnadboy.com` returns 404 through Traefik on cadre. Direct access at `http://host-utilities.isnadboy.com:8084` works. Pre-existing issue — most workflows don't hit Gotify unless alerting on failures. Should investigate Traefik route configuration.
 
 ---
 
-### 2026-02-09: Fixed process.env in n8n Code Nodes
-
-**Status:** ✅ Complete
-
-**Problem:** Three workflows using `process.env.X` in Code nodes failed with `process is not defined [line 2]`. n8n's task runner sandbox executes Code nodes in isolated processes where the `process` global is unavailable, despite `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
-
-**Fix Pattern:** Added a "Set Env Vars" node before each Code node that resolves `$env.X` expressions (which work in n8n expression fields), then the Code node reads them via `$input.first().json.VARNAME`.
-
-**Workflows Fixed:**
-- **Arr Stack Health Check** (`qOZ6kS7MSlF9hOKb`) — 10 env vars (Sonarr, Radarr, Prowlarr, SABnzbd, Overseerr URLs + API keys)
-- **Plex Recently Added** (`NYdQlvUoz1x14bIZ`) — 2 env vars (PLEX_URL, PLEX_TOKEN)
-- **Daily Media Digest** (`puI2Gdj35nijpEey`) — 10 env vars (Sonarr, Radarr, SABnzbd, Plex, Overseerr URLs + API keys)
-
-**Additional Bug Fixed:** Some URLs used single quotes `'${process.env.X}/api/...'` instead of backticks, making `${}` a literal string instead of template interpolation.
-
-**Files Changed:**
-- `n8n/workflows/arr-stack-health-check.json`
-- `n8n/workflows/plex-recently-added.json`
-- `n8n/workflows/daily-media-digest.json`
-
----
-
-### 2026-02-08: Trash Pickup Scheduler Workflow
-
-**Status:** ✅ Complete
-
-**Summary:** Created n8n workflow that schedules weekly trash pickup reminders on Google Calendar with holiday delay logic.
-
-**Workflow Created:**
-- **Trash Pickup Scheduler** (`D5R6GlhUDJTUGS8P`)
-  - Schedule: Every Sunday at 9 AM + Webhook: `GET /webhook/trash-pickup`
-  - Default trash day: Friday. Creates "Take trash out to curb" all-day event on Thursday (day before)
-  - Holiday detection: New Year's, Memorial Day, Independence Day, Labor Day, Thanksgiving, Christmas
-  - If holiday falls Mon-Fri of the week, trash is delayed one day (to Saturday) and an extra "Trash delay due to [holiday]" event is created
-  - Events created on "Anderson" calendar (`52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com`)
-  - Sends summary via Gotify notification
-
-**OAuth Scope Upgrade:**
-- Re-authorized Google OAuth2 with broader scopes:
-  - `https://mail.google.com/` (Gmail)
-  - `https://www.googleapis.com/auth/gmail.modify` + `gmail.labels`
-  - `https://www.googleapis.com/auth/calendar` (NEW)
-  - `https://www.googleapis.com/auth/contacts.readonly` (NEW)
-- Added `http://localhost:8888` redirect URI to Google Cloud Console OAuth client
-- New refresh token stored in `GOOGLE_REFRESH_TOKEN` env var
-
-**Verification:**
-- Trash Pickup Scheduler: ✅ Execution #83, success in 0.6s
-- Calendar event created correctly on Thursday Feb 12 (day before Friday pickup)
-- Test event cleaned up after verification
-
----
-
-### 2026-02-08: Gmail Cleanup & Labels+Contacts Workflows
-
-**Status:** ✅ Complete
-
-**Summary:** Ported gmail-trim cleanup logic to n8n as two JavaScript-based workflows, replacing the old "Gmail - List Labels" workflow.
-
-**Workflows Created:**
-1. **Gmail Cleanup** (`YvL90Tr5LhpyBV1D`) - Full cleanup logic with dry-run/live modes
-   - Webhook: `GET /webhook/gmail-cleanup?mode=dry-run&days=30`
-   - Discovers KEEP/KEEP_nnn labels, loads keeper contacts from People API
-   - Builds compound search query, scans threads, checks preservation rules
-   - Dry-run (default): reports what would be deleted. Live: trashes threads.
-   - Sends report via Gotify notification
-2. **Gmail Labels & Contacts** (`bf54qHDO8Gt82e0u`) - Discovery/reporting tool
-   - Webhook: `GET /webhook/gmail-labels-contacts`
-   - Lists all labels with message counts, keeper contact group members
-   - Sends report via Gotify notification
-3. **Deleted:** Old "Gmail - List Labels" (`jP5TmovCB2TlHSih`) - replaced by #2
-
-**Key Technical Details:**
-- n8n Code node sandbox blocks `this.helpers.httpRequestWithAuthentication()`
-- Solution: Set node passes `$env.GOOGLE_*` vars → Code node does manual OAuth2 token refresh via `this.helpers.httpRequest()` to Google's token endpoint
-- Google OAuth2 credentials stored as n8n env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
-- OAuth scopes: Gmail full access, Calendar, Contacts (read-only)
-
-**Files Changed:**
-- `n8n/.env.example` - Added Google OAuth2 credential placeholders
-- `n8n/workflows/` - Exported all 7 workflows as JSON backups
-
-**Verification:**
-- Gmail Labels & Contacts: ✅ Execution #70, success in 3.7s
-- Gmail Cleanup (dry-run): ✅ Execution #71, success in 51.9s
-- Gotify notifications: ✅ Sent
-
----
-
-### 2026-02-08: Fixed n8n Env Vars + Gmail Labels Workflow
-
-**Status:** ✅ Complete
-
-**Problem:** All n8n workflows failed at Gotify HTTP Request nodes because `process.env.X` doesn't work in n8n expression fields (={{ ... }}). The correct syntax is `$env.X`.
-
-**Changes Made:**
-1. Added `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` to `n8n/docker-compose.yml` (enables `$env` access)
-2. Updated all 4 workflows via API: HTTP Request nodes `process.env.X` → `$env.X`
-3. Redeployed n8n container on utilities host
-4. Created "Gmail - List Labels" workflow (ID: `jP5TmovCB2TlHSih`)
-
-**Workflows Fixed:**
-- Arr Stack Health Check (`qOZ6kS7MSlF9hOKb`)
-- Daily Media Digest (`puI2Gdj35nijpEey`)
-- Overseerr Request Notifier (`1bdxTCXlpam5yUco`)
-- Plex Recently Added (`NYdQlvUoz1x14bIZ`)
-
-**Key Fix Detail:**
-- Expression fields (={{ ... }}) in HTTP Request nodes: `process.env.X` → `$env.X`
-- Code nodes (jsCode): `process.env.X` does NOT work — n8n's task runner sandbox isolates Code nodes in processes where `process` is undefined. See 2026-02-09 fix below.
-
-**n8n API Notes:**
-- Create workflow: `POST /api/v1/workflows` (no `active` field - it's read-only)
-- Update workflow: `PUT /api/v1/workflows/{id}` (only `name`, `nodes`, `connections`, `settings` allowed)
-- Activate: `POST /api/v1/workflows/{id}/activate`
-- Deactivate: `POST /api/v1/workflows/{id}/deactivate`
-- No public API to manually execute workflows - use webhook triggers for testing
-
-**Verification:**
-- Overseerr Request Notifier: ✅ Triggered successfully after restart
-- Daily Media Digest: ✅ Tested via temporary webhook trigger, Gotify notification received
-- Env var test workflow: ✅ Created, verified `$env.GOTIFY_URL` resolved correctly, deleted
-
-**Gmail Labels Workflow:**
-- Created with Manual Trigger → Gmail Get Labels → Code Format → Gotify Notify
-- Node type: `n8n-nodes-base.gmail` (v2.1) with `resource: "label"` (not `gmailLabel`)
-- Gmail OAuth2 credential created in n8n UI (credential ID: `6wlAoJG85hyBlUo7`, name: "Gmail account")
-- OAuth client created in Google Cloud Console (project: gmtrim):
-  - Type: Web application, Name: n8n
-  - Client ID: `104439945788-mrb7k896tkd45btgm56jibobhpal1cnm.apps.googleusercontent.com`
-  - Redirect URI: `https://n8n.isnadboy.com/rest/oauth2-credential/callback`
-- ✅ Tested via webhook trigger - execution #39 succeeded, Gotify notification received
-
-**Next Steps:**
-- Build full Gmail cleanup workflow once label listing works
-
----
-
-### 2026-02-08: Deployed n8n Workflow Automation
-
-**Status:** ✅ Complete
-
-**Changes Made:**
-1. Created `n8n/docker-compose.yml` with Traefik integration
-2. Created `n8n/.env.example` template
-3. Created external volume `n8n-data` on utilities host
-4. Deployed via docker compose on utilities
-5. Traefik HTTP provider discovered `n8n-5678` service automatically
-
-**Stack Details:**
-- **Name:** n8n
-- **Environment:** Utilities
-- **Container:** n8n
-- **Image:** docker.n8n.io/n8nio/n8n:latest (v2.6.4)
-- **State:** running
-- **Domain:** https://n8n.isnadboy.com
-- **Volume:** n8n-data (external, mounted at /home/node/.n8n)
-- **Port:** 5678:5678
-
-**Key Configuration:**
-- `WEBHOOK_URL=https://n8n.isnadboy.com/` - webhooks work through reverse proxy
-- `N8N_HOST=n8n.isnadboy.com` - correct host display
-- `N8N_PROTOCOL=https` - HTTPS via Traefik
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` - allows `$env.X` in expression fields
-- Traefik label: `snadboy.revp.5678.domain=n8n.isnadboy.com`
-
-**Verification:**
-- Container running: ✅
-- Traefik discovery: ✅ `n8n-5678: https://n8n.isnadboy.com -> http://host-utilities.isnadboy.com:5678/`
-- HTTPS access: ✅ HTTP 200
-- Workflows executing: ✅ All 4 workflows + Gmail Labels created
-
----
-
-### 2026-02-07: Added Collapsible Groups to Homepage
-
-**Status:** ✅ Complete
-
-**Changes Made:**
-1. Updated `settings.yaml` with collapsible group configuration
-2. Set frequently accessed groups as expanded (Media Management, Media Server, Smart Home)
-3. Set infrastructure groups as collapsed by default (Proxmox Cluster, Backup Storage, Infrastructure)
-4. Created `homepage/COLLAPSIBLE-GROUPS.md` documentation
-5. Committed and pushed to GitHub (commit: 9abf07d)
-
-**Benefits:**
-- Reduced visual clutter on dashboard
-- Improved page load performance (collapsed groups don't render widgets initially)
-- Better organization - frequently used services always visible
-- Infrastructure monitoring available on-demand with click to expand
-
-**Group Configuration:**
-- **Always Expanded:** Media Management, Media Server, Smart Home
-- **Collapsed by Default:** Proxmox Cluster, Backup Storage, Infrastructure
-
-**Files Modified:**
-- `homepage/COLLAPSIBLE-GROUPS.md` (new)
-- Updated `settings.yaml` in homepage-config volume
-
----
-
-### 2026-02-06: Deployed Homepage Dashboard
-
-**Status:** ✅ Complete
-
-**Changes Made:**
-1. Created `homepage/docker-compose.yml` with Traefik integration
-2. Created `homepage/.env.example` for environment variables
-3. Committed and pushed to GitHub
-4. Added stack to Dockhand database (stack ID: 10)
-5. Created external volume `homepage-config` on utilities host
-6. Deployed via docker compose on utilities
-
-**Stack Details:**
-- **Name:** homepage
-- **Environment:** Utilities (Dockhand ID: 1)
-- **Container:** homepage
-- **Image:** ghcr.io/gethomepage/homepage:latest
-- **State:** running (healthy)
-- **Domain:** https://homepage.isnadboy.com
-- **Volume:** homepage-config (external)
-- **Port:** 3500:3000
-
-**Key Features:**
-- Read-only Docker socket mount for container stats
-- Traefik automatic HTTPS routing via `snadboy.revp.3000.domain` label
-- Auto-update and webhook enabled in Dockhand
-- Port 3000 exposed for web interface
-
-**Files Modified:**
-- `homepage/docker-compose.yml` (new)
-- `homepage/.env.example` (new)
-
-**Verification:**
-- Container health check: ✅ healthy
-- Docker socket access: ✅ read-only mount working
-- Traefik discovery: ✅ discovered by sb-traefik-http-provider
-- Traefik routing: ✅ HTTPS working at https://homepage.isnadboy.com (HTTP 200)
-- Volume persistence: ✅ mounted at /app/config
-- Dockhand sync: ✅ stack synced successfully
-
-**Deployment Notes:**
-- Fixed git ownership issue in Dockhand container with `git config --global --add safe.directory`
-- Resolved SSH host key issue for utilities localhost access
-- Labels only apply when deploying from compose file (not stdin pipe)
-- Required provider restart to discover new container (~30 seconds for health check)
-- Fixed host validation by adding `HOMEPAGE_ALLOWED_HOSTS=homepage.isnadboy.com`
-
-**Configuration (2026-02-06):**
-Created comprehensive Homepage dashboard with all active services:
-
-**Service Groups Configured:**
-1. **Media Management** (5 services)
-   - Sonarr, Radarr, Prowlarr, Overseerr, Bazarr
-   - All with API widgets enabled
-
-2. **Media Server** (2 services)
-   - Plex (API widget enabled)
-   - Tautulli (widget pending API key)
-
-3. **Downloads** (1 service)
-   - SABnzbd (API widget enabled)
-
-4. **Infrastructure** (6 services)
-   - Traefik, Traefik HTTP Provider, Dockhand
-   - Uptime Kuma (widget pending slug), Gotify, Script Server
-
-5. **Custom** (1 service)
-   - Agregarr
-
-6. **Smart Home** (1 service)
-   - Home Assistant (API widget enabled)
-
-**Configuration Files Created:**
-- `services.yaml` - 16 services with API integrations
-- `widgets.yaml` - Resource monitoring, Docker stats, search
-- `bookmarks.yaml` - External links (GitHub, Tailscale, docs)
-- `settings.yaml` - Dark theme, boxed layout, grid organization
-- `README.md` - Configuration documentation
-
-**Features:**
-- Dark mode with slate color scheme
-- API widgets for real-time service stats
-- Docker integration for container monitoring
-- Organized grid layout by service category
-- Quick search with Google integration
-- Resource usage widgets (CPU, memory)
-
-**Updates (2026-02-06 - Evening):**
-- ✅ Removed Bazarr service completely
-  - Deleted docker-compose.yml
-  - Stopped and removed container on arr host
-  - Removed bazarr-data volume
-  - Removed from Homepage configuration
-
-- ✅ Added Tautulli API integration
-  - API key: a9e9e9242f0c4ea8a0990c56dd62ce40
-  - Widget shows Plex analytics and stream stats
-
-- ✅ Added Proxmox cluster monitoring
-  - Created API user: homepage@pve
-  - API token: homepage@pve!homepage-token
-  - Role: PVEAuditor (read-only access)
-  - Monitoring 3 nodes:
-    - pve-multivac (192.168.86.104) - Plex host
-    - pve-colossus
-    - pve-guardian
-  - Widgets show: VMs, LXCs, CPU, memory, storage per node
-
-**Final Updates (2026-02-06 - Late Evening):**
-- ✅ Fixed Proxmox API connectivity issues
-  - Changed from hostnames to Tailscale IPs
-  - pve-colossus: 100.64.193.33:8006
-  - pve-guardian: 100.109.201.46:8006
-  - pve-multivac: 100.69.91.74:8006
-  - All nodes now showing stats correctly
-
-- ✅ Fixed Plex API integration
-  - Added HOMEPAGE_VAR_PLEX_TOKEN environment variable
-  - Widget now showing library and stream stats
-
-- ✅ Reorganized services
-  - Moved SABnzbd from "Downloads" to "Media Management" group
-  - Better logical organization
-
-- ✅ Added Docker container monitoring
-  - Created docker.yaml for container state tracking
-  - Updated widgets.yaml with expanded Docker stats
-  - Shows running containers, CPU, memory per container
-
-- ✅ Added PBS placeholders
-  - alexandria.isnadboy.com:8007
-  - svalbard.isnadboy.com:8007
-  - Ready for configuration once servers are accessible
-  - Setup notes in homepage-config/PBS-SETUP-NOTES.md
-
-**Latest Updates (2026-02-06 - Final Session):**
-
-- ✅ Fixed Plex token authentication
-  - Retrieved working token from Plex Preferences.xml
-  - Old token (expired): 05f660f70f3e23a0445997d159ad109ffb325bd2
-  - New token (working): js1SqwFxuN2eirNGdeox
-  - Plex widget now showing library stats, active streams, bandwidth
-  - Verified working with API test
-
-- ✅ Removed PBS servers (not available)
-  - alexandria.isnadboy.com - DNS points to cadre, server doesn't exist
-  - svalbard.isnadboy.com - DNS points to cadre, server doesn't exist
-  - Removed HOMEPAGE_VAR_PBS_USER and HOMEPAGE_VAR_PBS_TOKEN
-  - Cleaned up PBS-SETUP-NOTES.md documentation
-  - Removed from all configuration files
-
-- ✅ Reorganized service groups
-  - Moved Agregarr from "Custom" to "Media Management"
-  - Removed empty "Custom" group from layout
-  - Better logical organization of media services
-
-- ✅ Confirmed Home Assistant working
-  - Already configured in Smart Home section
-  - Widget showing entities and sensors
-  - API integration active
-
-**Final Service Count:** 17 services across 5 groups
-- **Media Management: 6** (Sonarr, Radarr, Prowlarr, Overseerr, SABnzbd, Agregarr)
-- **Media Server: 2** (Plex, Tautulli)
-- **Proxmox Cluster: 3** (Multivac, Colossus, Guardian - all with working APIs)
-- **Infrastructure: 6** (Traefik, HTTP Provider, Dockhand, Uptime Kuma, Gotify, Script Server)
-- **Smart Home: 1** (Home Assistant)
-
-**API Widget Status:** 14/14 working (100%) ✅
-- All *arr services: ✅
-- Plex & Tautulli: ✅
-- All Proxmox nodes: ✅
-- Home Assistant: ✅
-- Docker monitoring: ✅
-
-**Environment Variables (Final):**
-```yaml
-- HOMEPAGE_VAR_PLEX_TOKEN=js1SqwFxuN2eirNGdeox
-- HOMEPAGE_VAR_TAUTULLI_KEY=a9e9e9242f0c4ea8a0990c56dd62ce40
-- HOMEPAGE_VAR_PROXMOX_USER=homepage@pve!homepage-token
-- HOMEPAGE_VAR_PROXMOX_TOKEN=16e2f699-b719-4017-9dd6-4ca487594dc7
-```
-
-**Dashboard Status:** Fully operational, zero errors, real-time monitoring active
-
----
-
-## Previous Changes
-
-### 2026-01-25: Deployed Dockhand Docker Management UI
-
-**Status:** ✅ Complete
-
-**Changes Made:**
-1. Created `dockhand/docker-compose.yml` with Traefik integration
-2. Created `dockhand/.env.example` template for optional encryption key
-3. Committed and pushed to GitHub
-4. Created external volume `dockhand-data` on utilities endpoint (ID: 13)
-5. Deployed stack to utilities via Portainer API
-
-**Stack Details:**
-- **Name:** dockhand
-- **Stack ID:** 72
-- **Endpoint:** utilities (ID: 13)
-- **Container:** /dockhand
-- **Image:** fnsys/dockhand:latest
-- **State:** running (healthy)
-- **Domain:** https://dockhand.isnadboy.com
-- **Volume:** dockhand-data (external)
-
-**Key Features:**
-- Read-only Docker socket mount for security
-- Traefik automatic HTTPS routing via `snadboy.revp.3000.domain` label
-- SQLite database initialized at `/app/data/db/dockhand.db`
-- Event and metrics subprocesses running successfully
-- Port 3000 exposed for web interface
-
-**Files Modified:**
-- `dockhand/docker-compose.yml` (new)
-- `dockhand/.env.example` (new)
-
-**Verification:**
-- Container health check: ✅ healthy (Up 10+ minutes)
-- Docker socket access: ✅ working
-- Database initialization: ✅ complete (4/4 migrations applied)
-- Traefik discovery: ✅ discovered by sb-traefik-http-provider
-- Traefik routing: ✅ HTTPS working at https://dockhand.isnadboy.com
-- Volume persistence: ✅ mounted at /app/data
-- DNS resolution: ✅ resolves to host-cadre.isnadboy.com (100.117.24.88)
-- HTTPS access: ✅ HTTP 200 OK
-- Direct port access: ✅ HTTP 200 on host-utilities.isnadboy.com:3000
-
-**Service Discovery Details:**
-- Provider service name: `dockhand-3000`
-- Public URL: https://dockhand.isnadboy.com
-- Backend URL: http://host-utilities.isnadboy.com:3000/
-- Discovery time: ~2 minutes after deployment (required provider restart)
-
-**Access Verified:**
-- Web UI accessible at https://dockhand.isnadboy.com
-- SSL certificate valid (Let's Encrypt via Traefik)
-- Initial setup page loads successfully
-
-**Next Steps:**
-- ✅ Access https://dockhand.isnadboy.com - VERIFIED WORKING
-- Complete initial Dockhand setup/login
-- Optional: Generate encryption key and add to stack environment
-  - Command: `openssl rand -base64 32`
-  - Add as ENCRYPTION_KEY in Portainer stack environment variables
-
-## Build/Deploy Commands
-
-### Deploy New Service
-```bash
-# Via Portainer API (preferred)
-source /mnt/shareables/.claude/.env
-ENDPOINT_ID=13  # utilities
-STACK_NAME="service-name"
-COMPOSE_PATH="service-name/docker-compose.yml"
-
-curl -sk -X POST "${PORTAINER_URL}/api/stacks/create/standalone/repository?endpointId=${ENDPOINT_ID}" \
-  -H "X-API-Key: ${PORTAINER_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "'"${STACK_NAME}"'",
-    "repositoryURL": "https://github.com/snadboy/docker-homelab",
-    "composeFile": "'"${COMPOSE_PATH}"'",
-    "repositoryReferenceName": "",
-    "repositoryAuthentication": false,
-    "autoUpdate": {"interval": "5m"}
-  }'
-```
-
-### Create External Volume
-```bash
-source /mnt/shareables/.claude/.env
-ENDPOINT_ID=13
-VOLUME_NAME="volume-name"
-
-curl -sk -X POST "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/volumes/create" \
-  -H "X-API-Key: ${PORTAINER_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"Name": "'"${VOLUME_NAME}"'"}'
-```
-
-## Project Context
-
-This repository contains Docker Compose configurations for all homelab services deployed across multiple hosts via Portainer. All services follow standard patterns:
-- External volumes for data persistence
-- Traefik labels for automatic HTTPS routing
-- Standard environment variables (PUID, PGID, TZ)
-- GitOps auto-update enabled (5m interval)
-
-**Endpoints:**
-- cadre (ID: 8) - Traefik infrastructure
-- arr (ID: 10) - Media management
-- plex (ID: 11) - Media server
-- iot (ID: 12) - IoT/smarthome
-- utilities (ID: 13) - Utility services
-- devs (ID: 14) - Development services
+**Last Updated:** 2026-02-11

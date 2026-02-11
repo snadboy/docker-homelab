@@ -23,6 +23,8 @@ services:
       # - HEALTHCHECKS_PING_URL=https://hc-ping.com/your-uuid-here
     labels:
       - "snadboy.revp.8080.domain=sb-traefik.isnadboy.com"
+    dns_search:
+      - tail65635.ts.net
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s

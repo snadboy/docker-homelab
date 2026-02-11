@@ -9,6 +9,50 @@
 
 ## Recent Changes
 
+### 2026-02-10: Weekly Version Audit Workflow
+
+**Status:** ✅ Complete
+
+**Summary:** Created n8n workflow that automates the manual version audit performed earlier today. Runs weekly (Sundays 9 AM), checks all Docker container versions against latest GitHub releases, PVE and Technitium versions, and APT update status across 7 hosts. Posts two Discord embeds. Replaces the old Pending Updates Monitor.
+
+**New Workflow:**
+- **Weekly Version Audit** (`BXBsZXozpqxLZyoa`) — Sunday 9 AM
+  - 17 nodes: 7 APT SSH + 4 Docker SSH + 1 Code (API checks) + Merge + Format + Discord
+  - Docker containers (10): sonarr, radarr, prowlarr, overseerr, sabnzbd, tautulli, plex, traefik, zigbee2mqtt, n8n
+  - Compares running `org.opencontainers.image.version` labels vs GitHub `/releases/latest`
+  - Zigbee2mqtt: `docker exec` reads `/app/package.json` (no OCI labels, container named `zigbee2mqtt-office`)
+  - PVE version from `/api2/json/version` (PVEAuditor token)
+  - Technitium DNS version from `/api/settings/get`
+  - APT updates on 7 SSH hosts (plex, arr, cadre, ns, utilities, iot, ha)
+  - Version normalization: strips `-ls\d+` suffixes, `v` prefixes, Plex build hashes
+  - Embed 1: Software Versions (green=current, yellow=update available)
+  - Embed 2: System Updates (green=up to date, yellow=pending)
+  - Footer: `10 containers | 7 hosts | 3 PVE nodes`
+
+**Old Workflow Deactivated:**
+- **Pending Updates Monitor** (`mc4XV3qJ1FWNKVJO`) — deactivated (APT checking now subset of new workflow)
+
+**New Environment Variables (n8n/.env):**
+- `TECHNITIUM_URL=http://192.168.86.76:5380`
+- `TECHNITIUM_TOKEN=<api-token>`
+
+**Design Notes:**
+- PVE APT updates not checked via API (requires `Sys.Modify`, token only has `PVEAuditor`). PVE nodes managed by biweekly Ansible apt-update playbook instead.
+- GitHub API: unauthenticated, 60 req/hour limit — 10 lookups per weekly run is well within limits.
+- Reuses all 7 existing SSH credentials from the old Pending Updates Monitor.
+
+**Verification:**
+- 3 test executions, all succeeded (~6-7s each)
+- Discord output verified: all 10 containers, PVE 9.1.5, Technitium v14.3, 7 host APT status ✅
+
+**Files Changed:**
+- `n8n/workflows/weekly-version-audit.json` (new)
+- `n8n/.env.example` (added Technitium placeholders)
+
+**Commit:** `88b8eb9` — Add Weekly Version Audit workflow, replace Pending Updates Monitor
+
+---
+
 ### 2026-02-10: Homelab Version Audit & Updates
 
 **Status:** ✅ Complete

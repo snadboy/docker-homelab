@@ -1,0 +1,641 @@
+{
+  "name": "Weekly Version Audit",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "wva-trigger",
+      "name": "Sunday 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "PVE_API_URL",
+              "value": "={{ $env.PVE_API_URL }}",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "PVE_API_TOKEN",
+              "value": "={{ $env.PVE_API_TOKEN }}",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "DISCORD_WEBHOOK_URL",
+              "value": "={{ $env.DISCORD_WEBHOOK_URL }}",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "TECHNITIUM_URL",
+              "value": "={{ $env.TECHNITIUM_URL }}",
+              "type": "string"
+            },
+            {
+              "id": "e5",
+              "name": "TECHNITIUM_TOKEN",
+              "value": "={{ $env.TECHNITIUM_TOKEN }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "wva-set-env",
+      "name": "Set Env Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|plex|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-plex",
+      "name": "APT plex",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "C13DCoHPT9ECBLYJ",
+          "name": "plex SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|arr|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-arr",
+      "name": "APT arr",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        100
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "eoD78OvooU5xNszV",
+          "name": "arr SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|cadre|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-cadre",
+      "name": "APT cadre",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        200
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|ns|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-ns",
+      "name": "APT ns",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "SOdVhtzBbhi13lEl",
+          "name": "ns SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|utilities|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-utilities",
+      "name": "APT utilities",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        400
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|iot|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-iot",
+      "name": "APT iot",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        500
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "DjfY1P2avir6zmei",
+          "name": "iot SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|ha|${PENDING}|${REBOOT}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-apt-ha",
+      "name": "APT ha",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        600
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "YgRW8lB1lXMvtPjF",
+          "name": "ha SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "for c in sonarr radarr prowlarr overseerr sabnzbd tautulli; do ver=$(docker inspect \"$c\" 2>/dev/null | jq -r '.[0].Config.Labels[\"org.opencontainers.image.version\"] // \"unknown\"'); echo \"docker|$c|$ver\"; done",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-docker-arr",
+      "name": "Docker arr",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        800
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "eoD78OvooU5xNszV",
+          "name": "arr SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "ver=$(docker inspect plex 2>/dev/null | jq -r '.[0].Config.Labels[\"org.opencontainers.image.version\"] // \"unknown\"'); echo \"docker|plex|$ver\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-docker-plex",
+      "name": "Docker plex",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        900
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "C13DCoHPT9ECBLYJ",
+          "name": "plex SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "ver=$(docker inspect traefik 2>/dev/null | jq -r '.[0].Config.Labels[\"org.opencontainers.image.version\"] // \"unknown\"'); echo \"docker|traefik|$ver\"; z2m_ver=$(docker exec zigbee2mqtt-office cat /app/package.json 2>/dev/null | jq -r \".version\" 2>/dev/null || echo \"unknown\"); echo \"docker|zigbee2mqtt|$z2m_ver\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-docker-cadre",
+      "name": "Docker cadre",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        1000
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "ver=$(docker inspect n8n 2>/dev/null | jq -r '.[0].Config.Labels[\"org.opencontainers.image.version\"] // \"unknown\"'); echo \"docker|n8n|$ver\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "wva-docker-utilities",
+      "name": "Docker utilities",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        1100
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nconst PVE = env.PVE_API_URL;\nconst PVE_TOKEN = env.PVE_API_TOKEN;\nconst TECH_URL = env.TECHNITIUM_URL;\nconst TECH_TOKEN = env.TECHNITIUM_TOKEN;\nconst http = this.helpers.httpRequest.bind(this.helpers);\nconst pveHeaders = { Authorization: `PVEAPIToken=${PVE_TOKEN}` };\nconst pveOpts = { method: 'GET', headers: pveHeaders, skipSslCertificateValidation: true, timeout: 15000 };\n\n// PVE version\nlet pveVersion = 'unknown';\ntry {\n  const verResp = await http({ ...pveOpts, url: `${PVE}/api2/json/version` });\n  pveVersion = verResp.data?.version || 'unknown';\n} catch (e) {\n  pveVersion = 'error';\n}\n\n// PVE nodes \u2014 skip apt (requires Sys.Modify, token only has PVEAuditor)\nconst pveNodes = [];\ntry {\n  const nodesResp = await http({ ...pveOpts, url: `${PVE}/api2/json/nodes` });\n  for (const node of (nodesResp.data || [])) {\n    pveNodes.push({ name: node.node });\n  }\n} catch (e) {}\n\n// Technitium version via /api/settings/get\nlet techVersion = 'unknown';\ntry {\n  const techResp = await http({\n    method: 'GET',\n    url: `${TECH_URL}/api/settings/get?token=${TECH_TOKEN}`,\n    timeout: 10000\n  });\n  techVersion = techResp.response?.version || 'unknown';\n} catch (e) {\n  techVersion = 'error';\n}\n\n// Latest GitHub releases\nfunction normalizeTag(name, tag) {\n  if (['sonarr','radarr','prowlarr','overseerr','sabnzbd','tautulli','plex'].includes(name)) {\n    return tag.replace(/-ls\\d+$/, '');\n  }\n  if (['traefik','zigbee2mqtt'].includes(name)) {\n    return tag.replace(/^v/, '');\n  }\n  if (name === 'n8n') {\n    return tag.replace(/^n8n@/, '').replace(/^v/, '');\n  }\n  return tag;\n}\n\nconst githubServices = [\n  { name: 'sonarr', repo: 'linuxserver/docker-sonarr' },\n  { name: 'radarr', repo: 'linuxserver/docker-radarr' },\n  { name: 'prowlarr', repo: 'linuxserver/docker-prowlarr' },\n  { name: 'overseerr', repo: 'linuxserver/docker-overseerr' },\n  { name: 'sabnzbd', repo: 'linuxserver/docker-sabnzbd' },\n  { name: 'tautulli', repo: 'linuxserver/docker-tautulli' },\n  { name: 'plex', repo: 'linuxserver/docker-plex' },\n  { name: 'traefik', repo: 'traefik/traefik' },\n  { name: 'zigbee2mqtt', repo: 'Koenkk/zigbee2mqtt' },\n  { name: 'n8n', repo: 'n8n-io/n8n' }\n];\n\nconst latestVersions = {};\nfor (const svc of githubServices) {\n  try {\n    const resp = await http({\n      method: 'GET',\n      url: `https://api.github.com/repos/${svc.repo}/releases/latest`,\n      headers: { 'User-Agent': 'n8n-version-audit', Accept: 'application/vnd.github.v3+json' },\n      timeout: 10000\n    });\n    latestVersions[svc.name] = normalizeTag(svc.name, resp.tag_name || '');\n  } catch (e) {\n    latestVersions[svc.name] = 'unknown';\n  }\n}\n\nreturn [{\n  json: {\n    type: 'api_results',\n    pveVersion,\n    pveNodes,\n    techVersion,\n    latestVersions\n  }\n}];"
+      },
+      "id": "wva-api-checks",
+      "name": "API Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 12,
+        "options": {}
+      },
+      "id": "wva-merge",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        660,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst aptResults = [];\nconst dockerResults = [];\nlet apiData = null;\n\nfor (const item of items) {\n  if (item.json.type === 'api_results') { apiData = item.json; continue; }\n  const stdout = (item.json.stdout || '').trim();\n  if (!stdout) continue;\n  for (const line of stdout.split('\\n')) {\n    const t = line.trim();\n    if (t.startsWith('apt|')) {\n      const p = t.split('|');\n      aptResults.push({ host: p[1], pending: parseInt(p[2] || '0', 10), reboot: (p[3] || '').trim() === 'yes' });\n    } else if (t.startsWith('docker|')) {\n      const p = t.split('|');\n      dockerResults.push({ container: p[1], version: p[2] || 'unknown' });\n    }\n  }\n}\n\nfunction norm(name, ver) {\n  let v = ver.replace(/-ls\\d+$/, '').replace(/^v/, '');\n  if (name === 'plex') v = v.replace(/-[a-f0-9]{9,}$/, '');\n  return v;\n}\n\nconst latest = apiData?.latestVersions || {};\nlet anyUpdate = false;\nlet desc1 = '**--- Docker Containers ---**\\n';\ndockerResults.sort((a, b) => a.container.localeCompare(b.container));\n\nfor (const d of dockerResults) {\n  const cur = norm(d.container, d.version);\n  const lat = latest[d.container] ? norm(d.container, latest[d.container]) : null;\n  if (!lat || lat === 'unknown' || cur === lat || cur.startsWith(lat) || lat.startsWith(cur)) {\n    desc1 += '\\u2705 ' + d.container + ': ' + cur + '\\n';\n  } else {\n    desc1 += '\\u26A0\\uFE0F **' + d.container + '**: ' + cur + ' \\u2192 ' + lat + '\\n';\n    anyUpdate = true;\n  }\n}\n\ndesc1 += '\\n**--- Infrastructure ---**\\n';\nconst pveVer = apiData?.pveVersion || 'unknown';\nconst pveNodes = apiData?.pveNodes || [];\ndesc1 += '\\uD83D\\uDDA5\\uFE0F PVE: ' + pveVer + ' (' + pveNodes.length + ' nodes)\\n';\ndesc1 += '\\u2705 Technitium DNS: v' + (apiData?.techVersion || 'unknown') + '\\n';\n\nlet desc2 = '';\naptResults.sort((a, b) => a.host.localeCompare(b.host));\nlet anyApt = false;\nfor (const h of aptResults) {\n  if (h.pending > 0) {\n    let line = '\\uD83D\\uDCE6 **' + h.host + '**: ' + h.pending + ' pending';\n    if (h.reboot) line += ' \\u26A0\\uFE0F reboot';\n    desc2 += line + '\\n';\n    anyApt = true;\n  } else {\n    desc2 += '\\u2705 ' + h.host + ': Up to date\\n';\n  }\n}\n\nconst today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'America/New_York' });\nconst cCount = dockerResults.length;\nconst hCount = aptResults.length;\n\nreturn [{\n  json: {\n    embeds: [\n      {\n        title: '\\uD83D\\uDD0D Software Versions \\u2014 ' + today,\n        description: desc1,\n        color: anyUpdate ? 16776960 : 3066993,\n        timestamp: new Date().toISOString()\n      },\n      {\n        title: '\\uD83D\\uDCE6 System Updates \\u2014 ' + today,\n        description: desc2,\n        color: anyApt ? 16776960 : 3066993,\n        footer: { text: cCount + ' containers | ' + hCount + ' hosts | ' + pveNodes.length + ' PVE nodes' },\n        timestamp: new Date().toISOString()\n      }\n    ]\n  }\n}];"
+      },
+      "id": "wva-format",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: $json.embeds }) }}",
+        "options": {}
+      },
+      "id": "wva-discord",
+      "name": "Discord Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "Sunday 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Set Env Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "APT plex": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "APT arr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "APT cadre": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "APT ns": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "APT utilities": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "APT iot": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "APT ha": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Docker arr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "Docker plex": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "Docker cadre": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 9
+          }
+        ]
+      ]
+    },
+    "Docker utilities": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 10
+          }
+        ]
+      ]
+    },
+    "API Checks": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 11
+          }
+        ]
+      ]
+    },
+    "Set Env Vars": {
+      "main": [
+        [
+          {
+            "node": "APT plex",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT arr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT cadre",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT ns",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT utilities",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT iot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "APT ha",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Docker arr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Docker plex",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Docker cadre",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Docker utilities",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "API Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Discord Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const env = $input.first().json;\nconst UNIFI_URL = env.UNIFI_URL;\nconst UNIFI_USERNAME = env.UNIFI_USERNAME;\nconst UNIFI_PASSWORD = env.UNIFI_PASSWORD;\nconst httpRequest = this.helpers.httpRequest.bind(this.helpers);\n\nconst alerts = [];\n\ntry {\n  // 1. Authenticate to UniFi\n  const loginResp = await httpRequest({\n    method: 'POST',\n    url: `${UNIFI_URL}/api/auth/login`,\n    body: { username: UNIFI_USERNAME, password: UNIFI_PASSWORD },\n    returnFullResponse: true,\n    skipSslCertificateValidation: true,\n    json: true\n  });\n\n  // Extract cookie - handle both array and string\n  const rawCookies = loginResp.headers['set-cookie'];\n  let cookieStr = '';\n  if (Array.isArray(rawCookies)) {\n    cookieStr = rawCookies.map(c => c.split(';')[0]).join('; ');\n  } else if (typeof rawCookies === 'string') {\n    cookieStr = rawCookies.split(';')[0];\n  }\n\n  async function unifiGet(path) {\n    const raw = await httpRequest({\n      url: `${UNIFI_URL}${path}`,\n      headers: { Cookie: cookieStr },\n      skipSslCertificateValidation: true\n    });\n    return typeof raw === 'string' ? JSON.parse(raw) : raw;\n  }\n\n  // 2. Check WAN health\n  const healthResp = await unifiGet('/proxy/network/api/s/default/stat/health');\n  const subsystems = healthResp.data || [];\n\n  for (const sub of subsystems) {\n    if (sub.subsystem === 'wan') {\n      if (sub.status !== 'ok') {\n        alerts.push({\n          key: 'wan-status',\n          name: '\\ud83c\\udf10 WAN',\n          value: `Status: ${sub.status} | ISP: ${sub.isp_name || 'Unknown'} | IP: ${sub.wan_ip || 'N/A'}`\n        });\n      }\n      const gwStats = sub['gw_system-stats'] || {};\n      const gwCpu = parseFloat(gwStats.cpu || '0');\n      const gwMem = parseFloat(gwStats.mem || '0');\n      if (gwCpu > 80) {\n        alerts.push({ key: 'gw-cpu-high', name: '\\ud83d\\udda5\\ufe0f Gateway CPU', value: `${gwCpu.toFixed(1)}% (threshold: 80%)` });\n      }\n      if (gwMem > 80) {\n        alerts.push({ key: 'gw-mem-high', name: '\\ud83d\\udda5\\ufe0f Gateway Memory', value: `${gwMem.toFixed(1)}% (threshold: 80%)` });\n      }\n    }\n    if (sub.subsystem === 'wlan' && sub.status !== 'ok') {\n      alerts.push({\n        key: 'wlan-status',\n        name: '\\ud83d\\udce1 WLAN',\n        value: `Status: ${sub.status} | APs: ${sub.num_adopted || 0} adopted, ${sub.num_disconnected || 0} disconnected`\n      });\n    }\n  }\n\n  // 3. Check devices\n  const devResp = await unifiGet('/proxy/network/api/s/default/stat/device');\n  const devices = devResp.data || [];\n  for (const dev of devices) {\n    if (dev.state !== 1 && dev.adopted === true) {\n      const name = dev.name || dev.mac || 'Unknown';\n      const lastSeen = dev.last_seen ? new Date(dev.last_seen * 1000).toLocaleString() : 'unknown';\n      alerts.push({ key: `dev-offline-${dev.mac}`, name: `\\ud83d\\udce1 ${name}`, value: `Device offline (${dev.type}, last seen: ${lastSeen})` });\n    }\n  }\n\n  // 4. Check WiFi quality\n  const staResp = await unifiGet('/proxy/network/api/s/default/stat/sta');\n  const clients = staResp.data || [];\n  const poorSat = clients.filter(c => (c.satisfaction || 100) < 50);\n  if (poorSat.length > 3) {\n    alerts.push({ key: 'wifi-poor-satisfaction', name: '\\ud83d\\udcf6 WiFi Quality', value: `${poorSat.length} clients with satisfaction < 50% (of ${clients.length} total)` });\n  }\n\n} catch (err) {\n  alerts.push({ key: 'unifi-api-error', name: '\\u274c UniFi API', value: `Connection failed: ${err.message}` });\n}\n\nreturn [{ json: { unifiAlerts: alerts } }];"
+        "jsCode": "const globals = $('Globals').first().json;\nconst UNIFI_URL = globals.UNIFI_URL;\nconst UNIFI_USERNAME = globals.UNIFI_USERNAME;\nconst UNIFI_PASSWORD = globals.UNIFI_PASSWORD;\nconst httpRequest = this.helpers.httpRequest.bind(this.helpers);\n\nconst alerts = [];\n\ntry {\n  // 1. Authenticate to UniFi\n  const loginResp = await httpRequest({\n    method: 'POST',\n    url: `${UNIFI_URL}/api/auth/login`,\n    body: { username: UNIFI_USERNAME, password: UNIFI_PASSWORD },\n    returnFullResponse: true,\n    skipSslCertificateValidation: true,\n    json: true\n  });\n\n  // Extract cookie - handle both array and string\n  const rawCookies = loginResp.headers['set-cookie'];\n  let cookieStr = '';\n  if (Array.isArray(rawCookies)) {\n    cookieStr = rawCookies.map(c => c.split(';')[0]).join('; ');\n  } else if (typeof rawCookies === 'string') {\n    cookieStr = rawCookies.split(';')[0];\n  }\n\n  async function unifiGet(path) {\n    const raw = await httpRequest({\n      url: `${UNIFI_URL}${path}`,\n      headers: { Cookie: cookieStr },\n      skipSslCertificateValidation: true\n    });\n    return typeof raw === 'string' ? JSON.parse(raw) : raw;\n  }\n\n  // 2. Check WAN health\n  const healthResp = await unifiGet('/proxy/network/api/s/default/stat/health');\n  const subsystems = healthResp.data || [];\n\n  for (const sub of subsystems) {\n    if (sub.subsystem === 'wan') {\n      if (sub.status !== 'ok') {\n        alerts.push({\n          key: 'wan-status',\n          name: '\\ud83c\\udf10 WAN',\n          value: `Status: ${sub.status} | ISP: ${sub.isp_name || 'Unknown'} | IP: ${sub.wan_ip || 'N/A'}`\n        });\n      }\n      const gwStats = sub['gw_system-stats'] || {};\n      const gwCpu = parseFloat(gwStats.cpu || '0');\n      const gwMem = parseFloat(gwStats.mem || '0');\n      if (gwCpu > 80) {\n        alerts.push({ key: 'gw-cpu-high', name: '\\ud83d\\udda5\\ufe0f Gateway CPU', value: `${gwCpu.toFixed(1)}% (threshold: 80%)` });\n      }\n      if (gwMem > 80) {\n        alerts.push({ key: 'gw-mem-high', name: '\\ud83d\\udda5\\ufe0f Gateway Memory', value: `${gwMem.toFixed(1)}% (threshold: 80%)` });\n      }\n    }\n    if (sub.subsystem === 'wlan' && sub.status !== 'ok') {\n      alerts.push({\n        key: 'wlan-status',\n        name: '\\ud83d\\udce1 WLAN',\n        value: `Status: ${sub.status} | APs: ${sub.num_adopted || 0} adopted, ${sub.num_disconnected || 0} disconnected`\n      });\n    }\n  }\n\n  // 3. Check devices\n  const devResp = await unifiGet('/proxy/network/api/s/default/stat/device');\n  const devices = devResp.data || [];\n  for (const dev of devices) {\n    if (dev.state !== 1 && dev.adopted === true) {\n      const name = dev.name || dev.mac || 'Unknown';\n      const lastSeen = dev.last_seen ? new Date(dev.last_seen * 1000).toLocaleString() : 'unknown';\n      alerts.push({ key: `dev-offline-${dev.mac}`, name: `\\ud83d\\udce1 ${name}`, value: `Device offline (${dev.type}, last seen: ${lastSeen})` });\n    }\n  }\n\n  // 4. Check WiFi quality\n  const staResp = await unifiGet('/proxy/network/api/s/default/stat/sta');\n  const clients = staResp.data || [];\n  const poorSat = clients.filter(c => (c.satisfaction || 100) < 50);\n  if (poorSat.length > 3) {\n    alerts.push({ key: 'wifi-poor-satisfaction', name: '\\ud83d\\udcf6 WiFi Quality', value: `${poorSat.length} clients with satisfaction < 50% (of ${clients.length} total)` });\n  }\n\n} catch (err) {\n  alerts.push({ key: 'unifi-api-error', name: '\\u274c UniFi API', value: `Connection failed: ${err.message}` });\n}\n\nreturn [{ json: { unifiAlerts: alerts } }];"
       },
       "id": "nhm-unifi",
       "name": "Check UniFi Health",
@@ -99,7 +99,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.alertCooldowns) staticData.alertCooldowns = {};\nconst now = Date.now();\nconst COOLDOWN_MS = 60 * 60 * 1000;\n\nfunction shouldAlert(key) {\n  const last = staticData.alertCooldowns[key] || 0;\n  if (now - last < COOLDOWN_MS) return false;\n  staticData.alertCooldowns[key] = now;\n  return true;\n}\nfor (const [k, v] of Object.entries(staticData.alertCooldowns)) {\n  if (now - v > 24 * 60 * 60 * 1000) delete staticData.alertCooldowns[k];\n}\n\nconst alerts = [];\n\n// 1. UniFi alerts\nfor (const item of items) {\n  if (item.json.unifiAlerts) {\n    for (const a of item.json.unifiAlerts) {\n      if (shouldAlert(a.key)) alerts.push({ name: a.name, value: a.value });\n    }\n  }\n}\n\n// 2. Tunnel results from SSH\nconst expected = ['cloudflare-plex','cloudflare-overseerr','cloudflared-gotify','cloudflare-dockhand'];\nconst found = {};\nfor (const item of items) {\n  const stdout = item.json.stdout;\n  if (stdout === undefined) continue;\n  for (const line of stdout.trim().split('\\n').filter(l => l)) {\n    const [name, state, status] = line.split('|').map(s => s.trim());\n    if (name) found[name] = { state, status };\n  }\n}\nfor (const t of expected) {\n  const info = found[t];\n  if (!info) { if (shouldAlert(`tunnel-missing-${t}`)) alerts.push({ name: `\\u2601\\ufe0f ${t}`, value: 'Container not found' }); }\n  else if (info.state !== 'running') { if (shouldAlert(`tunnel-down-${t}`)) alerts.push({ name: `\\u2601\\ufe0f ${t}`, value: `Container ${info.state} (${info.status})` }); }\n}\n\nreturn [{ json: { hasIssues: alerts.length > 0, alertCount: alerts.length, alerts, timestamp: new Date().toISOString() } }];"
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.alertCooldowns) staticData.alertCooldowns = {};\nconst now = Date.now();\nconst COOLDOWN_MS = 60 * 60 * 1000;\n\nfunction shouldAlert(key) {\n  const last = staticData.alertCooldowns[key] || 0;\n  if (now - last < COOLDOWN_MS) return false;\n  staticData.alertCooldowns[key] = now;\n  return true;\n}\nfor (const [k, v] of Object.entries(staticData.alertCooldowns)) {\n  if (now - v > 24 * 60 * 60 * 1000) delete staticData.alertCooldowns[k];\n}\n\nconst alerts = [];\n\n// 1. UniFi alerts\nfor (const item of items) {\n  if (item.json.unifiAlerts) {\n    for (const a of item.json.unifiAlerts) {\n      if (shouldAlert(a.key)) alerts.push({ name: a.name, value: a.value });\n    }\n  }\n}\n\n// 2. Tunnel results from SSH\nconst expected = ['cloudflare-plex','cloudflare-overseerr','cloudflared-gotify','cloudflare-dockhand'];\nconst found = {};\nfor (const item of items) {\n  const stdout = item.json.stdout;\n  if (stdout === undefined) continue;\n  for (const line of stdout.trim().split('\\n').filter(l => l)) {\n    const [name, state, status] = line.split('|').map(s => s.trim());\n    if (name) found[name] = { state, status };\n  }\n}\nfor (const t of expected) {\n  const info = found[t];\n  if (!info) { if (shouldAlert(`tunnel-missing-${t}`)) alerts.push({ name: `\\u2601\\ufe0f ${t}`, value: 'Container not found' }); }\n  else if (info.state !== 'running') { if (shouldAlert(`tunnel-down-${t}`)) alerts.push({ name: `\\u2601\\ufe0f ${t}`, value: `Container ${info.state} (${info.status})` }); }\n}\n\nconst description = alerts.map(a => `**${a.name}**\\n${a.value}`).join('\\n\\n');\n\nreturn [{ json: {\n  hasIssues: alerts.length > 0,\n  alertCount: alerts.length,\n  alertTitle: '\\u26a0\\ufe0f Network Health Alert',\n  alertColor: 15548997,\n  description,\n  timestamp: new Date().toISOString()\n} }];"
       },
       "id": "nhm-evaluate",
       "name": "Evaluate All Results",
@@ -144,30 +144,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
             {
-              "name": "Content-Type",
-              "value": "application/json"
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.alertTitle, description: $json.description, color: $json.alertColor, timestamp: $json.timestamp }) }}"
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: '\\u26a0\\ufe0f Network Health Alert', color: 15548997, fields: $json.alerts, timestamp: $json.timestamp }] }) }}",
         "options": {}
       },
       "id": "nhm-discord",
       "name": "Discord Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         1320,
         200
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {},

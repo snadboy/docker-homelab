@@ -1,6 +1,5 @@
 {
   "name": "Proxmox Health Monitor",
-  "description": "Checks Proxmox node and guest resource usage every 15 minutes. Alerts to Discord when thresholds are exceeded.",
   "nodes": [
     {
       "parameters": {
@@ -24,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const env = $input.first().json;\nconst PVE = env.PVE_API_URL;\nconst TOKEN = env.PVE_API_TOKEN;\n\n// Thresholds\nconst THRESHOLDS = {\n  nodeMemPct: 85,\n  nodeDiskPct: 80,\n  nodeCpuPct: 90,\n  guestMemPct: 90,\n  guestDiskPct: 85\n};\n\n// Expected running guests (vmid as string keys)\nconst EXPECTED_RUNNING = {\n  '103': 'ns',\n  '104': 'pve-scripts-local',\n  '105': 'ha',\n  '106': 'cadre',\n  '108': 'ns-secundus',\n  '109': 'arr',\n  '110': 'plex',\n  '112': 'ns-tertius',\n  '113': 'iot',\n  '114': 'utilities',\n  '200': 'ansible-controller'\n};\n\nconst headers = { Authorization: `PVEAPIToken=${TOKEN}` };\nconst opts = { method: 'GET', headers, skipSslCertificateValidation: true, timeout: 15000 };\n\n// Deduplication: 1-hour cooldown per issue key\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.alertCooldowns) staticData.alertCooldowns = {};\nconst now = Date.now();\nconst COOLDOWN_MS = 60 * 60 * 1000; // 1 hour\n\nfunction shouldAlert(key) {\n  const last = staticData.alertCooldowns[key] || 0;\n  if (now - last < COOLDOWN_MS) return false;\n  staticData.alertCooldowns[key] = now;\n  return true;\n}\n\n// Clean up old cooldowns (older than 24h)\nfor (const [k, v] of Object.entries(staticData.alertCooldowns)) {\n  if (now - v > 24 * 60 * 60 * 1000) delete staticData.alertCooldowns[k];\n}\n\nconst alerts = [];\n\ntry {\n  // 1. Check nodes\n  const nodesResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes` });\n  const nodes = nodesResp.data || [];\n\n  for (const node of nodes) {\n    const name = node.node;\n\n    // Node offline check\n    if (node.status !== 'online') {\n      const key = `${name}-offline`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '🔴', host: name, metric: 'Status', value: node.status, threshold: 'online' });\n      }\n      continue;\n    }\n\n    // Node memory\n    const memPct = Math.round((node.mem / node.maxmem) * 100);\n    if (memPct > THRESHOLDS.nodeMemPct) {\n      const key = `${name}-mem-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '🧠', host: `🖥️ ${name}`, metric: 'Memory', value: `${memPct}%`, threshold: `${THRESHOLDS.nodeMemPct}%` });\n      }\n    }\n\n    // Node root disk\n    const diskPct = Math.round((node.disk / node.maxdisk) * 100);\n    if (diskPct > THRESHOLDS.nodeDiskPct) {\n      const key = `${name}-disk-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '💾', host: `🖥️ ${name}`, metric: 'Root Disk', value: `${diskPct}%`, threshold: `${THRESHOLDS.nodeDiskPct}%` });\n      }\n    }\n\n    // Node CPU (point-in-time)\n    const cpuPct = Math.round(node.cpu * 100);\n    if (cpuPct > THRESHOLDS.nodeCpuPct) {\n      const key = `${name}-cpu-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '⚡', host: `🖥️ ${name}`, metric: 'CPU', value: `${cpuPct}%`, threshold: `${THRESHOLDS.nodeCpuPct}%` });\n      }\n    }\n\n    // 2. Check guests (VMs + CTs) on this node\n    for (const guestType of ['qemu', 'lxc']) {\n      let guestsResp;\n      try {\n        guestsResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes/${name}/${guestType}` });\n      } catch (e) {\n        continue;\n      }\n      const guests = guestsResp.data || [];\n\n      for (const g of guests) {\n        const vmid = String(g.vmid);\n        const gName = g.name || vmid;\n        const label = `${gName} (${guestType === 'qemu' ? 'VM' : 'CT'} ${vmid})`;\n\n        // Unexpected stop check\n        if (g.status === 'stopped' && EXPECTED_RUNNING[vmid]) {\n          const key = `${vmid}-stopped`;\n          if (shouldAlert(key)) {\n            alerts.push({ emoji: '🛑', host: `💻 ${label}`, metric: 'Status', value: 'stopped', threshold: 'running' });\n          }\n          continue;\n        }\n\n        if (g.status !== 'running') continue;\n\n        // Guest memory\n        if (g.maxmem > 0) {\n          const gMemPct = Math.round((g.mem / g.maxmem) * 100);\n          if (gMemPct > THRESHOLDS.guestMemPct) {\n            const key = `${vmid}-mem-high`;\n            if (shouldAlert(key)) {\n              alerts.push({ emoji: '🧠', host: `💻 ${label}`, metric: 'Memory', value: `${gMemPct}%`, threshold: `${THRESHOLDS.guestMemPct}%` });\n            }\n          }\n        }\n\n        // Guest disk (LXC reports disk usage; QEMU reports 0)\n        if (g.maxdisk > 0 && g.disk > 0) {\n          const gDiskPct = Math.round((g.disk / g.maxdisk) * 100);\n          if (gDiskPct > THRESHOLDS.guestDiskPct) {\n            const key = `${vmid}-disk-high`;\n            if (shouldAlert(key)) {\n              alerts.push({ emoji: '💾', host: `💻 ${label}`, metric: 'Disk', value: `${gDiskPct}%`, threshold: `${THRESHOLDS.guestDiskPct}%` });\n            }\n          }\n        }\n      }\n    }\n  }\n} catch (err) {\n  alerts.push({ emoji: '❌', host: 'Proxmox API', metric: 'Connection', value: err.message, threshold: 'reachable' });\n}\n\nreturn [{\n  json: {\n    hasIssues: alerts.length > 0,\n    alertCount: alerts.length,\n    alerts,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const globals = $('Globals').first().json;\nconst PVE = globals.PVE_API_URL;\nconst TOKEN = globals.PVE_API_TOKEN;\n\n// Thresholds\nconst THRESHOLDS = {\n  nodeMemPct: 85,\n  nodeDiskPct: 80,\n  nodeCpuPct: 90,\n  guestMemPct: 90,\n  guestDiskPct: 85\n};\n\n// Expected running guests (vmid as string keys)\nconst EXPECTED_RUNNING = {\n  '103': 'ns',\n  '104': 'pve-scripts-local',\n  '105': 'ha',\n  '106': 'cadre',\n  '108': 'ns-secundus',\n  '109': 'arr',\n  '110': 'plex',\n  '112': 'ns-tertius',\n  '113': 'iot',\n  '114': 'utilities',\n  '200': 'ansible-controller'\n};\n\nconst headers = { Authorization: `PVEAPIToken=${TOKEN}` };\nconst opts = { method: 'GET', headers, skipSslCertificateValidation: true, timeout: 15000 };\n\n// Deduplication: 1-hour cooldown per issue key\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.alertCooldowns) staticData.alertCooldowns = {};\nconst now = Date.now();\nconst COOLDOWN_MS = 60 * 60 * 1000; // 1 hour\n\nfunction shouldAlert(key) {\n  const last = staticData.alertCooldowns[key] || 0;\n  if (now - last < COOLDOWN_MS) return false;\n  staticData.alertCooldowns[key] = now;\n  return true;\n}\n\n// Clean up old cooldowns (older than 24h)\nfor (const [k, v] of Object.entries(staticData.alertCooldowns)) {\n  if (now - v > 24 * 60 * 60 * 1000) delete staticData.alertCooldowns[k];\n}\n\nconst alerts = [];\n\ntry {\n  // 1. Check nodes\n  const nodesResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes` });\n  const nodes = nodesResp.data || [];\n\n  for (const node of nodes) {\n    const name = node.node;\n\n    // Node offline check\n    if (node.status !== 'online') {\n      const key = `${name}-offline`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '\\u{1f534}', host: name, metric: 'Status', value: node.status, threshold: 'online' });\n      }\n      continue;\n    }\n\n    // Node memory\n    const memPct = Math.round((node.mem / node.maxmem) * 100);\n    if (memPct > THRESHOLDS.nodeMemPct) {\n      const key = `${name}-mem-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '\\u{1f9e0}', host: `\\u{1f5a5}\\ufe0f ${name}`, metric: 'Memory', value: `${memPct}%`, threshold: `${THRESHOLDS.nodeMemPct}%` });\n      }\n    }\n\n    // Node root disk\n    const diskPct = Math.round((node.disk / node.maxdisk) * 100);\n    if (diskPct > THRESHOLDS.nodeDiskPct) {\n      const key = `${name}-disk-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '\\u{1f4be}', host: `\\u{1f5a5}\\ufe0f ${name}`, metric: 'Root Disk', value: `${diskPct}%`, threshold: `${THRESHOLDS.nodeDiskPct}%` });\n      }\n    }\n\n    // Node CPU (point-in-time)\n    const cpuPct = Math.round(node.cpu * 100);\n    if (cpuPct > THRESHOLDS.nodeCpuPct) {\n      const key = `${name}-cpu-high`;\n      if (shouldAlert(key)) {\n        alerts.push({ emoji: '\\u26a1', host: `\\u{1f5a5}\\ufe0f ${name}`, metric: 'CPU', value: `${cpuPct}%`, threshold: `${THRESHOLDS.nodeCpuPct}%` });\n      }\n    }\n\n    // 2. Check guests (VMs + CTs) on this node\n    for (const guestType of ['qemu', 'lxc']) {\n      let guestsResp;\n      try {\n        guestsResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes/${name}/${guestType}` });\n      } catch (e) {\n        continue;\n      }\n      const guests = guestsResp.data || [];\n\n      for (const g of guests) {\n        const vmid = String(g.vmid);\n        const gName = g.name || vmid;\n        const label = `${gName} (${guestType === 'qemu' ? 'VM' : 'CT'} ${vmid})`;\n\n        // Unexpected stop check\n        if (g.status === 'stopped' && EXPECTED_RUNNING[vmid]) {\n          const key = `${vmid}-stopped`;\n          if (shouldAlert(key)) {\n            alerts.push({ emoji: '\\u{1f6d1}', host: `\\u{1f4bb} ${label}`, metric: 'Status', value: 'stopped', threshold: 'running' });\n          }\n          continue;\n        }\n\n        if (g.status !== 'running') continue;\n\n        // Guest memory\n        if (g.maxmem > 0) {\n          const gMemPct = Math.round((g.mem / g.maxmem) * 100);\n          if (gMemPct > THRESHOLDS.guestMemPct) {\n            const key = `${vmid}-mem-high`;\n            if (shouldAlert(key)) {\n              alerts.push({ emoji: '\\u{1f9e0}', host: `\\u{1f4bb} ${label}`, metric: 'Memory', value: `${gMemPct}%`, threshold: `${THRESHOLDS.guestMemPct}%` });\n            }\n          }\n        }\n\n        // Guest disk (LXC reports disk usage; QEMU reports 0)\n        if (g.maxdisk > 0 && g.disk > 0) {\n          const gDiskPct = Math.round((g.disk / g.maxdisk) * 100);\n          if (gDiskPct > THRESHOLDS.guestDiskPct) {\n            const key = `${vmid}-disk-high`;\n            if (shouldAlert(key)) {\n              alerts.push({ emoji: '\\u{1f4be}', host: `\\u{1f4bb} ${label}`, metric: 'Disk', value: `${gDiskPct}%`, threshold: `${THRESHOLDS.guestDiskPct}%` });\n            }\n          }\n        }\n      }\n    }\n  }\n} catch (err) {\n  alerts.push({ emoji: '\\u274c', host: 'Proxmox API', metric: 'Connection', value: err.message, threshold: 'reachable' });\n}\n\nconst description = alerts.map(a => `**${a.emoji} ${a.host}**\\n${a.metric}: ${a.value} (threshold: ${a.threshold})`).join('\\n\\n');\n\nreturn [{\n  json: {\n    hasIssues: alerts.length > 0,\n    alertCount: alerts.length,\n    alertTitle: '\\u26a0\\ufe0f Proxmox Health Alert',\n    alertColor: 15548997,\n    description,\n    timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "phm-code",
       "name": "Check All Nodes & Guests",
@@ -69,30 +68,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
             {
-              "name": "Content-Type",
-              "value": "application/json"
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.alertTitle, description: $json.description, color: $json.alertColor, timestamp: $json.timestamp }) }}"
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: '⚠️ Proxmox Health Alert', color: 15548997, fields: $json.alerts.map(a => ({ name: `${a.emoji} ${a.host}`, value: `${a.metric}: ${a.value} (threshold: ${a.threshold})`, inline: false })), timestamp: $json.timestamp }] }) }}",
         "options": {}
       },
       "id": "phm-discord",
       "name": "Discord Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         880,
         200
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {},

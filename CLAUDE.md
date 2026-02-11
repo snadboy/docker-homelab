@@ -9,6 +9,93 @@
 
 ## Recent Changes
 
+### 2026-02-11: n8n Backup Workflow
+
+**Status:** ✅ Complete
+
+**Summary:** Automated daily backup of n8n workflows and credentials. Workflows are exported to a private GitHub repo (`snadboy/n8n-workflows`), credentials are decrypted and saved to shareables.
+
+**Workflow:** n8n Backup (`dVt3Th1wvWvutg0a`) — Daily at 3 AM
+- 5 nodes: Schedule → Globals → SSH Export Credentials → Code Export to GitHub → Gotify
+- Credentials: SQLite query on host → pipe through `docker exec n8n node` for AES decryption → write to `/mnt/shareables/BAK/n8n/credentials-YYYY-MM-DD.json` (7-day retention)
+- Workflows: n8n API → GitHub Contents API PUT for each workflow → `workflows/{name}--{id}.json`
+
+**Globals Credential Updated:** Added `GITHUB_TOKEN` and `N8N_API_KEY` (total: 30 constants)
+
+**Verification:** 14 credentials exported, 28 workflows pushed, Gotify notification sent
+
+**Files Changed:**
+- `n8n/workflows/n8n-backup.json` (new)
+
+---
+
+### 2026-02-11: Migrate n8n Workflows to Global Constants
+
+**Status:** ✅ Complete
+
+**Summary:** Migrated all 14 active n8n workflows from Docker environment variables (`$env.X` / `process.env.X`) to the `n8n-nodes-globals` community node. All workflow constants are now stored in a single "Homelab Constants" credential editable from the n8n UI — no more SSH + `.env` editing + container restarts to change a value.
+
+**What Changed:**
+- Installed `n8n-nodes-globals` community package in n8n container
+- Created "Homelab Constants" credential (ID: `kt9rQnvdyaBeZlR2`) with 28 key-value constants
+- Each workflow gets a "Globals" node that loads constants from the credential
+- All `$env.X` expression references replaced with `$('Globals').first().json.X`
+- All `process.env.X` in Code nodes replaced with `$('Globals').first().json.X`
+- "Set Env Vars" / "Set Credentials" nodes removed where they only passed env vars through
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` set in docker-compose.yml (blocks `$env` access)
+- `.env` on utilities host stripped to comments only (no workflow vars)
+- `.env.example` updated to reference Global Constants
+
+**Workflows Updated (14):**
+
+| Workflow | Pattern | Notes |
+|----------|---------|-------|
+| arr-stack-health-check | Replace Set with Globals | |
+| daily-media-digest | Replace Set with Globals | Code refs updated |
+| discord-claude-bridge | Keep Set, add Globals | Set still carries trigger data |
+| get-plex-token | Add Globals sequentially | Trigger -> Globals -> SSH -> Parse |
+| gmail-cleanup | Set Config -> Globals -> Code | 4 triggers share 1 Globals node |
+| gmail-labels-and-contacts | Replace Set with Globals | OAuth reads from Globals |
+| network-daily-summary | Replace Set with Globals | |
+| network-health-monitor | Replace Set with Globals | |
+| overseerr-request-notifier | Add Globals, fix Code | Fixed process.env + URL bug |
+| plex-recently-added | Add Globals sequentially | |
+| proxmox-daily-summary | Replace Set with Globals | |
+| proxmox-health-monitor | Replace Set with Globals | |
+| trash-pickup-scheduler | Replace Set with Globals | Calendar creds from Globals |
+| weekly-version-audit | Replace Set with Globals | |
+
+**Constants Stored (28):**
+GOTIFY_URL/TOKEN, DISCORD_WEBHOOK_URL/BOT_TOKEN/CHANNEL_ID, GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN, SONARR/RADARR/PROWLARR/SABNZBD/OVERSEERR URLs + API keys, PLEX_URL, PVE_API_URL/TOKEN, UNIFI_URL/USERNAME/PASSWORD, TECHNITIUM_URL/TOKEN, TRASH_EVENT_TITLE, CLAUDE_WORK_DIR
+
+**Key Technical Details:**
+- Globals node parameter `putAllInOneKey` must be `false` for top-level JSON keys
+- Credential type: `globalConstantsApi` with `format: "string"` and `globalConstants` field
+- n8n public API doesn't support creating credentials with custom data — created via direct SQLite insert with CryptoJS AES encryption
+- Globals node must be SEQUENTIAL (not parallel side branch) before any node that reads `$('Globals')` — parallel branches cause "Node 'Globals' hasn't been executed" errors
+
+**Bugs Fixed During Migration:**
+- **overseerr-request-notifier**: `process.env.X` (broken in sandbox), single-quote URL template literal, `this.getWorkflowStaticData` -> `$getWorkflowStaticData`
+- **Side-branch Globals race condition**: Fixed 4 workflows where Globals was parallel instead of sequential
+
+**Verification:**
+- All 14 workflows deployed and verified via n8n API
+- Arr Stack Health Check: ✅ (15-min schedule, execution 1294)
+- Network Health Monitor: ✅ (15-min schedule, execution 1295)
+- Proxmox Health Monitor: ✅ (15-min schedule, execution 1293)
+- Overseerr Request Notifier: ✅ (10-min schedule, execution 1296 — was failing, now fixed)
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` confirmed — `$env` no longer resolves
+
+**Files Changed:**
+- `n8n/workflows/*.json` — 14 workflow files updated
+- `n8n/docker-compose.yml` — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`
+- `n8n/.env.example` — stripped to system vars + note about Globals
+- `n8n/migrate-to-globals.py` — migration script (new)
+
+**Commit:** `fedca50` — Migrate n8n workflows from Docker env vars to Global Constants
+
+---
+
 ### 2026-02-10: Weekly Version Audit Workflow
 
 **Status:** ✅ Complete

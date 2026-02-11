@@ -15,7 +15,7 @@ services:
       - N8N_HOST=n8n.isnadboy.com
       - N8N_PROTOCOL=https
       - N8N_PORT=5678
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=true
       - N8N_RUNNERS_ENABLED=false
     volumes:
       - n8n-data:/home/node/.n8n

@@ -24,7 +24,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get pending requests from Overseerr\nlet requests;\ntry {\n  requests = await this.helpers.httpRequest({\n    method: 'GET',\n    url: '${process.env.OVERSEERR_URL}/api/v1/request?take=20&filter=pending&sort=added',\n    headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY },\n    timeout: 15000\n  });\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nconst pending = requests.results || [];\n\nif (pending.length === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\n// Get previously seen IDs from workflow static data\nconst staticData = this.getWorkflowStaticData('global');\nconst seenIds = staticData.seenRequestIds || [];\n\n// Find new requests\nconst newRequests = pending.filter(r => !seenIds.includes(r.id));\n\nif (newRequests.length === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\n// Update seen IDs (keep last 100)\nconst allIds = [...seenIds, ...newRequests.map(r => r.id)];\nstaticData.seenRequestIds = allIds.slice(-100);\n\n// Format notification\nconst items = newRequests.map(r => {\n  const type = r.type === 'movie' ? '\ud83c\udfac' : '\ud83d\udcfa';\n  const title = r.media?.title || r.media?.name || 'Unknown';\n  const user = r.requestedBy?.displayName || r.requestedBy?.email || 'Unknown user';\n  return `${type} ${title} (requested by ${user})`;\n});\n\nreturn [{\n  json: {\n    hasNew: true,\n    count: newRequests.length,\n    title: `\ud83d\udccb ${newRequests.length} New Overseerr Request(s)`,\n    message: items.join('\\n'),\n    priority: 5\n  }\n}];"
+        "jsCode": "const globals = $('Globals').first().json;\n// Get pending requests from Overseerr\nlet requests;\ntry {\n  requests = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${globals.OVERSEERR_URL}/api/v1/request?take=20&filter=pending&sort=added`,\n    headers: { 'X-Api-Key': globals.OVERSEERR_API_KEY },\n    timeout: 15000\n  });\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nconst pending = requests.results || [];\n\nif (pending.length === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\n// Get previously seen IDs from workflow static data\nconst staticData = $getWorkflowStaticData('global');\nconst seenIds = staticData.seenRequestIds || [];\n\n// Find new requests\nconst newRequests = pending.filter(r => !seenIds.includes(r.id));\n\nif (newRequests.length === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\n// Update seen IDs (keep last 100)\nconst allIds = [...seenIds, ...newRequests.map(r => r.id)];\nstaticData.seenRequestIds = allIds.slice(-100);\n\n// Format notification\nconst items = newRequests.map(r => {\n  const type = r.type === 'movie' ? '🎬' : '📺';\n  const title = r.media?.title || r.media?.name || 'Unknown';\n  const user = r.requestedBy?.displayName || r.requestedBy?.email || 'Unknown user';\n  return `${type} ${title} (requested by ${user})`;\n});\n\nreturn [{\n  json: {\n    hasNew: true,\n    count: newRequests.length,\n    title: `📋 ${newRequests.length} New Overseerr Request(s)`,\n    message: items.join('\\n'),\n    priority: 5\n  }\n}];"
       },
       "id": "d0a0a003-0003-4003-a003-000000000002",
       "name": "Check Pending Requests",
@@ -70,13 +70,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GOTIFY_URL }}/message",
+        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Gotify-Key",
-              "value": "={{ $env.GOTIFY_TOKEN }}"
+              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
             }
           ]
         },
@@ -104,10 +104,40 @@
         780,
         400
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        130,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
     "Every 10 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
       "main": [
         [
           {

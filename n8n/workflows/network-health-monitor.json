@@ -4,31 +4,22 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
         }
       },
       "id": "nhm-trigger",
       "name": "Every 15 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            { "id": "e1", "name": "UNIFI_URL", "value": "={{ $env.UNIFI_URL }}", "type": "string" },
-            { "id": "e2", "name": "UNIFI_USERNAME", "value": "={{ $env.UNIFI_USERNAME }}", "type": "string" },
-            { "id": "e3", "name": "UNIFI_PASSWORD", "value": "={{ $env.UNIFI_PASSWORD }}", "type": "string" },
-            { "id": "e4", "name": "DISCORD_WEBHOOK_URL", "value": "={{ $env.DISCORD_WEBHOOK_URL }}", "type": "string" }
-          ]
-        }
-      },
-      "id": "nhm-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [220, 300]
+      "position": [
+        0,
+        300
+      ]
     },
     {
       "parameters": {
@@ -38,7 +29,10 @@
       "name": "Check UniFi Health",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -52,9 +46,17 @@
       "name": "SSH cadre tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 100],
+      "position": [
+        440,
+        100
+      ],
       "onError": "continueRegularOutput",
-      "credentials": { "sshPrivateKey": { "id": "H1zhHsKxDwEDOSRk", "name": "cadre SSH" } }
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      }
     },
     {
       "parameters": {
@@ -68,17 +70,32 @@
       "name": "SSH utilities tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 500],
+      "position": [
+        440,
+        500
+      ],
       "onError": "continueRegularOutput",
-      "credentials": { "sshPrivateKey": { "id": "n8816WsRbTEbFnjD", "name": "utilities SSH" } }
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      }
     },
     {
-      "parameters": { "mode": "append", "numberInputs": 3, "options": {} },
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3,
+        "options": {}
+      },
       "id": "nhm-merge",
       "name": "Merge Results",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -88,13 +105,30 @@
       "name": "Evaluate All Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 300]
+      "position": [
+        880,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [{ "id": "c1", "leftValue": "={{ $json.hasIssues }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.hasIssues }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "and"
         },
         "options": {}
@@ -103,14 +137,24 @@
       "name": "Issues Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1100, 300]
+      "position": [
+        1100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ embeds: [{ title: '\\u26a0\\ufe0f Network Health Alert', color: 15548997, fields: $json.alerts, timestamp: $json.timestamp }] }) }}",
@@ -120,7 +164,10 @@
       "name": "Discord Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 200]
+      "position": [
+        1320,
+        200
+      ]
     },
     {
       "parameters": {},
@@ -128,18 +175,141 @@
       "name": "All Healthy",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1320, 400]
+      "position": [
+        1320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
-    "Every 15 Minutes": { "main": [[{ "node": "Set Env Vars", "type": "main", "index": 0 }]] },
-    "Set Env Vars": { "main": [[{ "node": "Check UniFi Health", "type": "main", "index": 0 }, { "node": "SSH cadre tunnels", "type": "main", "index": 0 }, { "node": "SSH utilities tunnels", "type": "main", "index": 0 }]] },
-    "Check UniFi Health": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
-    "SSH cadre tunnels": { "main": [[{ "node": "Merge Results", "type": "main", "index": 1 }]] },
-    "SSH utilities tunnels": { "main": [[{ "node": "Merge Results", "type": "main", "index": 2 }]] },
-    "Merge Results": { "main": [[{ "node": "Evaluate All Results", "type": "main", "index": 0 }]] },
-    "Evaluate All Results": { "main": [[{ "node": "Issues Found?", "type": "main", "index": 0 }]] },
-    "Issues Found?": { "main": [[{ "node": "Discord Alert", "type": "main", "index": 0 }], [{ "node": "All Healthy", "type": "main", "index": 0 }]] }
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check UniFi Health": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH cadre tunnels": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SSH utilities tunnels": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Evaluate All Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate All Results": {
+      "main": [
+        [
+          {
+            "node": "Issues Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issues Found?": {
+      "main": [
+        [
+          {
+            "node": "Discord Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Healthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Check UniFi Health",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH cadre tunnels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH utilities tunnels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1", "callerPolicy": "workflowsFromSameOwner", "availableInMCP": false }
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
 }

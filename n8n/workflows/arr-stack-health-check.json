@@ -24,32 +24,6 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            { "id": "e1", "name": "SONARR_URL", "value": "={{ $env.SONARR_URL }}", "type": "string" },
-            { "id": "e2", "name": "SONARR_API_KEY", "value": "={{ $env.SONARR_API_KEY }}", "type": "string" },
-            { "id": "e3", "name": "RADARR_URL", "value": "={{ $env.RADARR_URL }}", "type": "string" },
-            { "id": "e4", "name": "RADARR_API_KEY", "value": "={{ $env.RADARR_API_KEY }}", "type": "string" },
-            { "id": "e5", "name": "PROWLARR_URL", "value": "={{ $env.PROWLARR_URL }}", "type": "string" },
-            { "id": "e6", "name": "PROWLARR_API_KEY", "value": "={{ $env.PROWLARR_API_KEY }}", "type": "string" },
-            { "id": "e7", "name": "SABNZBD_URL", "value": "={{ $env.SABNZBD_URL }}", "type": "string" },
-            { "id": "e8", "name": "SABNZBD_API_KEY", "value": "={{ $env.SABNZBD_API_KEY }}", "type": "string" },
-            { "id": "e9", "name": "OVERSEERR_URL", "value": "={{ $env.OVERSEERR_URL }}", "type": "string" },
-            { "id": "e10", "name": "OVERSEERR_API_KEY", "value": "={{ $env.OVERSEERR_API_KEY }}", "type": "string" }
-          ]
-        }
-      },
-      "id": "arr-health-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        220,
-        300
-      ]
-    },
-    {
-      "parameters": {
         "jsCode": "const env = $input.first().json;\n\nconst services = [\n  { name: 'Sonarr', url: `${env.SONARR_URL}/api/v3/system/status`, headers: { 'X-Api-Key': env.SONARR_API_KEY } },\n  { name: 'Radarr', url: `${env.RADARR_URL}/api/v3/system/status`, headers: { 'X-Api-Key': env.RADARR_API_KEY } },\n  { name: 'Prowlarr', url: `${env.PROWLARR_URL}/api/v1/system/status`, headers: { 'X-Api-Key': env.PROWLARR_API_KEY } },\n  { name: 'SABnzbd', url: `${env.SABNZBD_URL}/api?mode=version&apikey=${env.SABNZBD_API_KEY}`, headers: {} },\n  { name: 'Overseerr', url: `${env.OVERSEERR_URL}/api/v1/status`, headers: { 'X-Api-Key': env.OVERSEERR_API_KEY } }\n];\n\nconst results = [];\nconst failures = [];\n\nfor (const svc of services) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'GET',\n      url: svc.url,\n      headers: svc.headers,\n      timeout: 10000\n    });\n    results.push(`✅ ${svc.name}: OK`);\n  } catch (err) {\n    failures.push(svc.name);\n    results.push(`❌ ${svc.name}: DOWN - ${err.message}`);\n  }\n}\n\nreturn [{\n  json: {\n    hasFailures: failures.length > 0,\n    failureCount: failures.length,\n    failedServices: failures.join(', '),\n    summary: results.join('\\n'),\n    timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "d0a0a001-0001-4001-a001-000000000002",
@@ -96,19 +70,19 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GOTIFY_URL }}/message",
+        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Gotify-Key",
-              "value": "={{ $env.GOTIFY_TOKEN }}"
+              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: \"\u26a0\ufe0f Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
+        "jsonBody": "={{ JSON.stringify({ title: \"⚠️ Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
         "options": {}
       },
       "id": "d0a0a001-0001-4001-a001-000000000004",
@@ -130,6 +104,25 @@
         880,
         400
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
@@ -137,18 +130,7 @@
       "main": [
         [
           {
-            "node": "Set Env Vars",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Env Vars": {
-      "main": [
-        [
-          {
-            "node": "Check All Services",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -178,6 +160,17 @@
         [
           {
             "node": "All Healthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Check All Services",
             "type": "main",
             "index": 0
           }

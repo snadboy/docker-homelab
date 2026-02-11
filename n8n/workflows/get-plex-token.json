@@ -38,7 +38,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const sshOutput = $input.first().json;\nconst token = (sshOutput.stdout || '').trim();\n\nif (!token) {\n  throw new Error(`Failed to get Plex token: stdout='${sshOutput.stdout}', stderr='${sshOutput.stderr}', keys=${Object.keys(sshOutput).join(',')}`);\n}\n\nreturn [{\n  json: {\n    PLEX_URL: $env.PLEX_URL,\n    PLEX_TOKEN: token\n  }\n}];"
+        "jsCode": "const sshOutput = $input.first().json;\nconst token = (sshOutput.stdout || '').trim();\n\nif (!token) {\n  throw new Error(`Failed to get Plex token: stdout='${sshOutput.stdout}', stderr='${sshOutput.stderr}', keys=${Object.keys(sshOutput).join(',')}`);\n}\n\nreturn [{\n  json: {\n    PLEX_URL: $('Globals').first().json.PLEX_URL,\n    PLEX_TOKEN: token\n  }\n}];"
       },
       "id": "d0a0a010-0010-4010-a010-000000000003",
       "name": "Parse Token",
@@ -48,10 +48,40 @@
         440,
         300
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        0,
+        500
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
     "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
       "main": [
         [
           {

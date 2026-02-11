@@ -16,24 +16,10 @@
       "name": "Daily 8:00 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            { "id": "e1", "name": "UNIFI_URL", "value": "={{ $env.UNIFI_URL }}", "type": "string" },
-            { "id": "e2", "name": "UNIFI_USERNAME", "value": "={{ $env.UNIFI_USERNAME }}", "type": "string" },
-            { "id": "e3", "name": "UNIFI_PASSWORD", "value": "={{ $env.UNIFI_PASSWORD }}", "type": "string" },
-            { "id": "e4", "name": "DISCORD_WEBHOOK_URL", "value": "={{ $env.DISCORD_WEBHOOK_URL }}", "type": "string" }
-          ]
-        }
-      },
-      "id": "nds-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [220, 300]
+      "position": [
+        0,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,7 +29,10 @@
       "name": "Gather UniFi Stats",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -57,7 +46,10 @@
       "name": "SSH cadre tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 100],
+      "position": [
+        440,
+        100
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -78,7 +70,10 @@
       "name": "SSH utilities tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 500],
+      "position": [
+        440,
+        500
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -97,7 +92,10 @@
       "name": "Merge Results",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -107,12 +105,15 @@
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 300]
+      "position": [
+        880,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -131,34 +132,118 @@
       "name": "Discord Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 300]
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
     "Daily 8:00 AM": {
-      "main": [[{ "node": "Set Env Vars", "type": "main", "index": 0 }]]
-    },
-    "Set Env Vars": {
-      "main": [[
-        { "node": "Gather UniFi Stats", "type": "main", "index": 0 },
-        { "node": "SSH cadre tunnels", "type": "main", "index": 0 },
-        { "node": "SSH utilities tunnels", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Gather UniFi Stats": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "SSH cadre tunnels": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 1 }]]
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "SSH utilities tunnels": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 2 }]]
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
     },
     "Merge Results": {
-      "main": [[{ "node": "Format Summary", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Summary": {
-      "main": [[{ "node": "Discord Summary", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Discord Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Gather UniFi Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH cadre tunnels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH utilities tunnels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

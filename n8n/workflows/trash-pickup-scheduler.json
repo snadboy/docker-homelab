@@ -54,46 +54,6 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "a1",
-              "name": "googleClientId",
-              "value": "={{ $env.GOOGLE_CLIENT_ID }}",
-              "type": "string"
-            },
-            {
-              "id": "a2",
-              "name": "googleClientSecret",
-              "value": "={{ $env.GOOGLE_CLIENT_SECRET }}",
-              "type": "string"
-            },
-            {
-              "id": "a3",
-              "name": "googleRefreshToken",
-              "value": "={{ $env.GOOGLE_REFRESH_TOKEN }}",
-              "type": "string"
-            },
-            {
-              "id": "a4",
-              "name": "trashEventTitle",
-              "value": "={{ $env.TRASH_EVENT_TITLE }}",
-              "type": "string"
-            }
-          ]
-        }
-      },
-      "id": "trash-set-creds",
-      "name": "Set Credentials",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        440,
-        560
-      ]
-    },
-    {
-      "parameters": {
         "source": "database",
         "workflowId": {
           "__rl": true,
@@ -113,7 +73,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const creds = $('Set Credentials').first().json;\nconst trashDay = $input.first().json;\n\nconst EVENT_TITLE = creds.trashEventTitle || 'Trash prep day';\n\nconst tokenBody = `client_id=${encodeURIComponent(creds.googleClientId)}&client_secret=${encodeURIComponent(creds.googleClientSecret)}&refresh_token=${encodeURIComponent(creds.googleRefreshToken)}&grant_type=refresh_token`;\nconst tokenResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://oauth2.googleapis.com/token',\n  body: tokenBody,\n  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }\n});\nconst accessToken = tokenResp.access_token;\n\nconst CALENDAR_ID = '52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com';\n\nfunction formatDate(d) {\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\n\nfunction addDays(dateStr, n) {\n  const d = new Date(dateStr + 'T00:00:00');\n  d.setDate(d.getDate() + n);\n  return formatDate(d);\n}\n\nconst takeOutDateStr = trashDay.takeOutDate;\nconst nextDateStr = addDays(takeOutDateStr, 1);\n\nconst events = [];\nevents.push({\n  summary: EVENT_TITLE,\n  start: { date: takeOutDateStr },\n  end: { date: nextDateStr },\n  reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 540 }] }\n});\n\nif (trashDay.delayed) {\n  // Create a delay notice event on the default (non-delayed) take-out day\n  const defaultTakeOutDate = addDays(trashDay.pickupDate, -2);\n  const defaultPickupDate = addDays(trashDay.pickupDate, -1);\n  events.push({\n    summary: `Trash delay due to ${trashDay.holiday}`,\n    start: { date: defaultTakeOutDate },\n    end: { date: defaultPickupDate },\n    reminders: { useDefault: false }\n  });\n}\n\nconst results = [];\nfor (const event of events) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,\n      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(event)\n    });\n    results.push(`Created: ${event.summary} on ${event.start.date}`);\n  } catch (err) {\n    results.push(`Error creating '${event.summary}': ${err.message}`);\n  }\n}\n\nlet summary = `Trash Pickup Schedule (week of ${trashDay.weekOf})\\n`;\nsummary += `Default pickup day: Friday\\n`;\nif (trashDay.delayed) {\n  summary += `Holiday: ${trashDay.holiday}\\n`;\n  summary += `Delayed pickup: ${trashDay.pickupDay} ${trashDay.pickupDate}\\n`;\n}\nsummary += `Take out trash: ${trashDay.takeOutDay} ${trashDay.takeOutDate}\\n\\n`;\nsummary += results.join('\\n');\n\nreturn [{ json: { title: 'Trash Pickup', message: summary, priority: 3 } }];"
+        "jsCode": "const creds = $('Globals').first().json;\nconst trashDay = $input.first().json;\n\nconst EVENT_TITLE = creds.TRASH_EVENT_TITLE || 'Trash prep day';\n\nconst tokenBody = `client_id=${encodeURIComponent(creds.GOOGLE_CLIENT_ID)}&client_secret=${encodeURIComponent(creds.GOOGLE_CLIENT_SECRET)}&refresh_token=${encodeURIComponent(creds.GOOGLE_REFRESH_TOKEN)}&grant_type=refresh_token`;\nconst tokenResp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://oauth2.googleapis.com/token',\n  body: tokenBody,\n  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }\n});\nconst accessToken = tokenResp.access_token;\n\nconst CALENDAR_ID = '52pai5sgrbqhh12h7mv1o3rb08@group.calendar.google.com';\n\nfunction formatDate(d) {\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\n\nfunction addDays(dateStr, n) {\n  const d = new Date(dateStr + 'T00:00:00');\n  d.setDate(d.getDate() + n);\n  return formatDate(d);\n}\n\nconst takeOutDateStr = trashDay.takeOutDate;\nconst nextDateStr = addDays(takeOutDateStr, 1);\n\nconst events = [];\nevents.push({\n  summary: EVENT_TITLE,\n  start: { date: takeOutDateStr },\n  end: { date: nextDateStr },\n  reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 540 }] }\n});\n\nif (trashDay.delayed) {\n  // Create a delay notice event on the default (non-delayed) take-out day\n  const defaultTakeOutDate = addDays(trashDay.pickupDate, -2);\n  const defaultPickupDate = addDays(trashDay.pickupDate, -1);\n  events.push({\n    summary: `Trash delay due to ${trashDay.holiday}`,\n    start: { date: defaultTakeOutDate },\n    end: { date: defaultPickupDate },\n    reminders: { useDefault: false }\n  });\n}\n\nconst results = [];\nfor (const event of events) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,\n      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(event)\n    });\n    results.push(`Created: ${event.summary} on ${event.start.date}`);\n  } catch (err) {\n    results.push(`Error creating '${event.summary}': ${err.message}`);\n  }\n}\n\nlet summary = `Trash Pickup Schedule (week of ${trashDay.weekOf})\\n`;\nsummary += `Default pickup day: Friday\\n`;\nif (trashDay.delayed) {\n  summary += `Holiday: ${trashDay.holiday}\\n`;\n  summary += `Delayed pickup: ${trashDay.pickupDay} ${trashDay.pickupDate}\\n`;\n}\nsummary += `Take out trash: ${trashDay.takeOutDay} ${trashDay.takeOutDate}\\n\\n`;\nsummary += results.join('\\n');\n\nreturn [{ json: { title: 'Trash Pickup', message: summary, priority: 3 } }];"
       },
       "id": "trash-calendar-code",
       "name": "Code: Create Calendar Events",
@@ -127,13 +87,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GOTIFY_URL }}/message",
+        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Gotify-Key",
-              "value": "={{ $env.GOTIFY_TOKEN }}"
+              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
             }
           ]
         },
@@ -149,6 +109,25 @@
         1100,
         560
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        440,
+        560
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
@@ -156,7 +135,7 @@
       "main": [
         [
           {
-            "node": "Set Credentials",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -172,18 +151,7 @@
             "index": 0
           },
           {
-            "node": "Set Credentials",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Credentials": {
-      "main": [
-        [
-          {
-            "node": "Compute Trash Day",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -206,6 +174,17 @@
         [
           {
             "node": "Notify via Gotify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Compute Trash Day",
             "type": "main",
             "index": 0
           }

@@ -17,23 +17,10 @@
       "name": "Daily 8:15 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            { "id": "e1", "name": "PVE_API_URL", "value": "={{ $env.PVE_API_URL }}", "type": "string" },
-            { "id": "e2", "name": "PVE_API_TOKEN", "value": "={{ $env.PVE_API_TOKEN }}", "type": "string" },
-            { "id": "e3", "name": "DISCORD_WEBHOOK_URL", "value": "={{ $env.DISCORD_WEBHOOK_URL }}", "type": "string" }
-          ]
-        }
-      },
-      "id": "pds-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [220, 300]
+      "position": [
+        0,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,12 +30,15 @@
       "name": "Gather All Stats",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -67,18 +57,64 @@
       "name": "Discord Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
     "Daily 8:15 AM": {
-      "main": [[{ "node": "Set Env Vars", "type": "main", "index": 0 }]]
-    },
-    "Set Env Vars": {
-      "main": [[{ "node": "Gather All Stats", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Gather All Stats": {
-      "main": [[{ "node": "Discord Summary", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Discord Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Gather All Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

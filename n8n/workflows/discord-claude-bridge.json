@@ -4,13 +4,18 @@
   "nodes": [
     {
       "parameters": {
-        "updates": ["messageCreate"]
+        "updates": [
+          "messageCreate"
+        ]
       },
       "id": "dcb-trigger",
       "name": "Discord Trigger",
       "type": "n8n-nodes-base.discordTrigger",
       "typeVersion": 1,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "credentials": {
         "discordBotApi": {
           "id": "AZmPOR1usnaJBCna",
@@ -45,7 +50,10 @@
       "name": "Filter Bot",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [220, 300]
+      "position": [
+        220,
+        300
+      ]
     },
     {
       "parameters": {
@@ -59,7 +67,7 @@
             {
               "id": "cond-channel",
               "leftValue": "={{ $json.channel_id }}",
-              "rightValue": "={{ $env.DISCORD_CHANNEL_ID }}",
+              "rightValue": "={{ $('Globals').first().json.DISCORD_CHANNEL_ID }}",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -74,19 +82,57 @@
       "name": "Filter Channel",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
-            { "id": "e1", "name": "DISCORD_BOT_TOKEN", "value": "={{ $env.DISCORD_BOT_TOKEN }}", "type": "string" },
-            { "id": "e2", "name": "DISCORD_CHANNEL_ID", "value": "={{ $env.DISCORD_CHANNEL_ID }}", "type": "string" },
-            { "id": "e3", "name": "CLAUDE_WORK_DIR", "value": "={{ $env.CLAUDE_WORK_DIR }}", "type": "string" },
-            { "id": "e4", "name": "content", "value": "={{ $('Discord Trigger').first().json.content }}", "type": "string" },
-            { "id": "e5", "name": "userId", "value": "={{ $('Discord Trigger').first().json.author.id }}", "type": "string" },
-            { "id": "e6", "name": "username", "value": "={{ $('Discord Trigger').first().json.author.username }}", "type": "string" },
-            { "id": "e7", "name": "channelId", "value": "={{ $('Discord Trigger').first().json.channel_id }}", "type": "string" }
+            {
+              "id": "e1",
+              "name": "DISCORD_BOT_TOKEN",
+              "value": "={{ $('Globals').first().json.DISCORD_BOT_TOKEN }}",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "DISCORD_CHANNEL_ID",
+              "value": "={{ $('Globals').first().json.DISCORD_CHANNEL_ID }}",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "CLAUDE_WORK_DIR",
+              "value": "={{ $('Globals').first().json.CLAUDE_WORK_DIR }}",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "content",
+              "value": "={{ $('Discord Trigger').first().json.content }}",
+              "type": "string"
+            },
+            {
+              "id": "e5",
+              "name": "userId",
+              "value": "={{ $('Discord Trigger').first().json.author.id }}",
+              "type": "string"
+            },
+            {
+              "id": "e6",
+              "name": "username",
+              "value": "={{ $('Discord Trigger').first().json.author.username }}",
+              "type": "string"
+            },
+            {
+              "id": "e7",
+              "name": "channelId",
+              "value": "={{ $('Discord Trigger').first().json.channel_id }}",
+              "type": "string"
+            }
           ]
         }
       },
@@ -94,7 +140,10 @@
       "name": "Set Env Vars",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -104,7 +153,10 @@
       "name": "Session Manager",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 300]
+      "position": [
+        880,
+        300
+      ]
     },
     {
       "parameters": {
@@ -133,7 +185,10 @@
       "name": "Route Action",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1100, 300]
+      "position": [
+        1100,
+        300
+      ]
     },
     {
       "parameters": {
@@ -156,7 +211,10 @@
       "name": "Typing Indicator",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 400],
+      "position": [
+        1320,
+        400
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -170,7 +228,10 @@
       "name": "SSH Claude Code",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [1540, 400],
+      "position": [
+        1540,
+        400
+      ],
       "credentials": {
         "sshPrivateKey": {
           "id": "biwSA51JSiJamqaz",
@@ -187,7 +248,10 @@
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1760, 400]
+      "position": [
+        1760,
+        400
+      ]
     },
     {
       "parameters": {
@@ -222,7 +286,10 @@
       "name": "Send to Discord",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1980, 400]
+      "position": [
+        1980,
+        400
+      ]
     },
     {
       "parameters": {
@@ -250,7 +317,29 @@
       "name": "Send End Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 200]
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        0,
+        500
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
@@ -258,7 +347,7 @@
       "main": [
         [
           {
-            "node": "Filter Bot",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -354,6 +443,17 @@
         [
           {
             "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Filter Bot",
             "type": "main",
             "index": 0
           }

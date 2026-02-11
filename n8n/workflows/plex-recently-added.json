@@ -41,7 +41,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Check Plex recently added items (last 2 hours)\nconst env = $input.first().json;\nconst twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;\n\nconst sections = [];\nlet totalNew = 0;\n\n// Get all library sections first\nlet libraries;\ntry {\n  const libResp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.PLEX_URL}/library/sections`,\n    headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  libraries = libResp?.MediaContainer?.Directory || [];\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nfor (const lib of libraries) {\n  try {\n    const recentResp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${env.PLEX_URL}/library/sections/${lib.key}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=20`,\n      headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n      timeout: 15000\n    });\n    const items = recentResp?.MediaContainer?.Metadata || [];\n    const newItems = items.filter(i => i.addedAt > twoHoursAgo);\n    \n    if (newItems.length > 0) {\n      totalNew += newItems.length;\n      const emoji = lib.type === 'movie' ? '\ud83c\udfac' : lib.type === 'show' ? '\ud83d\udcfa' : '\ud83c\udfb5';\n      const itemList = newItems.map(i => {\n        if (lib.type === 'show') {\n          return `  \u2022 ${i.grandparentTitle || i.parentTitle || i.title} - ${i.title}`;\n        }\n        return `  \u2022 ${i.title}${i.year ? ` (${i.year})` : ''}`;\n      });\n      sections.push(`${emoji} ${lib.title} (${newItems.length} new):\\n${itemList.join('\\n')}`);\n    }\n  } catch (err) {\n    // Skip failed library\n  }\n}\n\nif (totalNew === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\nreturn [{\n  json: {\n    hasNew: true,\n    title: `\ud83c\udf9e\ufe0f ${totalNew} New Item(s) Added to Plex`,\n    message: sections.join('\\n\\n'),\n    priority: 3\n  }\n}];"
+        "jsCode": "// Check Plex recently added items (last 2 hours)\nconst env = $input.first().json;\nconst twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;\n\nconst sections = [];\nlet totalNew = 0;\n\n// Get all library sections first\nlet libraries;\ntry {\n  const libResp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${env.PLEX_URL}/library/sections`,\n    headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n    timeout: 15000\n  });\n  libraries = libResp?.MediaContainer?.Directory || [];\n} catch (err) {\n  return [{ json: { hasNew: false, error: err.message } }];\n}\n\nfor (const lib of libraries) {\n  try {\n    const recentResp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${env.PLEX_URL}/library/sections/${lib.key}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=20`,\n      headers: { 'X-Plex-Token': env.PLEX_TOKEN, 'Accept': 'application/json' },\n      timeout: 15000\n    });\n    const items = recentResp?.MediaContainer?.Metadata || [];\n    const newItems = items.filter(i => i.addedAt > twoHoursAgo);\n    \n    if (newItems.length > 0) {\n      totalNew += newItems.length;\n      const emoji = lib.type === 'movie' ? '🎬' : lib.type === 'show' ? '📺' : '🎵';\n      const itemList = newItems.map(i => {\n        if (lib.type === 'show') {\n          return `  • ${i.grandparentTitle || i.parentTitle || i.title} - ${i.title}`;\n        }\n        return `  • ${i.title}${i.year ? ` (${i.year})` : ''}`;\n      });\n      sections.push(`${emoji} ${lib.title} (${newItems.length} new):\\n${itemList.join('\\n')}`);\n    }\n  } catch (err) {\n    // Skip failed library\n  }\n}\n\nif (totalNew === 0) {\n  return [{ json: { hasNew: false } }];\n}\n\nreturn [{\n  json: {\n    hasNew: true,\n    title: `🎞️ ${totalNew} New Item(s) Added to Plex`,\n    message: sections.join('\\n\\n'),\n    priority: 3\n  }\n}];"
       },
       "id": "d0a0a004-0004-4004-a004-000000000002",
       "name": "Check Recently Added",
@@ -87,13 +87,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GOTIFY_URL }}/message",
+        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Gotify-Key",
-              "value": "={{ $env.GOTIFY_TOKEN }}"
+              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
             }
           ]
         },
@@ -121,6 +121,25 @@
         880,
         400
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        0,
+        500
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
@@ -128,7 +147,7 @@
       "main": [
         [
           {
-            "node": "Get Plex Token",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -169,6 +188,17 @@
         [
           {
             "node": "Nothing New",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Get Plex Token",
             "type": "main",
             "index": 0
           }

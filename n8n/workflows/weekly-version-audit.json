@@ -23,52 +23,6 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "e1",
-              "name": "PVE_API_URL",
-              "value": "={{ $env.PVE_API_URL }}",
-              "type": "string"
-            },
-            {
-              "id": "e2",
-              "name": "PVE_API_TOKEN",
-              "value": "={{ $env.PVE_API_TOKEN }}",
-              "type": "string"
-            },
-            {
-              "id": "e3",
-              "name": "DISCORD_WEBHOOK_URL",
-              "value": "={{ $env.DISCORD_WEBHOOK_URL }}",
-              "type": "string"
-            },
-            {
-              "id": "e4",
-              "name": "TECHNITIUM_URL",
-              "value": "={{ $env.TECHNITIUM_URL }}",
-              "type": "string"
-            },
-            {
-              "id": "e5",
-              "name": "TECHNITIUM_TOKEN",
-              "value": "={{ $env.TECHNITIUM_TOKEN }}",
-              "type": "string"
-            }
-          ]
-        }
-      },
-      "id": "wva-set-env",
-      "name": "Set Env Vars",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        220,
-        500
-      ]
-    },
-    {
-      "parameters": {
         "resource": "command",
         "operation": "execute",
         "command": "apt update -qq 2>/dev/null; PENDING=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l); REBOOT=$(cat /var/run/reboot-required 2>/dev/null && echo 'yes' || echo 'no'); echo \"apt|plex|${PENDING}|${REBOOT}\"",
@@ -333,7 +287,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const env = $input.first().json;\nconst PVE = env.PVE_API_URL;\nconst PVE_TOKEN = env.PVE_API_TOKEN;\nconst TECH_URL = env.TECHNITIUM_URL;\nconst TECH_TOKEN = env.TECHNITIUM_TOKEN;\nconst http = this.helpers.httpRequest.bind(this.helpers);\nconst pveHeaders = { Authorization: `PVEAPIToken=${PVE_TOKEN}` };\nconst pveOpts = { method: 'GET', headers: pveHeaders, skipSslCertificateValidation: true, timeout: 15000 };\n\n// PVE version\nlet pveVersion = 'unknown';\ntry {\n  const verResp = await http({ ...pveOpts, url: `${PVE}/api2/json/version` });\n  pveVersion = verResp.data?.version || 'unknown';\n} catch (e) {\n  pveVersion = 'error';\n}\n\n// PVE nodes \u2014 skip apt (requires Sys.Modify, token only has PVEAuditor)\nconst pveNodes = [];\ntry {\n  const nodesResp = await http({ ...pveOpts, url: `${PVE}/api2/json/nodes` });\n  for (const node of (nodesResp.data || [])) {\n    pveNodes.push({ name: node.node });\n  }\n} catch (e) {}\n\n// Technitium version via /api/settings/get\nlet techVersion = 'unknown';\ntry {\n  const techResp = await http({\n    method: 'GET',\n    url: `${TECH_URL}/api/settings/get?token=${TECH_TOKEN}`,\n    timeout: 10000\n  });\n  techVersion = techResp.response?.version || 'unknown';\n} catch (e) {\n  techVersion = 'error';\n}\n\n// Latest GitHub releases\nfunction normalizeTag(name, tag) {\n  if (['sonarr','radarr','prowlarr','overseerr','sabnzbd','tautulli','plex'].includes(name)) {\n    return tag.replace(/-ls\\d+$/, '');\n  }\n  if (['traefik','zigbee2mqtt'].includes(name)) {\n    return tag.replace(/^v/, '');\n  }\n  if (name === 'n8n') {\n    return tag.replace(/^n8n@/, '').replace(/^v/, '');\n  }\n  return tag;\n}\n\nconst githubServices = [\n  { name: 'sonarr', repo: 'linuxserver/docker-sonarr' },\n  { name: 'radarr', repo: 'linuxserver/docker-radarr' },\n  { name: 'prowlarr', repo: 'linuxserver/docker-prowlarr' },\n  { name: 'overseerr', repo: 'linuxserver/docker-overseerr' },\n  { name: 'sabnzbd', repo: 'linuxserver/docker-sabnzbd' },\n  { name: 'tautulli', repo: 'linuxserver/docker-tautulli' },\n  { name: 'plex', repo: 'linuxserver/docker-plex' },\n  { name: 'traefik', repo: 'traefik/traefik' },\n  { name: 'zigbee2mqtt', repo: 'Koenkk/zigbee2mqtt' },\n  { name: 'n8n', repo: 'n8n-io/n8n' }\n];\n\nconst latestVersions = {};\nfor (const svc of githubServices) {\n  try {\n    const resp = await http({\n      method: 'GET',\n      url: `https://api.github.com/repos/${svc.repo}/releases/latest`,\n      headers: { 'User-Agent': 'n8n-version-audit', Accept: 'application/vnd.github.v3+json' },\n      timeout: 10000\n    });\n    latestVersions[svc.name] = normalizeTag(svc.name, resp.tag_name || '');\n  } catch (e) {\n    latestVersions[svc.name] = 'unknown';\n  }\n}\n\nreturn [{\n  json: {\n    type: 'api_results',\n    pveVersion,\n    pveNodes,\n    techVersion,\n    latestVersions\n  }\n}];"
+        "jsCode": "const env = $input.first().json;\nconst PVE = env.PVE_API_URL;\nconst PVE_TOKEN = env.PVE_API_TOKEN;\nconst TECH_URL = env.TECHNITIUM_URL;\nconst TECH_TOKEN = env.TECHNITIUM_TOKEN;\nconst http = this.helpers.httpRequest.bind(this.helpers);\nconst pveHeaders = { Authorization: `PVEAPIToken=${PVE_TOKEN}` };\nconst pveOpts = { method: 'GET', headers: pveHeaders, skipSslCertificateValidation: true, timeout: 15000 };\n\n// PVE version\nlet pveVersion = 'unknown';\ntry {\n  const verResp = await http({ ...pveOpts, url: `${PVE}/api2/json/version` });\n  pveVersion = verResp.data?.version || 'unknown';\n} catch (e) {\n  pveVersion = 'error';\n}\n\n// PVE nodes — skip apt (requires Sys.Modify, token only has PVEAuditor)\nconst pveNodes = [];\ntry {\n  const nodesResp = await http({ ...pveOpts, url: `${PVE}/api2/json/nodes` });\n  for (const node of (nodesResp.data || [])) {\n    pveNodes.push({ name: node.node });\n  }\n} catch (e) {}\n\n// Technitium version via /api/settings/get\nlet techVersion = 'unknown';\ntry {\n  const techResp = await http({\n    method: 'GET',\n    url: `${TECH_URL}/api/settings/get?token=${TECH_TOKEN}`,\n    timeout: 10000\n  });\n  techVersion = techResp.response?.version || 'unknown';\n} catch (e) {\n  techVersion = 'error';\n}\n\n// Latest GitHub releases\nfunction normalizeTag(name, tag) {\n  if (['sonarr','radarr','prowlarr','overseerr','sabnzbd','tautulli','plex'].includes(name)) {\n    return tag.replace(/-ls\\d+$/, '');\n  }\n  if (['traefik','zigbee2mqtt'].includes(name)) {\n    return tag.replace(/^v/, '');\n  }\n  if (name === 'n8n') {\n    return tag.replace(/^n8n@/, '').replace(/^v/, '');\n  }\n  return tag;\n}\n\nconst githubServices = [\n  { name: 'sonarr', repo: 'linuxserver/docker-sonarr' },\n  { name: 'radarr', repo: 'linuxserver/docker-radarr' },\n  { name: 'prowlarr', repo: 'linuxserver/docker-prowlarr' },\n  { name: 'overseerr', repo: 'linuxserver/docker-overseerr' },\n  { name: 'sabnzbd', repo: 'linuxserver/docker-sabnzbd' },\n  { name: 'tautulli', repo: 'linuxserver/docker-tautulli' },\n  { name: 'plex', repo: 'linuxserver/docker-plex' },\n  { name: 'traefik', repo: 'traefik/traefik' },\n  { name: 'zigbee2mqtt', repo: 'Koenkk/zigbee2mqtt' },\n  { name: 'n8n', repo: 'n8n-io/n8n' }\n];\n\nconst latestVersions = {};\nfor (const svc of githubServices) {\n  try {\n    const resp = await http({\n      method: 'GET',\n      url: `https://api.github.com/repos/${svc.repo}/releases/latest`,\n      headers: { 'User-Agent': 'n8n-version-audit', Accept: 'application/vnd.github.v3+json' },\n      timeout: 10000\n    });\n    latestVersions[svc.name] = normalizeTag(svc.name, resp.tag_name || '');\n  } catch (e) {\n    latestVersions[svc.name] = 'unknown';\n  }\n}\n\nreturn [{\n  json: {\n    type: 'api_results',\n    pveVersion,\n    pveNodes,\n    techVersion,\n    latestVersions\n  }\n}];"
       },
       "id": "wva-api-checks",
       "name": "API Checks",
@@ -375,7 +329,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Set Env Vars').first().json.DISCORD_WEBHOOK_URL }}",
+        "url": "={{ $('Globals').first().json.DISCORD_WEBHOOK_URL }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -398,6 +352,25 @@
         1100,
         500
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        500
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
@@ -405,7 +378,7 @@
       "main": [
         [
           {
-            "node": "Set Env Vars",
+            "node": "Globals",
             "type": "main",
             "index": 0
           }
@@ -544,7 +517,29 @@
         ]
       ]
     },
-    "Set Env Vars": {
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Discord Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
       "main": [
         [
           {
@@ -604,28 +599,6 @@
           },
           {
             "node": "API Checks",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Results": {
-      "main": [
-        [
-          {
-            "node": "Format Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Report": {
-      "main": [
-        [
-          {
-            "node": "Discord Report",
             "type": "main",
             "index": 0
           }

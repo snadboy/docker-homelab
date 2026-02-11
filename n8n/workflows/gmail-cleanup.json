@@ -235,15 +235,8 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Gotify-Key",
-              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
-            }
-          ]
-        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ title: 'Gmail Cleanup', message: $json.report, priority: $json.mode === 'live' ? 5 : 3 }) }}",
@@ -253,6 +246,12 @@
       "name": "Notify via Gotify",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hZM2wpBkhJwPJf32",
+          "name": "Gotify API"
+        }
+      },
       "position": [
         1020,
         360

@@ -1,6 +1,6 @@
 {
   "name": "Arr Stack Health Check",
-  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs. Reports status via Gotify.",
+  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs using credential-based authentication. Reports status via Gotify.",
   "nodes": [
     {
       "parameters": {
@@ -19,20 +19,179 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        300
+        340
       ]
     },
     {
       "parameters": {
-        "jsCode": "const env = $input.first().json;\n\nconst services = [\n  { name: 'Sonarr', url: `${env.SONARR_URL}/api/v3/system/status`, headers: { 'X-Api-Key': env.SONARR_API_KEY } },\n  { name: 'Radarr', url: `${env.RADARR_URL}/api/v3/system/status`, headers: { 'X-Api-Key': env.RADARR_API_KEY } },\n  { name: 'Prowlarr', url: `${env.PROWLARR_URL}/api/v1/system/status`, headers: { 'X-Api-Key': env.PROWLARR_API_KEY } },\n  { name: 'SABnzbd', url: `${env.SABNZBD_URL}/api?mode=version&apikey=${env.SABNZBD_API_KEY}`, headers: {} },\n  { name: 'Overseerr', url: `${env.OVERSEERR_URL}/api/v1/status`, headers: { 'X-Api-Key': env.OVERSEERR_API_KEY } }\n];\n\nconst results = [];\nconst failures = [];\n\nfor (const svc of services) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'GET',\n      url: svc.url,\n      headers: svc.headers,\n      timeout: 10000\n    });\n    results.push(`✅ ${svc.name}: OK`);\n  } catch (err) {\n    failures.push(svc.name);\n    results.push(`❌ ${svc.name}: DOWN - ${err.message}`);\n  }\n}\n\nreturn [{\n  json: {\n    hasFailures: failures.length > 0,\n    failureCount: failures.length,\n    failedServices: failures.join(', '),\n    summary: results.join('\\n'),\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "putAllInOneKey": false
       },
-      "id": "d0a0a001-0001-4001-a001-000000000002",
-      "name": "Check All Services",
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        340
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Globals').first().json.SONARR_URL }}/api/v3/system/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "check-sonarr",
+      "name": "Check Sonarr",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rAV3sUfzg27ok6NT",
+          "name": "Sonarr API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Globals').first().json.RADARR_URL }}/api/v3/system/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "check-radarr",
+      "name": "Check Radarr",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KYvcjxCLkVwCXJJY",
+          "name": "Radarr API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Globals').first().json.PROWLARR_URL }}/api/v1/system/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "check-prowlarr",
+      "name": "Check Prowlarr",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        340
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tkjLc4mJKRK9mIYd",
+          "name": "Prowlarr API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Globals').first().json.SABNZBD_URL }}/api?mode=version",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "check-sabnzbd",
+      "name": "Check SABnzbd",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        460
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "WUMwDzFtC53aazjW",
+          "name": "SABnzbd API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Globals').first().json.OVERSEERR_URL }}/api/v1/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "check-overseerr",
+      "name": "Check Overseerr",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        580
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8ka5F82xj3jN41r",
+          "name": "Overseerr API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 5,
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        680,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const services = [\n  { name: 'Sonarr', node: 'Check Sonarr' },\n  { name: 'Radarr', node: 'Check Radarr' },\n  { name: 'Prowlarr', node: 'Check Prowlarr' },\n  { name: 'SABnzbd', node: 'Check SABnzbd' },\n  { name: 'Overseerr', node: 'Check Overseerr' }\n];\n\nconst results = [];\nconst failures = [];\n\nfor (const svc of services) {\n  try {\n    const data = $(svc.node).first().json;\n    if (data.error) {\n      const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));\n      failures.push(svc.name);\n      results.push(`\\u274c ${svc.name}: DOWN - ${msg}`);\n    } else {\n      results.push(`\\u2705 ${svc.name}: OK`);\n    }\n  } catch (err) {\n    failures.push(svc.name);\n    results.push(`\\u274c ${svc.name}: DOWN - ${err.message}`);\n  }\n}\n\nreturn [{\n  json: {\n    hasFailures: failures.length > 0,\n    failureCount: failures.length,\n    failedServices: failures.join(', '),\n    summary: results.join('\\n'),\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "evaluate-results",
+      "name": "Evaluate Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
-        300
+        900,
+        340
       ]
     },
     {
@@ -58,71 +217,51 @@
         },
         "options": {}
       },
-      "id": "d0a0a001-0001-4001-a001-000000000003",
+      "id": "any-failures",
       "name": "Any Failures?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        660,
-        300
+        1120,
+        340
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Gotify-Key",
-              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
-            }
-          ]
-        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: \"⚠️ Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
+        "jsonBody": "={{ JSON.stringify({ title: \"\u26a0\ufe0f Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
         "options": {}
       },
-      "id": "d0a0a001-0001-4001-a001-000000000004",
+      "id": "gotify-alert",
       "name": "Gotify Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
-        200
-      ]
+        1340,
+        240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hZM2wpBkhJwPJf32",
+          "name": "Gotify API"
+        }
+      }
     },
     {
       "parameters": {},
-      "id": "d0a0a001-0001-4001-a001-000000000005",
+      "id": "all-healthy",
       "name": "All Healthy",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        880,
-        400
+        1340,
+        440
       ]
-    },
-    {
-      "parameters": {
-        "putAllInOneKey": false
-      },
-      "id": "globals-node",
-      "name": "Globals",
-      "type": "n8n-nodes-globals.globalConstants",
-      "typeVersion": 1,
-      "position": [
-        220,
-        300
-      ],
-      "credentials": {
-        "globalConstantsApi": {
-          "id": "kt9rQnvdyaBeZlR2",
-          "name": "Homelab Constants"
-        }
-      }
     }
   ],
   "connections": {
@@ -137,7 +276,104 @@
         ]
       ]
     },
-    "Check All Services": {
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Check Sonarr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Radarr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Prowlarr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check SABnzbd",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Overseerr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Sonarr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Radarr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Check Prowlarr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Check SABnzbd": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Check Overseerr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Results": {
       "main": [
         [
           {
@@ -160,17 +396,6 @@
         [
           {
             "node": "All Healthy",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Globals": {
-      "main": [
-        [
-          {
-            "node": "Check All Services",
             "type": "main",
             "index": 0
           }

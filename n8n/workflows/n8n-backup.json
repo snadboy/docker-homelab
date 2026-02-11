@@ -81,15 +81,8 @@
       "parameters": {
         "method": "POST",
         "url": "http://host-utilities.isnadboy.com:8084/message",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Gotify-Key",
-              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
-            }
-          ]
-        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 5 }) }}",
@@ -99,6 +92,12 @@
       "name": "Notify Gotify",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hZM2wpBkhJwPJf32",
+          "name": "Gotify API"
+        }
+      },
       "position": [
         880,
         300

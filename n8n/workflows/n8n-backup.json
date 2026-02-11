@@ -1,0 +1,159 @@
+{
+  "name": "n8n Backup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "backup-trigger",
+      "name": "Daily 3 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "backup-globals",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "TODAY=$(date +%Y-%m-%d)\nBACKUP_DIR=/mnt/shareables/BAK/n8n\nBACKUP_FILE=\"${BACKUP_DIR}/credentials-${TODAY}.json\"\n\ncat <<'DECRYPTJS' > /tmp/n8n-decrypt-creds.js\nconst crypto = require(\"crypto\");\nconst fs = require(\"fs\");\nconst readline = require(\"readline\");\nconst config = JSON.parse(fs.readFileSync(\"/home/node/.n8n/config\", \"utf8\"));\nconst key = config.encryptionKey;\nfunction evpBytesToKey(pw, salt, kl, il) {\n  let t = Buffer.alloc(0), p = Buffer.alloc(0);\n  while (t.length < kl + il) {\n    const h = crypto.createHash(\"md5\"); h.update(p); h.update(Buffer.from(pw));\n    if (salt) h.update(salt); p = h.digest(); t = Buffer.concat([t, p]);\n  }\n  return { key: t.subarray(0, kl), iv: t.subarray(kl, kl + il) };\n}\nfunction decrypt(data, pw) {\n  const buf = Buffer.from(data, \"base64\");\n  const { key: k, iv } = evpBytesToKey(pw, buf.subarray(8, 16), 32, 16);\n  const d = crypto.createDecipheriv(\"aes-256-cbc\", k, iv);\n  return Buffer.concat([d.update(buf.subarray(16)), d.final()]).toString(\"utf8\");\n}\nconst rl = readline.createInterface({ input: process.stdin });\nconst results = [];\nrl.on(\"line\", (line) => {\n  try { const r = JSON.parse(line); results.push({ id: r.id, name: r.name, type: r.type, data: JSON.parse(decrypt(r.data, key)) }); } catch(e) {}\n});\nrl.on(\"close\", () => console.log(JSON.stringify(results, null, 2)));\nDECRYPTJS\n\ndocker cp /tmp/n8n-decrypt-creds.js n8n:/tmp/decrypt.js\nsudo sqlite3 /var/lib/docker/volumes/n8n-data/_data/database.sqlite \"SELECT json_object('id', id, 'name', name, 'type', type, 'data', data) FROM credentials_entity\" | docker exec -i n8n node /tmp/decrypt.js > \"$BACKUP_FILE\"\ndocker exec n8n rm -f /tmp/decrypt.js\nrm -f /tmp/n8n-decrypt-creds.js\n\nCRED_COUNT=$(grep -c '\"id\"' \"$BACKUP_FILE\" 2>/dev/null || echo 0)\nfind \"$BACKUP_DIR\" -name 'credentials-*.json' -mtime +7 -delete 2>/dev/null\nRETAINED=$(ls \"$BACKUP_DIR\"/credentials-*.json 2>/dev/null | wc -l)\n\necho \"credentials|${CRED_COUNT}|${BACKUP_FILE}|${RETAINED}\"",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "backup-ssh-creds",
+      "name": "SSH Export Credentials",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const httpRequest = this.helpers.httpRequest.bind(this.helpers);\nconst globals = $('Globals').first().json;\n\nconst N8N_API_KEY = globals.N8N_API_KEY;\nconst GITHUB_TOKEN = globals.GITHUB_TOKEN;\nconst REPO = 'snadboy/n8n-workflows';\nconst today = new Date().toISOString().split('T')[0];\n\n// Fetch all workflows from n8n API\nconst workflows = await httpRequest({\n  method: 'GET',\n  url: 'http://localhost:5678/api/v1/workflows',\n  headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n});\n\nconst workflowList = workflows.data || workflows;\nlet pushed = 0;\nconst errors = [];\n\nfor (const wf of workflowList) {\n  let fullWf;\n  try {\n    fullWf = await httpRequest({\n      method: 'GET',\n      url: `http://localhost:5678/api/v1/workflows/${wf.id}`,\n      headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n    });\n  } catch(e) {\n    errors.push(`Fetch ${wf.name}: ${e.message}`);\n    continue;\n  }\n\n  const safeName = wf.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\\s+/g, '-').toLowerCase();\n  const filePath = `workflows/${safeName}--${wf.id}.json`;\n  const content = JSON.stringify(fullWf, null, 2);\n  const contentB64 = Buffer.from(content).toString('base64');\n\n  let sha = null;\n  try {\n    const existing = await httpRequest({\n      method: 'GET',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n      },\n    });\n    sha = existing.sha;\n  } catch(e) {\n    // File doesn't exist yet\n  }\n\n  try {\n    const body = {\n      message: `Backup: ${today} - ${wf.name}`,\n      content: contentB64,\n    };\n    if (sha) body.sha = sha;\n\n    await httpRequest({\n      method: 'PUT',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n        'Content-Type': 'application/json',\n      },\n      body,\n    });\n    pushed++;\n  } catch(e) {\n    errors.push(`Push ${wf.name}: ${e.message}`);\n  }\n}\n\n// Parse credential export results\nconst sshOutput = $('SSH Export Credentials').first().json;\nconst sshStdout = sshOutput.stdout || '';\nconst credParts = sshStdout.trim().split('|');\nconst credCount = credParts[1] || '0';\nconst credFile = credParts[2] || 'unknown';\nconst credBackups = credParts[3] || '0';\n\nreturn [{\n  json: {\n    title: 'n8n Backup Complete',\n    message: `Workflows: ${pushed}/${workflowList.length} pushed to GitHub\\nCredentials: ${credCount} exported to shareables\\nBackup files retained: ${credBackups}` + (errors.length > 0 ? `\\nErrors: ${errors.join('; ')}` : ''),\n    priority: errors.length > 0 ? 6 : 4,\n    workflowCount: pushed,\n    credentialCount: parseInt(credCount),\n    errors,\n  }\n}];"
+      },
+      "id": "backup-code-github",
+      "name": "Export Workflows to GitHub",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host-utilities.isnadboy.com:8084/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Gotify-Key",
+              "value": "={{ $('Globals').first().json.GOTIFY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 5 }) }}",
+        "options": {}
+      },
+      "id": "backup-gotify",
+      "name": "Notify Gotify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 3 AM": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "SSH Export Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH Export Credentials": {
+      "main": [
+        [
+          {
+            "node": "Export Workflows to GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Workflows to GitHub": {
+      "main": [
+        [
+          {
+            "node": "Notify Gotify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

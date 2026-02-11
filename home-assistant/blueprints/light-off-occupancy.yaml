@@ -1,0 +1,71 @@
+blueprint:
+  name: "Light Off - Occupancy"
+  description: >-
+    Turns off a light when occupancy clears, with a configurable delay.
+    Includes a safety timeout to turn off the light if left on too long.
+  domain: automation
+  input:
+    occupancy_sensor:
+      name: Occupancy Sensor
+      description: Binary sensor that detects room occupancy
+      selector:
+        entity:
+          domain: binary_sensor
+    light_entity:
+      name: Light
+      description: Light to turn off when room is unoccupied
+      selector:
+        entity:
+          domain: light
+    no_occupancy_delay:
+      name: No Occupancy Delay
+      description: Seconds to wait after occupancy clears before turning off the light
+      default: 15
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 5
+          unit_of_measurement: seconds
+    max_on_duration:
+      name: Maximum On Duration
+      description: Safety timeout — turn off light if on longer than this
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+          unit_of_measurement: minutes
+
+triggers:
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "off"
+    for:
+      seconds: !input no_occupancy_delay
+  - trigger: state
+    entity_id: !input light_entity
+    to: "on"
+    for:
+      minutes: !input max_on_duration
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
+
+conditions:
+  - condition: state
+    entity_id: !input light_entity
+    state: "on"
+  - condition: state
+    entity_id: !input occupancy_sensor
+    state: "off"
+
+actions:
+  - action: light.turn_off
+    target:
+      entity_id: !input light_entity
+    data: {}
+
+mode: restart

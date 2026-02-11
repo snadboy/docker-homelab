@@ -1,0 +1,105 @@
+blueprint:
+  name: "Exhaust Fan Off - Humidity and Occupancy"
+  description: >-
+    Turns off an exhaust fan when the room is unoccupied AND humidity is no
+    longer rising. Includes a safety timeout to turn off the fan if left on
+    too long.
+  domain: automation
+  input:
+    occupancy_sensor:
+      name: Occupancy Sensor
+      description: Binary sensor that detects room occupancy
+      selector:
+        entity:
+          domain: binary_sensor
+    fan_switch:
+      name: Fan Switch
+      description: Switch entity that controls the exhaust fan
+      selector:
+        entity:
+          domain: switch
+    humidity_rate_sensor:
+      name: Humidity Rate Sensor
+      description: Sensor that measures humidity rate of change (%/min)
+      selector:
+        entity:
+          domain: sensor
+    no_occupancy_delay:
+      name: No Occupancy Delay
+      description: Minutes to wait after occupancy clears
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          unit_of_measurement: minutes
+    humidity_falling_delay:
+      name: Humidity Falling Delay
+      description: Minutes the humidity rate must stay below 0 before turning off
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+          unit_of_measurement: minutes
+    humidity_rate_threshold:
+      name: Humidity Rate Threshold
+      description: Rate below which humidity is considered "not rising"
+      default: 0.1
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.1
+    max_on_duration:
+      name: Maximum On Duration
+      description: Safety timeout — turn off fan if on longer than this
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+          unit_of_measurement: minutes
+
+triggers:
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "off"
+    for:
+      minutes: !input no_occupancy_delay
+  - trigger: numeric_state
+    entity_id: !input humidity_rate_sensor
+    below: 0
+    for:
+      minutes: !input humidity_falling_delay
+  - trigger: state
+    entity_id: !input fan_switch
+    to: "on"
+    for:
+      minutes: !input max_on_duration
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
+
+conditions:
+  - condition: state
+    entity_id: !input fan_switch
+    state: "on"
+  - condition: state
+    entity_id: !input occupancy_sensor
+    state: "off"
+  - condition: numeric_state
+    entity_id: !input humidity_rate_sensor
+    below: !input humidity_rate_threshold
+
+actions:
+  - action: switch.turn_off
+    target:
+      entity_id: !input fan_switch
+    data: {}
+
+mode: restart

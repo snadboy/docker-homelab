@@ -1,0 +1,61 @@
+blueprint:
+  name: "Exhaust Fan On - Humidity or Occupancy"
+  description: >-
+    Turns on an exhaust fan when humidity rises rapidly OR occupancy is
+    detected, and the fan is currently off.
+  domain: automation
+  input:
+    occupancy_sensor:
+      name: Occupancy Sensor
+      description: Binary sensor that detects room occupancy
+      selector:
+        entity:
+          domain: binary_sensor
+    fan_switch:
+      name: Fan Switch
+      description: Switch entity that controls the exhaust fan
+      selector:
+        entity:
+          domain: switch
+    fan_entity:
+      name: Fan Entity
+      description: Fan entity used for state checking (may differ from the switch)
+      selector:
+        entity:
+          domain: fan
+    humidity_rate_sensor:
+      name: Humidity Rate Sensor
+      description: Sensor that measures humidity rate of change (%/min)
+      selector:
+        entity:
+          domain: sensor
+    humidity_rate_trigger:
+      name: Humidity Rate Trigger
+      description: Humidity rate above which the fan turns on
+      default: 2
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input humidity_rate_sensor
+    above: !input humidity_rate_trigger
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "on"
+
+conditions:
+  - condition: state
+    entity_id: !input fan_entity
+    state: "off"
+
+actions:
+  - action: switch.turn_on
+    target:
+      entity_id: !input fan_switch
+    data: {}
+
+mode: single

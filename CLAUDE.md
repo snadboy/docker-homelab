@@ -190,7 +190,7 @@ Automated weekly version audit replaces manual checks and the old Pending Update
 |----------|-------|
 | Workflow ID | BXBsZXozpqxLZyoa |
 | Schedule | Sunday 9 AM (`0 9 * * 0`) |
-| Nodes | 17 (7 APT SSH + 4 Docker SSH + 1 Code API + Merge + Format + Discord) |
+| Nodes | 23 (7 APT SSH + 4 Docker SSH + 5 Health SSH + 1 Dockhand SSH + 1 Code API + Merge + Format + Discord + Globals) |
 | Replaced | Pending Updates Monitor (`mc4XV3qJ1FWNKVJO`, deactivated) |
 
 ### What It Checks
@@ -200,11 +200,14 @@ Automated weekly version audit replaces manual checks and the old Pending Update
 - **PVE version**: From `/api2/json/version` (PVEAuditor token)
 - **Technitium DNS version**: From `/api/settings/get` API
 - **APT updates**: 7 SSH hosts (plex, arr, cadre, ns, utilities, iot, ha)
+- **Container health**: 5 Docker hosts (arr, plex, cadre, utilities, iot) — unhealthy, restarting, restart loops (>3)
+- **Dockhand stacks**: SQLite query for sync status + failed deployments (7d)
 
 ### Discord Output
-Two embeds per message:
+Three embeds per message:
 1. **Software Versions** (green/yellow) — Docker container versions + PVE + Technitium
 2. **System Updates** (green/yellow) — APT pending counts per host
+3. **Container & Stack Health** (green/red) — unhealthy containers, restart loops, Dockhand stack sync, failed deployments
 
 ### New n8n Environment Variables
 - `TECHNITIUM_URL=http://192.168.86.76:5380`
@@ -302,6 +305,62 @@ Added `dns_search: ["tail65635.ts.net"]` to the `sb-traefik-http-provider` servi
 
 ### Commit
 - `e01ffca` — Add Tailscale DNS search domain to HTTP provider container
+
+---
+
+## n8n Credential-Based Auth Refactor (2026-02-11)
+
+**Status:** ✅ Complete
+
+Refactored n8n workflows to use Header Auth / Query Auth credentials instead of manually injecting API keys from Global Constants.
+
+### Credentials Created (6 new)
+
+| Credential | ID | Type | Header/Param |
+|---|---|---|---|
+| Sonarr API | `rAV3sUfzg27ok6NT` | httpHeaderAuth | `X-Api-Key` |
+| Radarr API | `KYvcjxCLkVwCXJJY` | httpHeaderAuth | `X-Api-Key` |
+| Prowlarr API | `tkjLc4mJKRK9mIYd` | httpHeaderAuth | `X-Api-Key` |
+| Overseerr API | `O8ka5F82xj3jN41r` | httpHeaderAuth | `X-Api-Key` |
+| SABnzbd API | `WUMwDzFtC53aazjW` | httpQueryAuth | `apikey` |
+| Gotify API | `hZM2wpBkhJwPJf32` | httpHeaderAuth | `X-Gotify-Key` |
+
+### Changes
+- **Arr Stack Health Check**: Full rewrite — single Code node replaced with 5 HTTP Request nodes using credential auth + Merge
+- **Gotify nodes in 7 workflows**: Replaced manual `X-Gotify-Key` header with Gotify API credential
+
+### Commit
+- `aa8895f` — Refactor n8n workflows to use credential-based auth
+
+---
+
+## Discord Node Refactor (2026-02-11)
+
+**Status:** ✅ Complete
+
+Switched all 5 Discord-posting workflows from HTTP Request webhook posts to native `n8n-nodes-base.discord` v2 node.
+
+### Changes Applied to All 5 Workflows
+1. **env→globals**: Renamed misleading `const env = $input.first().json` to use `$('Globals').first().json` directly
+2. **fields→description**: Converted Code node output from `fields[]` arrays to markdown `description` text
+3. **HTTP Request→Discord v2**: Replaced manual webhook POST with native Discord node using `discordWebhookApi` credential (ID: `410BCHcgoAHtBHHk`) and `json` inputMethod for embeds
+
+### Workflows Updated
+
+| Workflow | ID | Pattern |
+|----------|-----|---------|
+| Daily Network Summary | `ppH7nKbAfGkObNAk` | Single embed (title/description/footer) |
+| Daily Proxmox Summary | `Fc1CXcJUU3LZ46G2` | Single embed (title/description/footer) |
+| Network Health Monitor | `tFQDbJFTrwwYVJKu` | Alert embed (alertTitle/description/alertColor) |
+| Proxmox Health Monitor | `Cs4Vu1hmLj82uBCQ` | Alert embed (alertTitle/description/alertColor) |
+| Weekly Version Audit | `BXBsZXozpqxLZyoa` | Triple embed ($json.embeds[0..2]) |
+
+### Verification
+- Both health monitors confirmed running successfully every 15 minutes after deployment
+- Merge inputs verified correct in all workflows (no fix needed)
+
+### Commit
+- `ebd9a22` — Switch Discord workflows to native Discord v2 node
 
 ---
 

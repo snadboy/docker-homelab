@@ -480,7 +480,7 @@ Volume path: `/var/lib/docker/volumes/traefik-http-provider-config/_data/` on ca
 
 ## Outstanding Items
 
-- **Gotify HTTPS routing**: `https://gotify.isnadboy.com` returns 404 through Traefik on cadre. Direct access at `http://host-utilities.isnadboy.com:8084` works. Pre-existing issue — most workflows don't hit Gotify unless alerting on failures. Should investigate Traefik route configuration.
+None.
 
 ---
 

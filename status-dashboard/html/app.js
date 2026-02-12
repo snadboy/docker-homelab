@@ -36,6 +36,11 @@ function tunnelName(full) {
   return full.replace('cloudflare-', '').replace('cloudflared-', '');
 }
 
+function deviceTypeName(type) {
+  const map = { uap: 'AP', usw: 'Switch', udm: 'Gateway', ugw: 'Gateway', udb: 'Bridge' };
+  return map[type] || type;
+}
+
 function renderNetwork(data) {
   const n = data.network || {};
   let html = '';
@@ -51,7 +56,7 @@ function renderNetwork(data) {
   if (n.wan2) {
     html += `<div class="stat-row">
       <span class="stat-label"><span class="status-dot ok"></span>WAN2 (Backup)</span>
-      <span class="stat-value">${n.wan2.latency || 0}ms</span>
+      <span class="stat-value">${n.wan2.ip ? n.wan2.ip + ' / ' : ''}${n.wan2.latency || 0}ms</span>
     </div>`;
   }
 
@@ -116,6 +121,28 @@ function renderNetwork(data) {
     }
   }
 
+  // Device detail table
+  if (n.devices?.list && n.devices.list.length > 0) {
+    const devCount = n.devices.list.length;
+    html += `<details class="detail-dropdown">
+      <summary class="detail-summary">${devCount} devices</summary>
+      <table class="detail-table">
+        <tr><th>Name</th><th>Type</th><th>IP</th><th>Status</th><th>Clients</th><th>Uptime</th></tr>`;
+    for (const d of n.devices.list) {
+      const online = d.state === 1;
+      const cls = !online ? ' class="stopped"' : (d.satisfaction !== undefined && d.satisfaction < 50) ? ' class="warn"' : '';
+      html += `<tr${cls}>
+        <td>${d.name}</td>
+        <td>${deviceTypeName(d.type)}</td>
+        <td>${d.ip}</td>
+        <td><span class="status-dot ${online ? 'ok' : 'error'}"></span>${online ? 'Online' : 'Offline'}</td>
+        <td>${d.clients || 0}</td>
+        <td>${formatUptime(d.uptime)}</td>
+      </tr>`;
+    }
+    html += '</table></details>';
+  }
+
   // Tunnels
   if (n.tunnels && n.tunnels.length > 0) {
     html += '<div class="section-title">Cloudflare Tunnels</div>';
@@ -157,15 +184,65 @@ function renderProxmox(data) {
         <span class="bar-label">${node.diskPct}%</span>
       </div>`;
 
-      const guests = [];
-      if (node.vmsTotal > 0) guests.push(`VMs: ${node.vmsRunning}/${node.vmsTotal}`);
-      if (node.ctsTotal > 0) guests.push(`CTs: ${node.ctsRunning}/${node.ctsTotal}`);
+      // Guest summary + detail table
+      const guests = node.guests || [];
+      const vmCount = guests.filter(g => g.type === 'VM').length;
+      const ctCount = guests.filter(g => g.type === 'CT').length;
+      const guestParts = [];
+      if (vmCount > 0) guestParts.push(`${node.vmsRunning}/${vmCount} VMs`);
+      if (ctCount > 0) guestParts.push(`${node.ctsRunning}/${ctCount} CTs`);
+
       if (guests.length > 0) {
-        html += `<div class="pve-guests">${guests.join(' &middot; ')}</div>`;
+        html += `<details class="detail-dropdown">
+          <summary class="detail-summary">${guestParts.join(', ')}</summary>
+          <table class="detail-table">
+            <tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th><th>CPU</th><th>Mem</th></tr>`;
+        for (const g of guests) {
+          const isStopped = g.status !== 'running';
+          const rowCls = isStopped ? ' class="stopped"' : (g.cpuPct > 80 || g.memPct > 80) ? ' class="warn"' : '';
+          html += `<tr${rowCls}>
+            <td>${g.vmid}</td>
+            <td>${g.name}</td>
+            <td>${g.type}</td>
+            <td><span class="status-dot ${isStopped ? 'error' : 'ok'}"></span>${g.status}</td>
+            <td>${isStopped ? '-' : g.cpuPct + '%'}</td>
+            <td>${isStopped ? '-' : g.memPct + '%'}</td>
+          </tr>`;
+        }
+        html += '</table></details>';
+      } else if (node.vmsTotal > 0 || node.ctsTotal > 0) {
+        html += `<div class="pve-guests">${guestParts.join(' &middot; ')}</div>`;
       }
     }
 
     html += '</div>';
+  }
+
+  // PBS section
+  const pbs = data.pbs || {};
+  if (pbs.servers && pbs.servers.length > 0) {
+    html += '<div class="section-title" style="margin-top:16px">Backup Servers</div>';
+    for (const srv of pbs.servers) {
+      html += `<div class="pbs-card">
+        <div class="pbs-header">
+          <span class="pbs-name"><span class="status-dot ok"></span>${srv.name}</span>
+          <span class="pbs-version">PBS ${srv.version || '?'}</span>
+        </div>`;
+      for (const ds of (srv.datastores || [])) {
+        html += `<div class="pbs-ds">
+          <div class="pbs-ds-header">
+            <span>${ds.name}</span>
+            <span>${ds.usedGB} / ${ds.totalGB} GB (${ds.usedPct}%)</span>
+          </div>
+          <div class="bar"><div class="bar-fill disk ${barClass(ds.usedPct)}" style="width:${ds.usedPct}%"></div></div>`;
+        if (ds.gcState) {
+          const gcTime = ds.gcLastRun ? new Date(ds.gcLastRun * 1000).toLocaleDateString() : 'never';
+          html += `<div class="pbs-gc">GC: ${ds.gcState} (${gcTime})</div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
   }
 
   if (p.totals) {
@@ -180,24 +257,47 @@ function renderServices(data) {
   let html = '';
 
   for (const host of (s.hosts || [])) {
-    html += `<div class="host-section">
-      <div class="host-name">${host.name}</div>
-      <div class="chip-grid">`;
-
     const sorted = [...(host.containers || [])].sort((a, b) => {
       if (a.state === 'running' && b.state !== 'running') return -1;
       if (a.state !== 'running' && b.state === 'running') return 1;
       return a.name.localeCompare(b.name);
     });
 
+    const containerCount = sorted.length;
+
+    html += `<details class="detail-dropdown" open>
+      <summary class="detail-summary">
+        <span>${host.name}</span>
+        <span style="font-size:12px">${containerCount} containers</span>
+      </summary>
+      <div class="chip-grid" style="margin-top:6px">`;
+
     for (const c of sorted) {
       const isUnhealthy = (c.status || '').includes('unhealthy');
       let cls = c.state;
       if (isUnhealthy) cls = 'unhealthy';
-      html += `<span class="chip ${cls}" title="${c.status}">${c.name}</span>`;
+      const updateCls = c.hasUpdate ? ' has-update' : '';
+      html += `<span class="chip ${cls}${updateCls}" title="${c.status}">${c.name}${c.hasUpdate ? '<span class="update-badge">&uarr;</span>' : ''}</span>`;
     }
 
-    html += '</div></div>';
+    html += '</div>';
+
+    // Container detail table
+    html += `<table class="detail-table">
+      <tr><th>Container</th><th>Version</th><th>Up Since</th><th>Status</th></tr>`;
+    for (const c of sorted) {
+      const isStopped = c.state !== 'running';
+      const rowCls = isStopped ? ' class="stopped"' : '';
+      // Parse uptime from status like "Up 3 hours (healthy)"
+      const upSince = c.status || '';
+      html += `<tr${rowCls}>
+        <td>${c.name}</td>
+        <td>${c.version || '-'}${c.hasUpdate ? ' <span class="update-badge">&uarr;</span>' : ''}</td>
+        <td>${upSince}</td>
+        <td>${c.state}</td>
+      </tr>`;
+    }
+    html += '</table></details>';
   }
 
   if (s.summary) {

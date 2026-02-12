@@ -16,7 +16,10 @@
       "name": "Every 15 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 500]
+      "position": [
+        0,
+        500
+      ]
     },
     {
       "parameters": {
@@ -29,7 +32,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 900],
+      "position": [
+        0,
+        900
+      ],
       "webhookId": "homelab-status"
     },
     {
@@ -40,7 +46,10 @@
       "name": "Globals",
       "type": "n8n-nodes-globals.globalConstants",
       "typeVersion": 1,
-      "position": [220, 500],
+      "position": [
+        220,
+        500
+      ],
       "credentials": {
         "globalConstantsApi": {
           "id": "kt9rQnvdyaBeZlR2",
@@ -56,7 +65,11 @@
       "name": "Gather UniFi Stats",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -70,7 +83,10 @@
       "name": "SSH cadre tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 200],
+      "position": [
+        440,
+        200
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -91,7 +107,10 @@
       "name": "SSH utilities tunnels",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 400],
+      "position": [
+        440,
+        400
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -108,7 +127,11 @@
       "name": "Gather PVE Stats",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 600]
+      "position": [
+        440,
+        600
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -122,7 +145,11 @@
       "name": "Get Plex Token",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [440, 800]
+      "position": [
+        440,
+        800
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -132,7 +159,11 @@
       "name": "Gather Media Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 800]
+      "position": [
+        660,
+        800
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -146,7 +177,10 @@
       "name": "Health arr",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1000],
+      "position": [
+        440,
+        1000
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -167,7 +201,10 @@
       "name": "Health plex",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1100],
+      "position": [
+        440,
+        1100
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -188,7 +225,10 @@
       "name": "Health cadre",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1200],
+      "position": [
+        440,
+        1200
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -209,7 +249,10 @@
       "name": "Health utilities",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1300],
+      "position": [
+        440,
+        1300
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -230,7 +273,10 @@
       "name": "Health iot",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1400],
+      "position": [
+        440,
+        1400
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -251,7 +297,10 @@
       "name": "PBS svalbard",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1500],
+      "position": [
+        440,
+        1500
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -272,7 +321,10 @@
       "name": "PBS alexandria",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1600],
+      "position": [
+        440,
+        1600
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -293,7 +345,10 @@
       "name": "Read Latest Versions",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [440, 1700],
+      "position": [
+        440,
+        1700
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "sshPrivateKey": {
@@ -312,7 +367,10 @@
       "name": "Merge Results",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [880, 500]
+      "position": [
+        880,
+        500
+      ]
     },
     {
       "parameters": {
@@ -322,7 +380,10 @@
       "name": "Cache Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 500]
+      "position": [
+        1100,
+        500
+      ]
     },
     {
       "parameters": {
@@ -332,7 +393,10 @@
       "name": "Read Cache",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 900]
+      "position": [
+        220,
+        900
+      ]
     },
     {
       "parameters": {
@@ -361,7 +425,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [440, 900]
+      "position": [
+        440,
+        900
+      ]
     }
   ],
   "connections": {

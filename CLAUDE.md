@@ -364,9 +364,49 @@ Switched all 5 Discord-posting workflows from HTTP Request webhook posts to nati
 
 ---
 
+## Gotify → Discord Migration (2026-02-11)
+
+**Status:** ✅ Complete
+
+Switched all 8 remaining Gotify notification workflows to Discord, unifying all n8n notifications on Discord.
+
+### Workflows Converted
+
+| # | Workflow | ID | Discord Node |
+|---|----------|-----|-------------|
+| 1 | Arr Stack Health Check | `qOZ6kS7MSlF9hOKb` | Discord Alert |
+| 2 | Gmail Cleanup | `YvL90Tr5LhpyBV1D` | Discord Notify |
+| 3 | Gmail Labels & Contacts | `bf54qHDO8Gt82e0u` | Discord Notify |
+| 4 | Trash Pickup Scheduler | `D5R6GlhUDJTUGS8P` | Discord Notify |
+| 5 | n8n Backup | `dVt3Th1wvWvutg0a` | Discord Notify |
+| 6 | Plex Recently Added | `NYdQlvUoz1x14bIZ` | Discord Notify |
+| 7 | Overseerr Request Notifier | `1bdxTCXlpam5yUco` | Discord Notify |
+| 8 | Daily Media Digest | `puI2Gdj35nijpEey` | Discord Digest |
+
+### Discord Embed Pattern
+
+All nodes use `n8n-nodes-base.discord` v2 with webhook auth:
+- Credential: Discord Webhook (`410BCHcgoAHtBHHk`)
+- Embed input method: `json` (dynamic `JSON.stringify`)
+- Priority → Color mapping: >=7 red (`15158332`), >=5 yellow (`16776960`), <5 green (`3066993`)
+
+### Gotify Cleanup (optional follow-up)
+
+- Remove `GOTIFY_URL` from Global Constants (no longer referenced by any workflow)
+- Delete Gotify API credential (`hZM2wpBkhJwPJf32`)
+- Consider decommissioning the Gotify container on utilities
+
+### Files Changed
+- 8 workflow JSON files in `n8n/workflows/`
+
+### Commit
+- `4cd3dd6` — Switch 8 n8n workflows from Gotify to Discord notifications
+
+---
+
 ## Outstanding Items
 
-- **Gotify HTTPS routing**: `https://gotify.isnadboy.com` returns 404 through Traefik on cadre. Direct access at `http://host-utilities.isnadboy.com:8084` works. Pre-existing issue — most workflows don't hit Gotify unless alerting on failures. Should investigate Traefik route configuration.
+- **Gotify decommission**: No workflows reference Gotify anymore. Consider removing the Gotify container from utilities and cleaning up Global Constants / credentials.
 
 ---
 

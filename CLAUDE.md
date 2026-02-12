@@ -404,10 +404,73 @@ All nodes use `n8n-nodes-base.discord` v2 with webhook auth:
 
 ---
 
+## Discord Notification Organization (2026-02-12)
+
+**Status:** ✅ Complete
+
+Reorganized all n8n Discord notifications into two channels and consolidated daily reports.
+
+### Discord Channels
+
+| Channel | Webhook Credential | Purpose |
+|---------|-------------------|---------|
+| #homelab-alerts | `ChjLJM1kqQJWWMx7` (Discord Alerts Webhook) | Health monitors, backup failures |
+| #homelab-reports | `2sFNFWT1cJPmliyb` (Discord Reports Webhook) | Daily reports, weekly audits, event notifications |
+
+### Workflow Routing
+
+**Alerts channel (3 workflows):**
+- Proxmox Health Monitor (`Cs4Vu1hmLj82uBCQ`)
+- Network Health Monitor (`tFQDbJFTrwwYVJKu`)
+- Arr Stack Health Check (`qOZ6kS7MSlF9hOKb`)
+
+**Reports channel (10 workflows):**
+- Daily Homelab Report (`5fUpCHbIrTCOdZ6F`) — NEW consolidated report
+- Gmail Cleanup, Gmail Labels & Contacts, Trash Pickup Scheduler
+- n8n Backup (failure-only alerts go to #homelab-alerts)
+- Plex Recently Added, Weekly Version Audit
+
+### Consolidated Daily Homelab Report
+
+| Property | Value |
+|----------|-------|
+| Workflow ID | `5fUpCHbIrTCOdZ6F` |
+| Schedule | Daily 8:15 AM |
+| Nodes | 12 (Trigger + Globals + 5 data gatherers + Merge + Format + Discord) |
+| Replaces | Daily Network Summary, Daily Proxmox Summary, Daily Media Digest |
+
+**3 embeds in single message:**
+1. Network — WAN health, gateway, speedtest, devices, WiFi clients, Cloudflare tunnels
+2. Proxmox — Node stats (CPU/mem/disk/uptime), VM/CT counts
+3. Media — Sonarr calendar, Radarr queue, SABnzbd status, Plex libraries, Overseerr requests
+
+### n8n Backup — Failure Only
+
+Added If node (`hasErrors` check) between Export and Discord. Only sends alert (red embed, #homelab-alerts) when backup has errors. Silent on success.
+
+### Deactivated Workflows
+
+| Workflow | ID | Reason |
+|----------|-----|--------|
+| Daily Network Summary | `ppH7nKbAfGkObNAk` | Replaced by Daily Homelab Report |
+| Daily Proxmox Summary | `Fc1CXcJUU3LZ46G2` | Replaced by Daily Homelab Report |
+| Daily Media Digest | `puI2Gdj35nijpEey` | Replaced by Daily Homelab Report |
+| Overseerr Request Notifier | `1bdxTCXlpam5yUco` | Redundant with Plex Recently Added |
+
+### Files Changed
+- 13 workflow JSON files updated (webhook credential routing)
+- `n8n/workflows/daily-homelab-report.json` (new)
+- `n8n/workflows/n8n-backup.json` (added If node for failure-only)
+
+### Commit
+- `48b5add` — Organize Discord notifications: channels, consolidated report, backup alerts
+
+---
+
 ## Outstanding Items
 
 - **Gotify decommission**: No workflows reference Gotify anymore. Consider removing the Gotify container from utilities and cleaning up Global Constants / credentials.
 
 ---
 
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-02-12

@@ -257,8 +257,8 @@
       ],
       "credentials": {
         "discordWebhookApi": {
-          "id": "410BCHcgoAHtBHHk",
-          "name": "Discord Webhook"
+          "id": "2sFNFWT1cJPmliyb",
+          "name": "Discord Reports Webhook"
         }
       }
     },
@@ -301,7 +301,7 @@
         "options": {
           "respondWithOptions": {
             "values": {
-              "formSubmittedText": "Gmail Cleanup started — check Discord for results."
+              "formSubmittedText": "Gmail Cleanup started \u2014 check Discord for results."
             }
           }
         }

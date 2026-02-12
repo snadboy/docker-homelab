@@ -66,7 +66,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const httpRequest = this.helpers.httpRequest.bind(this.helpers);\nconst globals = $('Globals').first().json;\n\nconst N8N_API_KEY = globals.N8N_API_KEY;\nconst GITHUB_TOKEN = globals.GITHUB_TOKEN;\nconst REPO = 'snadboy/n8n-workflows';\nconst today = new Date().toISOString().split('T')[0];\n\n// Fetch all workflows from n8n API\nconst workflows = await httpRequest({\n  method: 'GET',\n  url: 'http://localhost:5678/api/v1/workflows',\n  headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n});\n\nconst workflowList = workflows.data || workflows;\nlet pushed = 0;\nconst errors = [];\n\nfor (const wf of workflowList) {\n  let fullWf;\n  try {\n    fullWf = await httpRequest({\n      method: 'GET',\n      url: `http://localhost:5678/api/v1/workflows/${wf.id}`,\n      headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n    });\n  } catch(e) {\n    errors.push(`Fetch ${wf.name}: ${e.message}`);\n    continue;\n  }\n\n  const safeName = wf.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\\s+/g, '-').toLowerCase();\n  const filePath = `workflows/${safeName}--${wf.id}.json`;\n  const content = JSON.stringify(fullWf, null, 2);\n  const contentB64 = Buffer.from(content).toString('base64');\n\n  let sha = null;\n  try {\n    const existing = await httpRequest({\n      method: 'GET',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n      },\n    });\n    sha = existing.sha;\n  } catch(e) {\n    // File doesn't exist yet\n  }\n\n  try {\n    const body = {\n      message: `Backup: ${today} - ${wf.name}`,\n      content: contentB64,\n    };\n    if (sha) body.sha = sha;\n\n    await httpRequest({\n      method: 'PUT',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n        'Content-Type': 'application/json',\n      },\n      body,\n    });\n    pushed++;\n  } catch(e) {\n    errors.push(`Push ${wf.name}: ${e.message}`);\n  }\n}\n\n// Parse credential export results\nconst sshOutput = $('SSH Export Credentials').first().json;\nconst sshStdout = sshOutput.stdout || '';\nconst credParts = sshStdout.trim().split('|');\nconst credCount = credParts[1] || '0';\nconst credFile = credParts[2] || 'unknown';\nconst credBackups = credParts[3] || '0';\n\nreturn [{\n  json: {\n    title: 'n8n Backup Complete',\n    message: `Workflows: ${pushed}/${workflowList.length} pushed to GitHub\\nCredentials: ${credCount} exported to shareables\\nBackup files retained: ${credBackups}` + (errors.length > 0 ? `\\nErrors: ${errors.join('; ')}` : ''),\n    priority: errors.length > 0 ? 6 : 4,\n    workflowCount: pushed,\n    credentialCount: parseInt(credCount),\n    errors,\n  }\n}];"
+        "jsCode": "const httpRequest = this.helpers.httpRequest.bind(this.helpers);\nconst globals = $('Globals').first().json;\n\nconst N8N_API_KEY = globals.N8N_API_KEY;\nconst GITHUB_TOKEN = globals.GITHUB_TOKEN;\nconst REPO = 'snadboy/n8n-workflows';\nconst today = new Date().toISOString().split('T')[0];\n\n// Fetch all workflows from n8n API\nconst workflows = await httpRequest({\n  method: 'GET',\n  url: 'http://localhost:5678/api/v1/workflows',\n  headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n});\n\nconst workflowList = workflows.data || workflows;\nlet pushed = 0;\nconst errors = [];\n\nfor (const wf of workflowList) {\n  let fullWf;\n  try {\n    fullWf = await httpRequest({\n      method: 'GET',\n      url: `http://localhost:5678/api/v1/workflows/${wf.id}`,\n      headers: { 'X-N8N-API-KEY': N8N_API_KEY },\n    });\n  } catch(e) {\n    errors.push(`Fetch ${wf.name}: ${e.message}`);\n    continue;\n  }\n\n  const safeName = wf.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\\s+/g, '-').toLowerCase();\n  const filePath = `workflows/${safeName}--${wf.id}.json`;\n  const content = JSON.stringify(fullWf, null, 2);\n  const contentB64 = Buffer.from(content).toString('base64');\n\n  let sha = null;\n  try {\n    const existing = await httpRequest({\n      method: 'GET',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n      },\n    });\n    sha = existing.sha;\n  } catch(e) {\n    // File doesn't exist yet\n  }\n\n  try {\n    const body = {\n      message: `Backup: ${today} - ${wf.name}`,\n      content: contentB64,\n    };\n    if (sha) body.sha = sha;\n\n    await httpRequest({\n      method: 'PUT',\n      url: `https://api.github.com/repos/${REPO}/contents/${filePath}`,\n      headers: {\n        'Authorization': `token ${GITHUB_TOKEN}`,\n        'Accept': 'application/vnd.github.v3+json',\n        'User-Agent': 'n8n-backup',\n        'Content-Type': 'application/json',\n      },\n      body,\n    });\n    pushed++;\n  } catch(e) {\n    errors.push(`Push ${wf.name}: ${e.message}`);\n  }\n}\n\n// Parse credential export results\nconst sshOutput = $('SSH Export Credentials').first().json;\nconst sshStdout = sshOutput.stdout || '';\nconst credParts = sshStdout.trim().split('|');\nconst credCount = credParts[1] || '0';\nconst credFile = credParts[2] || 'unknown';\nconst credBackups = credParts[3] || '0';\n\nreturn [{\n  json: {\n    title: 'n8n Backup Failed',\n    message: `Workflows: ${pushed}/${workflowList.length} pushed to GitHub\\nCredentials: ${credCount} exported to shareables\\nBackup files retained: ${credBackups}\\nErrors: ${errors.join('; ')}`,\n    priority: 7,\n    workflowCount: pushed,\n    credentialCount: parseInt(credCount),\n    errors,\n    hasErrors: errors.length > 0\n  }\n}];"
       },
       "id": "backup-code-github",
       "name": "Export Workflows to GitHub",
@@ -74,6 +74,38 @@
       "typeVersion": 2,
       "position": [
         660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-errors",
+              "leftValue": "={{ $json.hasErrors }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "backup-if",
+      "name": "Has Errors?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
         300
       ]
     },
@@ -87,26 +119,37 @@
           "values": [
             {
               "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 5) >= 7 ? 15158332 : ($json.priority || 5) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: 15158332, timestamp: new Date().toISOString() }) }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "backup-gotify",
-      "name": "Discord Notify",
+      "id": "backup-discord-alert",
+      "name": "Discord Alert",
       "type": "n8n-nodes-base.discord",
       "typeVersion": 2,
       "position": [
-        880,
-        300
+        1100,
+        200
       ],
       "credentials": {
         "discordWebhookApi": {
-          "id": "410BCHcgoAHtBHHk",
-          "name": "Discord Webhook"
+          "id": "ChjLJM1kqQJWWMx7",
+          "name": "Discord Alerts Webhook"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "backup-noop",
+      "name": "Backup OK",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        400
+      ]
     }
   ],
   "connections": {
@@ -147,7 +190,25 @@
       "main": [
         [
           {
-            "node": "Discord Notify",
+            "node": "Has Errors?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Errors?": {
+      "main": [
+        [
+          {
+            "node": "Discord Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backup OK",
             "type": "main",
             "index": 0
           }

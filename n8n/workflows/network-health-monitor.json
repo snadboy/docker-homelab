@@ -168,8 +168,8 @@
       ],
       "credentials": {
         "discordWebhookApi": {
-          "id": "410BCHcgoAHtBHHk",
-          "name": "Discord Webhook"
+          "id": "ChjLJM1kqQJWWMx7",
+          "name": "Discord Alerts Webhook"
         }
       }
     },

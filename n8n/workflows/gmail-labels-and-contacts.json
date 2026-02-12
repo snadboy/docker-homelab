@@ -71,8 +71,8 @@
       ],
       "credentials": {
         "discordWebhookApi": {
-          "id": "410BCHcgoAHtBHHk",
-          "name": "Discord Webhook"
+          "id": "2sFNFWT1cJPmliyb",
+          "name": "Discord Reports Webhook"
         }
       }
     },

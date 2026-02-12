@@ -236,7 +236,7 @@
           "values": [
             {
               "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: \"⚠️ Arr Stack Alert: \" + $json.failedServices, description: $json.summary, color: 15158332, timestamp: new Date().toISOString() }) }}"
+              "json": "={{ JSON.stringify({ title: \"\u26a0\ufe0f Arr Stack Alert: \" + $json.failedServices, description: $json.summary, color: 15158332, timestamp: new Date().toISOString() }) }}"
             }
           ]
         },
@@ -252,8 +252,8 @@
       ],
       "credentials": {
         "discordWebhookApi": {
-          "id": "410BCHcgoAHtBHHk",
-          "name": "Discord Webhook"
+          "id": "ChjLJM1kqQJWWMx7",
+          "name": "Discord Alerts Webhook"
         }
       }
     },

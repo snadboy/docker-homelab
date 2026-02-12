@@ -289,7 +289,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "echo \"PBS:svalbard\"\nfor ds in $(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].name'); do\n  USAGE=$(df -B1 --output=size,used,avail \"/mnt/datastore/$ds\" 2>/dev/null | tail -1 | tr -s ' ')\n  GC=$(proxmox-backup-manager garbage-collection status \"$ds\" --output-format json 2>/dev/null)\n  echo \"DS:$ds:$USAGE:$GC\"\ndone\nVER=$(proxmox-backup-manager version 2>/dev/null | grep -oP 'version: \\K[0-9.]+')\necho \"VER:$VER\"",
+        "command": "echo \"PBS:svalbard\"\nfor ds in $(proxmox-backup-manager datastore list --output-format json 2>/dev/null | python3 -c \"import json,sys; [print(d['name']) for d in json.load(sys.stdin)]\"); do\n  USAGE=$(df -B1 --output=size,used,avail \"/mnt/datastore/$ds\" 2>/dev/null | tail -1 | tr -s ' ')\n  GC=$(proxmox-backup-manager garbage-collection status \"$ds\" --output-format json 2>/dev/null)\n  echo \"DS:$ds:$USAGE:$GC\"\ndone\nVER=$(proxmox-backup-manager version 2>/dev/null | grep -oP 'version: \\K[0-9.]+')\necho \"VER:$VER\"",
         "authentication": "privateKey",
         "options": {}
       },
@@ -313,7 +313,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "echo \"PBS:alexandria\"\nfor ds in $(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].name'); do\n  USAGE=$(df -B1 --output=size,used,avail \"/mnt/datastore/$ds\" 2>/dev/null | tail -1 | tr -s ' ')\n  GC=$(proxmox-backup-manager garbage-collection status \"$ds\" --output-format json 2>/dev/null)\n  echo \"DS:$ds:$USAGE:$GC\"\ndone\nVER=$(proxmox-backup-manager version 2>/dev/null | grep -oP 'version: \\K[0-9.]+')\necho \"VER:$VER\"",
+        "command": "echo \"PBS:alexandria\"\nfor ds in $(proxmox-backup-manager datastore list --output-format json 2>/dev/null | python3 -c \"import json,sys; [print(d['name']) for d in json.load(sys.stdin)]\"); do\n  USAGE=$(df -B1 --output=size,used,avail \"/mnt/datastore/$ds\" 2>/dev/null | tail -1 | tr -s ' ')\n  GC=$(proxmox-backup-manager garbage-collection status \"$ds\" --output-format json 2>/dev/null)\n  echo \"DS:$ds:$USAGE:$GC\"\ndone\nVER=$(proxmox-backup-manager version 2>/dev/null | grep -oP 'version: \\K[0-9.]+')\necho \"VER:$VER\"",
         "authentication": "privateKey",
         "options": {}
       },

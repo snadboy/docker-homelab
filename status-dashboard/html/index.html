@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Homelab Status</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Homelab Status</h1>
+    </div>
+    <div class="header-right">
+      <span class="pulse-dot" id="pulse"></span>
+      <span class="updated" id="updated">Loading...</span>
+    </div>
+  </header>
+
+  <main id="dashboard">
+    <!-- Network -->
+    <section class="card" id="network-card">
+      <h2>Network</h2>
+      <div class="card-body" id="network-body">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Proxmox -->
+    <section class="card" id="proxmox-card">
+      <h2>Proxmox</h2>
+      <div class="card-body" id="proxmox-body">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Services -->
+    <section class="card" id="services-card">
+      <h2>Services</h2>
+      <div class="card-body" id="services-body">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Media -->
+    <section class="card" id="media-card">
+      <h2>Media</h2>
+      <div class="card-body" id="media-body">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

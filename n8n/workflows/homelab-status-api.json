@@ -1,0 +1,532 @@
+{
+  "name": "Homelab Status API",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "hsa-schedule",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 500]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "homelab-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "hsa-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 900],
+      "webhookId": "homelab-status"
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "hsa-globals",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [220, 500],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const globals = $('Globals').first().json;\nconst UNIFI_URL = globals.UNIFI_URL;\nconst UNIFI_USERNAME = globals.UNIFI_USERNAME;\nconst UNIFI_PASSWORD = globals.UNIFI_PASSWORD;\nconst httpRequest = this.helpers.httpRequest.bind(this.helpers);\n\nconst result = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {} };\n\ntry {\n  const loginResp = await httpRequest({\n    method: 'POST',\n    url: `${UNIFI_URL}/api/auth/login`,\n    body: { username: UNIFI_USERNAME, password: UNIFI_PASSWORD },\n    returnFullResponse: true,\n    skipSslCertificateValidation: true,\n    json: true\n  });\n\n  const rawCookies = loginResp.headers['set-cookie'];\n  let cookieStr = '';\n  if (Array.isArray(rawCookies)) {\n    cookieStr = rawCookies.map(c => c.split(';')[0]).join('; ');\n  } else if (typeof rawCookies === 'string') {\n    cookieStr = rawCookies.split(';')[0];\n  }\n\n  async function unifiGet(path) {\n    const raw = await httpRequest({\n      url: `${UNIFI_URL}${path}`,\n      headers: { Cookie: cookieStr },\n      skipSslCertificateValidation: true\n    });\n    return typeof raw === 'string' ? JSON.parse(raw) : raw;\n  }\n\n  // WAN Health & Gateway\n  const healthResp = await unifiGet('/proxy/network/api/s/default/stat/health');\n  const subsystems = healthResp.data || [];\n  const wan = subsystems.find(s => s.subsystem === 'wan');\n\n  if (wan) {\n    const gwStats = wan['gw_system-stats'] || {};\n    const uptimeStats = wan.uptime_stats || {};\n    const wan1Stats = uptimeStats.WAN || {};\n    const wan2Stats = uptimeStats.WAN2 || {};\n\n    result.wan = {\n      status: wan.status || 'unknown',\n      isp: wan.isp_name || 'Unknown',\n      ip: wan.wan_ip || 'N/A',\n      latency: wan1Stats.latency_average || 0\n    };\n\n    result.wan2 = {\n      status: wan2Stats ? 'ok' : 'unknown',\n      latency: wan2Stats.latency_average || 0\n    };\n\n    result.gateway = {\n      name: wan.gw_name || 'Gateway',\n      cpu: parseFloat(gwStats.cpu || 0),\n      mem: parseFloat(gwStats.mem || 0),\n      uptime: parseInt(gwStats.uptime || 0),\n      firmware: wan.gw_version || 'N/A'\n    };\n  }\n\n  // Speedtest\n  const speedResp = await unifiGet('/proxy/network/v2/api/site/default/speedtest');\n  const speedResults = speedResp.data || [];\n  const latestByWan = {};\n  for (const r of speedResults) {\n    const ng = r.wan_networkgroup;\n    if (!ng || r.download_mbps === 0) continue;\n    if (!latestByWan[ng] || r.time > latestByWan[ng].time) latestByWan[ng] = r;\n  }\n  result.speedtest = {};\n  if (latestByWan.WAN) {\n    const s = latestByWan.WAN;\n    result.speedtest.wan = { down: s.download_mbps, up: s.upload_mbps, latency: s.latency_ms };\n  }\n  if (latestByWan.WAN2) {\n    const s = latestByWan.WAN2;\n    result.speedtest.wan2 = { down: s.download_mbps, up: s.upload_mbps, latency: s.latency_ms };\n  }\n\n  // Devices\n  const devResp = await unifiGet('/proxy/network/api/s/default/stat/device');\n  const devices = devResp.data || [];\n  const aps = devices.filter(d => d.type === 'uap');\n  const switches = devices.filter(d => d.type === 'usw' || d.type === 'udb');\n  result.devices = {\n    apsOnline: aps.filter(d => d.state === 1).length,\n    apsTotal: aps.length,\n    switchesOnline: switches.filter(d => d.state === 1).length,\n    switchesTotal: switches.length\n  };\n\n  // WiFi clients\n  const staResp = await unifiGet('/proxy/network/api/s/default/stat/sta');\n  const clients = staResp.data || [];\n  const sats = clients.filter(c => c.satisfaction !== undefined).map(c => c.satisfaction);\n  result.wifi = {\n    clients: clients.length,\n    avgSatisfaction: sats.length > 0 ? Math.round(sats.reduce((a, b) => a + b, 0) / sats.length) : 0,\n    poorCount: sats.filter(s => s < 50).length,\n    weakSignal: clients.filter(c => c.signal !== undefined && c.signal < -80).length\n  };\n\n} catch (err) {\n  result.error = err.message;\n}\n\nreturn [{ json: { type: 'unifi', data: result } }];"
+      },
+      "id": "hsa-unifi",
+      "name": "Gather UniFi Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --filter name=cloudflare --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-ssh-cadre-tunnels",
+      "name": "SSH cadre tunnels",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 200],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --filter name=cloudflare --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-ssh-util-tunnels",
+      "name": "SSH utilities tunnels",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 400],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const globals = $('Globals').first().json;\nconst PVE = globals.PVE_API_URL;\nconst TOKEN = globals.PVE_API_TOKEN;\nconst headers = { Authorization: `PVEAPIToken=${TOKEN}` };\nconst opts = { method: 'GET', headers, skipSslCertificateValidation: true, timeout: 15000 };\n\nconst result = { nodes: [], totals: { nodesOnline: 0, vmsRunning: 0, ctsRunning: 0 } };\n\ntry {\n  const nodesResp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes` });\n  const nodes = (nodesResp.data || []).sort((a, b) => a.node.localeCompare(b.node));\n\n  for (const node of nodes) {\n    const name = node.node;\n    if (node.status !== 'online') {\n      result.nodes.push({ name, status: 'offline', cpu: 0, memPct: 0, diskPct: 0, uptime: 0, vmsRunning: 0, vmsTotal: 0, ctsRunning: 0, ctsTotal: 0 });\n      continue;\n    }\n    result.totals.nodesOnline++;\n\n    const cpuPct = Math.round(node.cpu * 100);\n    const memPct = Math.round((node.mem / node.maxmem) * 100);\n    const diskPct = Math.round((node.disk / node.maxdisk) * 100);\n\n    let vmRunning = 0, vmTotal = 0, ctRunning = 0, ctTotal = 0;\n    for (const guestType of ['qemu', 'lxc']) {\n      try {\n        const resp = await this.helpers.httpRequest({ ...opts, url: `${PVE}/api2/json/nodes/${name}/${guestType}` });\n        for (const g of (resp.data || [])) {\n          if (g.template) continue;\n          if (guestType === 'qemu') {\n            vmTotal++;\n            if (g.status === 'running') { vmRunning++; result.totals.vmsRunning++; }\n          } else {\n            ctTotal++;\n            if (g.status === 'running') { ctRunning++; result.totals.ctsRunning++; }\n          }\n        }\n      } catch (e) { /* skip */ }\n    }\n\n    result.nodes.push({\n      name, status: 'online', cpu: cpuPct, memPct, diskPct,\n      uptime: node.uptime || 0,\n      vmsRunning: vmRunning, vmsTotal: vmTotal,\n      ctsRunning: ctRunning, ctsTotal: ctTotal\n    });\n  }\n} catch (err) {\n  result.error = err.message;\n}\n\nreturn [{ json: { type: 'pve', data: result } }];"
+      },
+      "id": "hsa-pve",
+      "name": "Gather PVE Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 600]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "AM7xbizoMlhMEp8x",
+          "mode": "list"
+        }
+      },
+      "id": "hsa-plex-token",
+      "name": "Get Plex Token",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [440, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "const globals = {...$('Globals').first().json, ...$input.first().json};\nconst httpRequest = this.helpers.httpRequest.bind(this.helpers);\nconst today = new Date();\nconst startDate = today.toISOString().split('T')[0];\nconst endDate = new Date(today.getTime() + 86400000).toISOString().split('T')[0];\n\nconst result = { tautulli: {}, sonarr: {}, radarr: {}, sabnzbd: {}, overseerr: {} };\n\n// Tautulli - active streams\ntry {\n  const tautulliResp = await httpRequest({\n    method: 'GET',\n    url: `${globals.TAUTULLI_URL}/api/v2?apikey=${globals.TAUTULLI_API_KEY}&cmd=get_activity`,\n    timeout: 10000\n  });\n  const activity = tautulliResp.response?.data || {};\n  const sessions = activity.sessions || [];\n  result.tautulli = {\n    activeStreams: sessions.length,\n    streams: sessions.map(s => ({\n      user: s.friendly_name || s.username || 'Unknown',\n      title: s.full_title || s.title || 'Unknown',\n      player: s.player || 'Unknown',\n      state: s.state || 'unknown'\n    }))\n  };\n} catch (err) {\n  result.tautulli = { activeStreams: 0, streams: [], error: err.message };\n}\n\n// Sonarr - today's calendar\ntry {\n  const sonarrCal = await httpRequest({\n    method: 'GET',\n    url: `${globals.SONARR_URL}/api/v3/calendar?start=${startDate}&end=${endDate}`,\n    headers: { 'X-Api-Key': globals.SONARR_API_KEY },\n    timeout: 15000\n  });\n  result.sonarr = {\n    todayCount: sonarrCal.length,\n    episodes: sonarrCal.slice(0, 10).map(e => ({\n      series: e.series?.title || 'Unknown',\n      season: e.seasonNumber,\n      episode: e.episodeNumber,\n      title: e.title || '',\n      hasFile: e.hasFile || false\n    }))\n  };\n} catch (err) {\n  result.sonarr = { todayCount: 0, episodes: [], error: err.message };\n}\n\n// Radarr - queue\ntry {\n  const radarrQueue = await httpRequest({\n    method: 'GET',\n    url: `${globals.RADARR_URL}/api/v3/queue?pageSize=20`,\n    headers: { 'X-Api-Key': globals.RADARR_API_KEY },\n    timeout: 15000\n  });\n  const records = radarrQueue.records || [];\n  result.radarr = {\n    queueCount: records.length,\n    queue: records.slice(0, 10).map(r => ({\n      title: r.title || 'Unknown',\n      progress: r.sizeleft && r.size ? Math.round((1 - r.sizeleft / r.size) * 100) : 0,\n      status: r.status || 'unknown'\n    }))\n  };\n} catch (err) {\n  result.radarr = { queueCount: 0, queue: [], error: err.message };\n}\n\n// SABnzbd - queue status\ntry {\n  const sabQueue = await httpRequest({\n    method: 'GET',\n    url: `${globals.SABNZBD_URL}/api?mode=queue&output=json&apikey=${globals.SABNZBD_API_KEY}`,\n    timeout: 15000\n  });\n  const queue = sabQueue.queue || {};\n  result.sabnzbd = {\n    downloading: (queue.slots || []).length,\n    speed: queue.speed || '0',\n    paused: queue.paused || false\n  };\n} catch (err) {\n  result.sabnzbd = { downloading: 0, speed: '0', paused: false, error: err.message };\n}\n\n// Overseerr - pending requests\ntry {\n  const requests = await httpRequest({\n    method: 'GET',\n    url: `${globals.OVERSEERR_URL}/api/v1/request?take=10&filter=pending`,\n    headers: { 'X-Api-Key': globals.OVERSEERR_API_KEY },\n    timeout: 15000\n  });\n  result.overseerr = {\n    pendingRequests: (requests.results || []).length\n  };\n} catch (err) {\n  result.overseerr = { pendingRequests: 0, error: err.message };\n}\n\nreturn [{ json: { type: 'media', data: result } }];"
+      },
+      "id": "hsa-media",
+      "name": "Gather Media Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 800]
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-health-arr",
+      "name": "Health arr",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 1000],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "eoD78OvooU5xNszV",
+          "name": "arr SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-health-plex",
+      "name": "Health plex",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 1100],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "C13DCoHPT9ECBLYJ",
+          "name": "plex SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-health-cadre",
+      "name": "Health cadre",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 1200],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "H1zhHsKxDwEDOSRk",
+          "name": "cadre SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-health-utilities",
+      "name": "Health utilities",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 1300],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-health-iot",
+      "name": "Health iot",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [440, 1400],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "DjfY1P2avir6zmei",
+          "name": "iot SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 10,
+        "options": {}
+      },
+      "id": "hsa-merge",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [880, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\n// Parse structured data from Code nodes\nlet network = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {}, tunnels: [] };\nlet proxmox = { nodes: [], totals: {} };\nlet media = {};\nconst serviceHosts = [];\n\nconst hostMap = {\n  'hsa-health-arr': 'arr',\n  'hsa-health-plex': 'plex',\n  'hsa-health-cadre': 'cadre',\n  'hsa-health-utilities': 'utilities',\n  'hsa-health-iot': 'iot'\n};\n\n// Track which hosts we've seen for services\nconst hostContainers = {};\nfor (const h of Object.values(hostMap)) hostContainers[h] = [];\n\nlet totalContainers = 0, running = 0, unhealthy = 0, stopped = 0;\n\nconst expectedTunnels = ['cloudflare-plex', 'cloudflare-overseerr', 'cloudflared-gotify', 'cloudflare-dockhand'];\nconst foundTunnels = {};\n\nfor (const item of items) {\n  const d = item.json;\n\n  // Code node structured data\n  if (d.type === 'unifi') {\n    network = { ...network, ...d.data };\n  } else if (d.type === 'pve') {\n    proxmox = d.data;\n  } else if (d.type === 'media') {\n    media = d.data;\n  } else if (d.stdout !== undefined) {\n    // SSH node output - determine source by checking connection path\n    const stdout = (d.stdout || '').trim();\n    if (!stdout) continue;\n    const lines = stdout.split('\\n').filter(l => l.length > 0);\n\n    // Check if this is tunnel data (has cloudflare in names)\n    const isTunnel = lines.some(l => l.includes('cloudflare'));\n    if (isTunnel) {\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        if (name) foundTunnels[name] = state;\n      }\n    } else {\n      // Container health data - figure out which host based on container names\n      const containers = [];\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        if (name) {\n          containers.push({ name, state, status });\n          totalContainers++;\n          if (state === 'running') running++;\n          else if (state === 'exited' || state === 'dead') stopped++;\n          if (status.includes('unhealthy')) unhealthy++;\n        }\n      }\n      // Match host by known container names\n      const names = containers.map(c => c.name);\n      let host = 'unknown';\n      if (names.some(n => n === 'sonarr' || n === 'radarr')) host = 'arr';\n      else if (names.some(n => n === 'plex')) host = 'plex';\n      else if (names.some(n => n === 'traefik' || n.includes('zigbee2mqtt'))) host = 'cadre';\n      else if (names.some(n => n === 'n8n' || n === 'dockhand' || n === 'homepage')) host = 'utilities';\n      else if (names.some(n => n.includes('homeassistant') || n.includes('mosquitto'))) host = 'iot';\n      else if (containers.length > 0) {\n        // Try to match by any remaining host\n        const usedHosts = serviceHosts.map(h => h.name);\n        const available = Object.values(hostMap).filter(h => !usedHosts.includes(h));\n        if (available.length > 0) host = available[0];\n      }\n      if (host !== 'unknown') {\n        serviceHosts.push({ name: host, containers });\n      }\n    }\n  }\n}\n\n// Build tunnel list\nfor (const tunnel of expectedTunnels) {\n  const state = foundTunnels[tunnel] || 'not found';\n  network.tunnels.push({ name: tunnel, state });\n}\n\nconst cachedStatus = {\n  lastUpdated: new Date().toISOString(),\n  network,\n  proxmox,\n  services: {\n    hosts: serviceHosts.sort((a, b) => a.name.localeCompare(b.name)),\n    summary: { totalContainers, running, unhealthy, stopped }\n  },\n  media\n};\n\nstaticData.cachedStatus = JSON.stringify(cachedStatus);\n\nreturn [{ json: { cached: true, lastUpdated: cachedStatus.lastUpdated } }];"
+      },
+      "id": "hsa-cache",
+      "name": "Cache Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst cached = staticData.cachedStatus;\n\nif (!cached) {\n  return [{ json: { error: 'No cached data yet. Wait for the first scheduled run.' } }];\n}\n\nreturn [{ json: JSON.parse(cached) }];"
+      },
+      "id": "hsa-read-cache",
+      "name": "Read Cache",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 900]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, OPTIONS"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "public, max-age=60"
+              }
+            ]
+          }
+        }
+      },
+      "id": "hsa-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [440, 900]
+    }
+  ],
+  "connections": {
+    "Every 15 min": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Gather UniFi Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH cadre tunnels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH utilities tunnels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gather PVE Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Plex Token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health arr",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health plex",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health cadre",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health utilities",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health iot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gather UniFi Stats": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH cadre tunnels": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SSH utilities tunnels": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Gather PVE Stats": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Get Plex Token": {
+      "main": [
+        [
+          {
+            "node": "Gather Media Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gather Media Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Health arr": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Health plex": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Health cadre": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "Health utilities": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "Health iot": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 9
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Cache Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Cache": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

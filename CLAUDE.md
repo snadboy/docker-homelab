@@ -190,7 +190,7 @@ Automated weekly version audit replaces manual checks and the old Pending Update
 |----------|-------|
 | Workflow ID | BXBsZXozpqxLZyoa |
 | Schedule | Sunday 9 AM (`0 9 * * 0`) |
-| Nodes | 23 (7 APT SSH + 4 Docker SSH + 5 Health SSH + 1 Dockhand SSH + 1 Code API + Merge + Format + Discord + Globals) |
+| Nodes | 17 (7 APT SSH + 4 Docker SSH + 1 Code API + Merge + Format + Discord) |
 | Replaced | Pending Updates Monitor (`mc4XV3qJ1FWNKVJO`, deactivated) |
 
 ### What It Checks
@@ -200,14 +200,11 @@ Automated weekly version audit replaces manual checks and the old Pending Update
 - **PVE version**: From `/api2/json/version` (PVEAuditor token)
 - **Technitium DNS version**: From `/api/settings/get` API
 - **APT updates**: 7 SSH hosts (plex, arr, cadre, ns, utilities, iot, ha)
-- **Container health**: 5 Docker hosts (arr, plex, cadre, utilities, iot) — unhealthy, restarting, restart loops (>3)
-- **Dockhand stacks**: SQLite query for sync status + failed deployments (7d)
 
 ### Discord Output
-Three embeds per message:
+Two embeds per message:
 1. **Software Versions** (green/yellow) — Docker container versions + PVE + Technitium
 2. **System Updates** (green/yellow) — APT pending counts per host
-3. **Container & Stack Health** (green/red) — unhealthy containers, restart loops, Dockhand stack sync, failed deployments
 
 ### New n8n Environment Variables
 - `TECHNITIUM_URL=http://192.168.86.76:5380`
@@ -308,6 +305,55 @@ Added `dns_search: ["tail65635.ts.net"]` to the `sb-traefik-http-provider` servi
 
 ---
 
+## Weekly Version Audit — Container & Stack Health Enhancement (2026-02-11)
+
+**Status:** ✅ Complete
+
+Enhanced the Weekly Version Audit workflow to check Docker container health and Dockhand stack sync status across all hosts.
+
+### What Was Added
+
+**Container Health Checks (5 new SSH nodes):**
+- SSH into arr, plex, cadre, utilities, iot
+- Detects unhealthy containers (`docker ps --format json` + jq filter for `unhealthy` status)
+- Detects restarting containers (state == `restarting`)
+- Reports containers with >3 restart count (`docker inspect` + jq filter on RestartCount)
+
+**Dockhand Stack Status (1 new SSH node):**
+- Queries Dockhand SQLite database via `docker exec dockhand sqlite3`
+- Reports stack sync status (synced/deployed/success = OK, anything else = alert)
+- Reports failed deployments from `schedule_executions` table (last 7 days)
+
+**New Discord Embed:**
+- Third embed: "Container & Stack Health" with whale emoji
+- Green when all healthy, red (#E74C3C) when issues detected
+- Footer: `N containers | N hosts | N PVE nodes | N stacks`
+
+### Workflow Changes
+- Nodes: 17 → 23 (6 new SSH nodes)
+- Merge inputs: 12 → 18
+- Globals fan-out: 12 → 18 targets
+- Discord embeds: 2 → 3
+
+### Verification
+- Execution 1535: ✅ All 23 nodes succeeded (~8s)
+- Container health: All 5 hosts report healthy
+- Dockhand: All 11 stacks synced, 0 failed deployments
+- Discord: 3 embeds posted correctly
+
+### Dockhand Status Values
+- `synced`, `deployed`, `success` = healthy (green)
+- Anything else (e.g., `failed`) = alert (red)
+
+### Files Changed
+- `n8n/workflows/weekly-version-audit.json` — 6 new nodes, updated Format Report code
+
+### n8n API Access Note
+- n8n API is NOT accessible through Traefik (returns `X-N8N-API-KEY header required`)
+- Must use `http://localhost:5678` from utilities host directly (SSH + curl)
+
+---
+
 ## n8n Credential-Based Auth Refactor (2026-02-11)
 
 **Status:** ✅ Complete
@@ -325,313 +371,116 @@ Refactored n8n workflows to use Header Auth / Query Auth credentials instead of 
 | SABnzbd API | `WUMwDzFtC53aazjW` | httpQueryAuth | `apikey` |
 | Gotify API | `hZM2wpBkhJwPJf32` | httpHeaderAuth | `X-Gotify-Key` |
 
-### Changes
-- **Arr Stack Health Check**: Full rewrite — single Code node replaced with 5 HTTP Request nodes using credential auth + Merge
-- **Gotify nodes in 7 workflows**: Replaced manual `X-Gotify-Key` header with Gotify API credential
-
-### Commit
-- `aa8895f` — Refactor n8n workflows to use credential-based auth
-
----
-
-## Discord Node Refactor (2026-02-11)
-
-**Status:** ✅ Complete
-
-Switched all 5 Discord-posting workflows from HTTP Request webhook posts to native `n8n-nodes-base.discord` v2 node.
-
-### Changes Applied to All 5 Workflows
-1. **env→globals**: Renamed misleading `const env = $input.first().json` to use `$('Globals').first().json` directly
-2. **fields→description**: Converted Code node output from `fields[]` arrays to markdown `description` text
-3. **HTTP Request→Discord v2**: Replaced manual webhook POST with native Discord node using `discordWebhookApi` credential (ID: `410BCHcgoAHtBHHk`) and `json` inputMethod for embeds
-
-### Workflows Updated
-
-| Workflow | ID | Pattern |
-|----------|-----|---------|
-| Daily Network Summary | `ppH7nKbAfGkObNAk` | Single embed (title/description/footer) |
-| Daily Proxmox Summary | `Fc1CXcJUU3LZ46G2` | Single embed (title/description/footer) |
-| Network Health Monitor | `tFQDbJFTrwwYVJKu` | Alert embed (alertTitle/description/alertColor) |
-| Proxmox Health Monitor | `Cs4Vu1hmLj82uBCQ` | Alert embed (alertTitle/description/alertColor) |
-| Weekly Version Audit | `BXBsZXozpqxLZyoa` | Triple embed ($json.embeds[0..2]) |
-
-### Verification
-- Both health monitors confirmed running successfully every 15 minutes after deployment
-- Merge inputs verified correct in all workflows (no fix needed)
-
-### Commit
-- `ebd9a22` — Switch Discord workflows to native Discord v2 node
-
----
-
-## Gotify → Discord Migration (2026-02-11)
-
-**Status:** ✅ Complete
-
-Switched all 8 remaining Gotify notification workflows to Discord, unifying all n8n notifications on Discord.
-
-### Workflows Converted
-
-| # | Workflow | ID | Discord Node |
-|---|----------|-----|-------------|
-| 1 | Arr Stack Health Check | `qOZ6kS7MSlF9hOKb` | Discord Alert |
-| 2 | Gmail Cleanup | `YvL90Tr5LhpyBV1D` | Discord Notify |
-| 3 | Gmail Labels & Contacts | `bf54qHDO8Gt82e0u` | Discord Notify |
-| 4 | Trash Pickup Scheduler | `D5R6GlhUDJTUGS8P` | Discord Notify |
-| 5 | n8n Backup | `dVt3Th1wvWvutg0a` | Discord Notify |
-| 6 | Plex Recently Added | `NYdQlvUoz1x14bIZ` | Discord Notify |
-| 7 | Overseerr Request Notifier | `1bdxTCXlpam5yUco` | Discord Notify |
-| 8 | Daily Media Digest | `puI2Gdj35nijpEey` | Discord Digest |
-
-### Discord Embed Pattern
-
-All nodes use `n8n-nodes-base.discord` v2 with webhook auth:
-- Credential: Discord Webhook (`410BCHcgoAHtBHHk`)
-- Embed input method: `json` (dynamic `JSON.stringify`)
-- Priority → Color mapping: >=7 red (`15158332`), >=5 yellow (`16776960`), <5 green (`3066993`)
-
-### Gotify Cleanup (optional follow-up)
-
-- Remove `GOTIFY_URL` from Global Constants (no longer referenced by any workflow)
-- Delete Gotify API credential (`hZM2wpBkhJwPJf32`)
-- Consider decommissioning the Gotify container on utilities
-
-### Files Changed
-- 8 workflow JSON files in `n8n/workflows/`
-
-### Commit
-- `4cd3dd6` — Switch 8 n8n workflows from Gotify to Discord notifications
-
----
-
-## Discord Notification Organization (2026-02-12)
-
-**Status:** ✅ Complete
-
-Reorganized all n8n Discord notifications into two channels and consolidated daily reports.
-
-### Discord Channels
-
-| Channel | Webhook Credential | Purpose |
-|---------|-------------------|---------|
-| #homelab-alerts | `ChjLJM1kqQJWWMx7` (Discord Alerts Webhook) | Health monitors, backup failures |
-| #homelab-reports | `2sFNFWT1cJPmliyb` (Discord Reports Webhook) | Daily reports, weekly audits, event notifications |
-
-### Workflow Routing
-
-**Alerts channel (3 workflows):**
-- Proxmox Health Monitor (`Cs4Vu1hmLj82uBCQ`)
-- Network Health Monitor (`tFQDbJFTrwwYVJKu`)
-- Arr Stack Health Check (`qOZ6kS7MSlF9hOKb`)
-
-**Reports channel (10 workflows):**
-- Daily Homelab Report (`5fUpCHbIrTCOdZ6F`) — NEW consolidated report
-- Gmail Cleanup, Gmail Labels & Contacts, Trash Pickup Scheduler
-- n8n Backup (failure-only alerts go to #homelab-alerts)
-- Plex Recently Added, Weekly Version Audit
-
-### Consolidated Daily Homelab Report
-
-| Property | Value |
-|----------|-------|
-| Workflow ID | `5fUpCHbIrTCOdZ6F` |
-| Schedule | Daily 8:15 AM |
-| Nodes | 12 (Trigger + Globals + 5 data gatherers + Merge + Format + Discord) |
-| Replaces | Daily Network Summary, Daily Proxmox Summary, Daily Media Digest |
-
-**3 embeds in single message:**
-1. Network — WAN health, gateway, speedtest, devices, WiFi clients, Cloudflare tunnels
-2. Proxmox — Node stats (CPU/mem/disk/uptime), VM/CT counts
-3. Media — Sonarr calendar, Radarr queue, SABnzbd status, Plex libraries, Overseerr requests
-
-### n8n Backup — Failure Only
-
-Added If node (`hasErrors` check) between Export and Discord. Only sends alert (red embed, #homelab-alerts) when backup has errors. Silent on success.
-
-### Deactivated Workflows
-
-| Workflow | ID | Reason |
-|----------|-----|--------|
-| Daily Network Summary | `ppH7nKbAfGkObNAk` | Replaced by Daily Homelab Report |
-| Daily Proxmox Summary | `Fc1CXcJUU3LZ46G2` | Replaced by Daily Homelab Report |
-| Daily Media Digest | `puI2Gdj35nijpEey` | Replaced by Daily Homelab Report |
-| Overseerr Request Notifier | `1bdxTCXlpam5yUco` | Redundant with Plex Recently Added |
-
-### Files Changed
-- 13 workflow JSON files updated (webhook credential routing)
-- `n8n/workflows/daily-homelab-report.json` (new)
-- `n8n/workflows/n8n-backup.json` (added If node for failure-only)
-
-### Commit
-- `48b5add` — Organize Discord notifications: channels, consolidated report, backup alerts
-
----
-
-## Homelab Status Dashboard (2026-02-12)
-
-**Status:** ✅ Complete
-
-Web dashboard at `status.isnadboy.com` showing real-time homelab status, auto-refreshing every 60 seconds.
-
-| Property | Value |
-|----------|-------|
-| URL | https://status.isnadboy.com |
-| Workflow ID | `FQGdFuIA1sVcR19b` |
-| Workflow Name | Homelab Status API |
-| Schedule | Every 15 min (`*/15 * * * *`) |
-| Webhook | GET `/webhook/homelab-status` |
-| Container | status-dashboard (nginx:alpine on utilities, port 3080) |
-| Dockhand Stack | status-dashboard (ID auto-assigned) |
-
-### Architecture
-
-- **n8n workflow** gathers data every 15 min from UniFi, Proxmox, Sonarr/Radarr/SABnzbd/Tautulli/Overseerr, Docker health (4 hosts), Cloudflare tunnels
-- Data cached in workflow static data (`$getWorkflowStaticData('global')`)
-- Webhook GET reads cache and responds with JSON + CORS headers
-- **nginx:alpine** container serves static HTML/CSS/JS dashboard
-- Dashboard fetches JSON from webhook, renders 4 sections
-
-### Workflow Nodes (21)
-
-| Path | Nodes |
-|------|-------|
-| Schedule | Every 15 min → Globals → [UniFi, PVE, Media, 5x Health SSH, 2x Tunnel SSH, 2x PBS SSH, Read Latest Versions] → Merge (13 inputs) → Cache Results |
-| Webhook | GET → Read Cache → Respond to Webhook (JSON + CORS) |
-
-### Dashboard Sections
-
-| Section | Content |
-|---------|---------|
-| Network | WAN status/IP/latency, WAN2 IP, gateway stats, speedtest, APs/switches, WiFi clients, Cloudflare tunnels, expandable device detail table |
-| Proxmox | Per-node cards (CPU/mem/disk bars + uptime), expandable VM/CT detail table per node, PBS backup server cards with datastore usage bars and GC status |
-| Services | Per-host collapsible container grids with colored status chips + update badges, expandable detail table (version, up since, status) |
-| Media | Active Plex streams, today's Sonarr episodes, Radarr queue, SABnzbd status, Overseerr requests |
-
-### Globals Added
-
-- `TAUTULLI_URL` — Tautulli base URL
-- `TAUTULLI_API_KEY` — Tautulli API key
-- Total Homelab Constants: 32
-
-### Issues Fixed
-
-- **Host detection**: Initial code used container name heuristics to identify SSH host output, failed when cadre had cloudflare tunnel containers. Fixed by adding `echo "HOST:<hostname>"` prefix to each health SSH command.
-- **Sonarr series names**: Episodes showed "Unknown" because Sonarr `/api/v3/calendar` doesn't include series object by default. Fixed by adding `&includeSeries=true` query parameter.
-
-### Files Created
-
-| File | Purpose |
-|------|---------|
-| `n8n/workflows/homelab-status-api.json` | 18-node n8n workflow |
-| `status-dashboard/docker-compose.yml` | nginx container with REVP label |
-| `status-dashboard/nginx.conf` | Static file serving + gzip |
-| `status-dashboard/html/index.html` | Dashboard page structure |
-| `status-dashboard/html/style.css` | Dark theme (`#0d1117`) + responsive grid |
-| `status-dashboard/html/app.js` | Fetch + render logic, 60s auto-refresh |
-
-### Commits
-
-- `ff23b02` — Add Homelab Status Dashboard and API workflow
-- `9a4eee5` — Fix host detection in status API workflow
-- `abdd5e6` — Add includeSeries parameter to Sonarr calendar API call
-
-### Known Issues
-
-- **HTTPS cert**: `CF_DNS_API_TOKEN` is empty in Traefik's `.env` on cadre — new certs can't be issued. Existing certs work from cache. Pre-existing issue affecting any new subdomains.
-- **iot host**: Not shown in services because no Docker containers are running on iot (expected behavior).
-- **Plex host down**: 192.168.86.40 unreachable as of 2026-02-12. Get Plex Token and media data gathering fail gracefully (onError: continueRegularOutput).
-
----
-
-## Status Dashboard Enhancements (2026-02-12)
-
-**Status:** ✅ Complete
-
-Added drill-down detail to all dashboard sections via collapsible `<details>/<summary>` tables, plus new data sources: PBS backup servers, PVE guest details, UniFi device list, WAN2 IP, container version labels, and update detection.
-
-### New n8n Credentials
-
-| Name | ID | Host | User |
-|------|-----|------|------|
-| svalbard SSH | `Wg2JonbsovvhvVGk` | host-svalbard.isnadboy.com:22 | root |
-| alexandria SSH | `AKwY0lwWf1nlBk1i` | host-alexandria.isnadboy.com:22 | root |
-
-### Backend Changes (homelab-status-api workflow)
-
-| Enhancement | Details |
-|-------------|---------|
-| PBS servers | 2 SSH nodes query `proxmox-backup-manager` CLI for datastore usage, GC status, version |
-| PVE guests | `Gather PVE Stats` expanded to collect per-guest details (vmid, name, type, status, cpuPct, memPct) |
-| UniFi devices | `Gather UniFi Stats` expanded to collect device list (name, type, IP, state, clients, uptime) |
-| WAN2 IP | Extracted from gateway device `wan2.ip` field |
-| Container versions | Health SSH commands extract `org.opencontainers.image.version` label via jq |
-| Update detection | Reads `/opt/n8n-shared/latest-versions.json` (written by weekly version audit) and compares versions |
-| Error handling | External service nodes (UniFi, PVE, Plex, Media) use `onError: continueRegularOutput` |
-| Merge inputs | Increased from 10 to 13 (+2 PBS SSH, +1 Read Latest Versions) |
-| Total nodes | 21 (was 18) |
-
-### Backend Changes (weekly-version-audit workflow)
-
-- Added "Write Latest Versions" SSH node after Format Report
-- Writes latest version data to `/opt/n8n-shared/latest-versions.json` on utilities
-- Total nodes: 24 (was 23)
-
-### Frontend Changes
-
-| Feature | Implementation |
-|---------|---------------|
-| Collapsible sections | Native `<details>/<summary>` HTML elements with CSS arrow animation |
-| PVE guest tables | Expandable per-node table: ID, Name, Type, Status, CPU%, Mem% |
-| PBS cards | Server cards with datastore usage bars, GC status, version |
-| Device tables | Expandable table: Name, Type, IP, Status, Clients, Uptime |
-| Service details | Each host in collapsible `<details open>`, detail table with Version, Up Since, Status |
-| Update badges | Yellow `↑` badge on container chips with available updates |
-| WAN2 IP | Displayed in WAN2 stat row alongside latency |
-| Row highlighting | Red for stopped guests/offline devices, yellow for high CPU/mem/low satisfaction |
-
-### Issues Fixed During Deployment
-
-| Issue | Root Cause | Fix |
-|-------|-----------|-----|
-| Workflow stops when plex is down | Get Plex Token had no `onError` handler | Added `onError: continueRegularOutput` to 4 external service nodes |
-| PBS shows 0 datastores | `jq` not installed on PBS servers | Replaced `jq` with `python3` for JSON parsing |
-| Crons not firing after deploy | Multiple deploy/activate cycles confused n8n scheduler | Restarted n8n container |
-
-### Other Changes
-
-- Created `/opt/n8n-shared/` directory on utilities for version cache
-- Updated HTTP provider `ssh-hosts.yaml` — added "status-dashboard" to utilities description
-
-### Files Changed
-
-- `n8n/workflows/homelab-status-api.json` — 3 new SSH nodes, expanded Code nodes, Merge 13 inputs, onError handlers
-- `n8n/workflows/weekly-version-audit.json` — added Write Latest Versions SSH node
-- `status-dashboard/html/app.js` — collapsible sections, device/guest/PBS rendering
-- `status-dashboard/html/style.css` — detail tables, PBS cards, update badges
-
-### Commits
-
-- `fd83bd2` — Add drill-down details to status dashboard
-- `07b9db9` — Add error handling to external service nodes in status API
-- `f2f2484` — Fix PBS SSH command: replace jq with python3
+### Arr Stack Health Check — Full Refactor
+
+Replaced single Code node (5 `httpRequest()` calls with manual API keys) with 5 individual HTTP Request nodes using credential-based auth.
+
+**New flow:** Schedule → Globals → 5 HTTP Request nodes (parallel) → Merge (5 inputs, append) → Evaluate Results Code → If → Gotify Alert / All Healthy
+
+- Nodes: 6 → 12
+- Each service check independently testable in n8n editor
+- API keys stored as encrypted n8n credentials
+
+### Gotify Nodes — 7 Workflows Updated
+
+Replaced manual `X-Gotify-Key` header (from Globals expression) with Gotify API Header Auth credential:
+1. daily-media-digest
+2. overseerr-request-notifier
+3. plex-recently-added
+4. n8n-backup
+5. trash-pickup-scheduler
+6. gmail-labels-and-contacts
+7. gmail-cleanup
+
+### Not Refactored (complex Code node patterns)
+
+These workflows use Code nodes with multi-service API orchestration — not practical to replace:
+- daily-media-digest (Sonarr/Radarr/SABnzbd/Plex/Overseerr data gathering)
+- weekly-version-audit (PVE/Technitium/GitHub APIs)
+- n8n-backup (n8n API + GitHub API)
+- network-health-monitor (UniFi cookie auth)
+- proxmox-health-monitor/daily-summary (PVE composite token)
+- Gmail workflows (OAuth token refresh)
 
 ### Verification
 
-- PBS: 2 servers, svalbard (27% used), alexandria (51% used), both v4.1.2, GC OK
-- PVE guests: 11 total across 3 nodes with CPU/mem details
-- WAN2 IP: 192.168.12.190
-- UniFi devices: 10 with name, type, state, clients
-- Container versions: 21 of 36 have labels
-- Container updates: pending first weekly audit run (Sunday 9 AM)
-- Schedule trigger: successful at 20:30 UTC, all 21 nodes pass
+- Execution 1578: ✅ All 12 nodes passed (~330ms)
+  - 5/5 services healthy via credential auth
+  - Merge collected all 5 inputs
+  - Routed to "All Healthy" (no failures)
+
+### Files Changed
+- `n8n/workflows/arr-stack-health-check.json` — Full rewrite (credential-based HTTP Request nodes + Merge)
+- `n8n/workflows/daily-media-digest.json` — Gotify credential
+- `n8n/workflows/overseerr-request-notifier.json` — Gotify credential
+- `n8n/workflows/plex-recently-added.json` — Gotify credential
+- `n8n/workflows/n8n-backup.json` — Gotify credential
+- `n8n/workflows/trash-pickup-scheduler.json` — Gotify credential
+- `n8n/workflows/gmail-labels-and-contacts.json` — Gotify credential
+- `n8n/workflows/gmail-cleanup.json` — Gotify credential
+
+---
+
+## Script Server Teardown (2026-02-11)
+
+**Status:** ✅ Complete
+
+Decommissioned the script-server fork — its purpose was eclipsed by n8n (workflow automation) and Semaphore (Ansible automation).
+
+### What Was Removed
+
+| Item | Location | Action |
+|------|----------|--------|
+| Docker container | utilities | Stopped, removed |
+| Named volumes (4) | utilities | `script-server-config`, `-scripts`, `-logs`, `-runners` removed |
+| Bind mount data | utilities | `/opt/script-server/` removed |
+| Compose definition | utilities | `~/docker-homelab/script-server/` removed |
+| Traefik route | cadre (auto) | Auto-removed when container deleted (label-based discovery) |
+| HTTP provider desc | cadre | Updated `ssh-hosts.yaml` — removed "script-server" from utilities description |
+| GHCR images | ghcr.io | `ghcr.io/snadboy/script-server` deleted (219 versions) |
+| GitHub repo | github.com | `snadboy/script-server` deleted (public fork of bugy/script-server) |
+| Local project | devs | `/home/snadboy/projects/script-server` removed |
+| Claude memory | devs | `~/.claude/projects/-home-snadboy-projects-script-server/` removed |
+| DNS | — | No record existed (used wildcard) |
+
+### Not Affected
+
+- **Weekly version audit** — script-server was never in the container version checks; health checks are generic (`docker ps`) and auto-exclude removed containers
+- **Dockhand** — stack/container no longer exists, drops out of SQLite queries automatically
+
+---
+
+## Traefik HTTP Provider Skill Enhancement (2026-02-12)
+
+**Status:** ✅ Complete
+
+Enhanced the `traefik-http-provider` Claude Code skill with streamlined config update operations.
+
+### What Changed
+
+Replaced the cumbersome docker-cp round-trip workflow in the Configuration File Management section with direct volume path commands:
+
+- **Quick Reference callout** added near top of skill with restart requirements and volume path
+- **Add Static Route** — one-liner heredoc append + auto-restart
+- **Add SSH Host** — one-liner heredoc append + auto-restart
+- **Disable/Remove Entry** — sed commands for toggling or removing entries
+- **Update Description** — sed in-place replacement
+- **Restart & Verify** — restart + log check + route verification
+- **Full File Replacement** — pull/edit/push for complex edits
+
+Volume path: `/var/lib/docker/volumes/traefik-http-provider-config/_data/` on cadre.
+
+### Files Changed
+- `/mnt/shareables/.claude/skills/traefik-http-provider/skill.md` — Expanded config management section (429 → 481 lines)
+
+### Commit
+- `525822c` — Enhance traefik-http-provider skill with streamlined config update operations
 
 ---
 
 ## Outstanding Items
 
-- **Plex host down**: 192.168.86.40 unreachable. Media data and Plex token gathering fail gracefully but return empty data. Investigate whether plex VM needs to be restarted.
-- **Gotify decommission**: No workflows reference Gotify anymore. Consider removing the Gotify container from utilities and cleaning up Global Constants / credentials.
-- **HTTPS cert provisioning**: Fix `CF_DNS_API_TOKEN` in Traefik's `.env` on cadre to allow new Let's Encrypt certificates to be issued.
+- **Gotify HTTPS routing**: `https://gotify.isnadboy.com` returns 404 through Traefik on cadre. Direct access at `http://host-utilities.isnadboy.com:8084` works. Pre-existing issue — most workflows don't hit Gotify unless alerting on failures. Should investigate Traefik route configuration.
 
 ---
 

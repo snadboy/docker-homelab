@@ -491,20 +491,20 @@ Web dashboard at `status.isnadboy.com` showing real-time homelab status, auto-re
 - **nginx:alpine** container serves static HTML/CSS/JS dashboard
 - Dashboard fetches JSON from webhook, renders 4 sections
 
-### Workflow Nodes (18)
+### Workflow Nodes (21)
 
 | Path | Nodes |
 |------|-------|
-| Schedule | Every 15 min → Globals → [UniFi, PVE, Media, 5x Health SSH, 2x Tunnel SSH] → Merge (10 inputs) → Cache Results |
+| Schedule | Every 15 min → Globals → [UniFi, PVE, Media, 5x Health SSH, 2x Tunnel SSH, 2x PBS SSH, Read Latest Versions] → Merge (13 inputs) → Cache Results |
 | Webhook | GET → Read Cache → Respond to Webhook (JSON + CORS) |
 
 ### Dashboard Sections
 
 | Section | Content |
 |---------|---------|
-| Network | WAN status/IP/latency, WAN2, gateway stats, speedtest, APs/switches, WiFi clients, Cloudflare tunnels |
-| Proxmox | Per-node cards (CPU/mem/disk bars + uptime), VM/CT counts, cluster totals |
-| Services | Per-host container grids with colored status chips, summary bar |
+| Network | WAN status/IP/latency, WAN2 IP, gateway stats, speedtest, APs/switches, WiFi clients, Cloudflare tunnels, expandable device detail table |
+| Proxmox | Per-node cards (CPU/mem/disk bars + uptime), expandable VM/CT detail table per node, PBS backup server cards with datastore usage bars and GC status |
+| Services | Per-host collapsible container grids with colored status chips + update badges, expandable detail table (version, up since, status) |
 | Media | Active Plex streams, today's Sonarr episodes, Radarr queue, SABnzbd status, Overseerr requests |
 
 ### Globals Added
@@ -535,24 +535,101 @@ Web dashboard at `status.isnadboy.com` showing real-time homelab status, auto-re
 - `9a4eee5` — Fix host detection in status API workflow
 - `abdd5e6` — Add includeSeries parameter to Sonarr calendar API call
 
-### Verification
-
-- Webhook returns complete JSON (network, proxmox, services, media)
-- 36/36 containers running across 4 hosts (arr, cadre, plex, utilities)
-- 3 PVE nodes online, 7 VMs, 4 CTs
-- Sonarr series names display correctly
-- Dashboard auto-refreshes with green pulse indicator
-- Mobile responsive (single column on narrow screens)
-
 ### Known Issues
 
 - **HTTPS cert**: `CF_DNS_API_TOKEN` is empty in Traefik's `.env` on cadre — new certs can't be issued. Existing certs work from cache. Pre-existing issue affecting any new subdomains.
 - **iot host**: Not shown in services because no Docker containers are running on iot (expected behavior).
+- **Plex host down**: 192.168.86.40 unreachable as of 2026-02-12. Get Plex Token and media data gathering fail gracefully (onError: continueRegularOutput).
+
+---
+
+## Status Dashboard Enhancements (2026-02-12)
+
+**Status:** ✅ Complete
+
+Added drill-down detail to all dashboard sections via collapsible `<details>/<summary>` tables, plus new data sources: PBS backup servers, PVE guest details, UniFi device list, WAN2 IP, container version labels, and update detection.
+
+### New n8n Credentials
+
+| Name | ID | Host | User |
+|------|-----|------|------|
+| svalbard SSH | `Wg2JonbsovvhvVGk` | host-svalbard.isnadboy.com:22 | root |
+| alexandria SSH | `AKwY0lwWf1nlBk1i` | host-alexandria.isnadboy.com:22 | root |
+
+### Backend Changes (homelab-status-api workflow)
+
+| Enhancement | Details |
+|-------------|---------|
+| PBS servers | 2 SSH nodes query `proxmox-backup-manager` CLI for datastore usage, GC status, version |
+| PVE guests | `Gather PVE Stats` expanded to collect per-guest details (vmid, name, type, status, cpuPct, memPct) |
+| UniFi devices | `Gather UniFi Stats` expanded to collect device list (name, type, IP, state, clients, uptime) |
+| WAN2 IP | Extracted from gateway device `wan2.ip` field |
+| Container versions | Health SSH commands extract `org.opencontainers.image.version` label via jq |
+| Update detection | Reads `/opt/n8n-shared/latest-versions.json` (written by weekly version audit) and compares versions |
+| Error handling | External service nodes (UniFi, PVE, Plex, Media) use `onError: continueRegularOutput` |
+| Merge inputs | Increased from 10 to 13 (+2 PBS SSH, +1 Read Latest Versions) |
+| Total nodes | 21 (was 18) |
+
+### Backend Changes (weekly-version-audit workflow)
+
+- Added "Write Latest Versions" SSH node after Format Report
+- Writes latest version data to `/opt/n8n-shared/latest-versions.json` on utilities
+- Total nodes: 24 (was 23)
+
+### Frontend Changes
+
+| Feature | Implementation |
+|---------|---------------|
+| Collapsible sections | Native `<details>/<summary>` HTML elements with CSS arrow animation |
+| PVE guest tables | Expandable per-node table: ID, Name, Type, Status, CPU%, Mem% |
+| PBS cards | Server cards with datastore usage bars, GC status, version |
+| Device tables | Expandable table: Name, Type, IP, Status, Clients, Uptime |
+| Service details | Each host in collapsible `<details open>`, detail table with Version, Up Since, Status |
+| Update badges | Yellow `↑` badge on container chips with available updates |
+| WAN2 IP | Displayed in WAN2 stat row alongside latency |
+| Row highlighting | Red for stopped guests/offline devices, yellow for high CPU/mem/low satisfaction |
+
+### Issues Fixed During Deployment
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Workflow stops when plex is down | Get Plex Token had no `onError` handler | Added `onError: continueRegularOutput` to 4 external service nodes |
+| PBS shows 0 datastores | `jq` not installed on PBS servers | Replaced `jq` with `python3` for JSON parsing |
+| Crons not firing after deploy | Multiple deploy/activate cycles confused n8n scheduler | Restarted n8n container |
+
+### Other Changes
+
+- Created `/opt/n8n-shared/` directory on utilities for version cache
+- Updated HTTP provider `ssh-hosts.yaml` — added "status-dashboard" to utilities description
+
+### Files Changed
+
+- `n8n/workflows/homelab-status-api.json` — 3 new SSH nodes, expanded Code nodes, Merge 13 inputs, onError handlers
+- `n8n/workflows/weekly-version-audit.json` — added Write Latest Versions SSH node
+- `status-dashboard/html/app.js` — collapsible sections, device/guest/PBS rendering
+- `status-dashboard/html/style.css` — detail tables, PBS cards, update badges
+
+### Commits
+
+- `fd83bd2` — Add drill-down details to status dashboard
+- `07b9db9` — Add error handling to external service nodes in status API
+- `f2f2484` — Fix PBS SSH command: replace jq with python3
+
+### Verification
+
+- PBS: 2 servers, svalbard (27% used), alexandria (51% used), both v4.1.2, GC OK
+- PVE guests: 11 total across 3 nodes with CPU/mem details
+- WAN2 IP: 192.168.12.190
+- UniFi devices: 10 with name, type, state, clients
+- Container versions: 21 of 36 have labels
+- Container updates: pending first weekly audit run (Sunday 9 AM)
+- Schedule trigger: successful at 20:30 UTC, all 21 nodes pass
 
 ---
 
 ## Outstanding Items
 
+- **Plex host down**: 192.168.86.40 unreachable. Media data and Plex token gathering fail gracefully but return empty data. Investigate whether plex VM needs to be restarted.
 - **Gotify decommission**: No workflows reference Gotify anymore. Consider removing the Gotify container from utilities and cleaning up Global Constants / credentials.
 - **HTTPS cert provisioning**: Fix `CF_DNS_API_TOKEN` in Traefik's `.env` on cadre to allow new Let's Encrypt certificates to be issued.
 

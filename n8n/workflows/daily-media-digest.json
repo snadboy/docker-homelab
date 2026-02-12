@@ -1,6 +1,6 @@
 {
   "name": "Daily Media Digest",
-  "description": "Daily digest of media activity across Sonarr, Radarr, and Plex. Summarizes downloads, upcoming episodes, library additions. Sends via Gotify.",
+  "description": "Daily digest of media activity across Sonarr, Radarr, and Plex. Summarizes downloads, upcoming episodes, library additions. Sends via Discord.",
   "nodes": [
     {
       "parameters": {
@@ -54,29 +54,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 5 }) }}",
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 3) >= 7 ? 15158332 : ($json.priority || 3) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "d0a0a002-0002-4002-a002-000000000003",
-      "name": "Send Digest to Gotify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
-        }
-      },
+      "name": "Discord Digest",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         880,
         304
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {
@@ -125,7 +130,7 @@
       "main": [
         [
           {
-            "node": "Send Digest to Gotify",
+            "node": "Discord Digest",
             "type": "main",
             "index": 0
           }

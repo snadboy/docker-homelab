@@ -79,29 +79,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "http://host-utilities.isnadboy.com:8084/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 5 }) }}",
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 5) >= 7 ? 15158332 : ($json.priority || 5) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "backup-gotify",
-      "name": "Notify Gotify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
-        }
-      },
+      "name": "Discord Notify",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         880,
         300
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     }
   ],
   "connections": {
@@ -142,7 +147,7 @@
       "main": [
         [
           {
-            "node": "Notify Gotify",
+            "node": "Discord Notify",
             "type": "main",
             "index": 0
           }

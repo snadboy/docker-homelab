@@ -1,6 +1,6 @@
 {
   "name": "Plex Recently Added",
-  "description": "Monitors Plex for recently added movies and TV episodes. Sends Gotify notification when new content is available.",
+  "description": "Monitors Plex for recently added movies and TV episodes. Sends Discord notification when new content is available.",
   "nodes": [
     {
       "parameters": {
@@ -86,29 +86,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 5 }) }}",
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 3) >= 7 ? 15158332 : ($json.priority || 3) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "d0a0a004-0004-4004-a004-000000000004",
-      "name": "Notify Gotify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
-        }
-      },
+      "name": "Discord Notify",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         880,
         200
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {},
@@ -179,7 +184,7 @@
       "main": [
         [
           {
-            "node": "Notify Gotify",
+            "node": "Discord Notify",
             "type": "main",
             "index": 0
           }

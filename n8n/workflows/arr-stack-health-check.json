@@ -1,6 +1,6 @@
 {
   "name": "Arr Stack Health Check",
-  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs using credential-based authentication. Reports status via Gotify.",
+  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs using credential-based authentication. Reports status via Discord.",
   "nodes": [
     {
       "parameters": {
@@ -228,27 +228,32 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: \"\u26a0\ufe0f Arr Stack Alert: \" + $json.failedServices, message: $json.summary, priority: 7 }) }}",
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: \"⚠️ Arr Stack Alert: \" + $json.failedServices, description: $json.summary, color: 15158332, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "gotify-alert",
-      "name": "Gotify Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Discord Alert",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         1340,
         240
       ],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
         }
       }
     },
@@ -388,7 +393,7 @@
       "main": [
         [
           {
-            "node": "Gotify Alert",
+            "node": "Discord Alert",
             "type": "main",
             "index": 0
           }

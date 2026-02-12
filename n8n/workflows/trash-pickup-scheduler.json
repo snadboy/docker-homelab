@@ -1,6 +1,6 @@
 {
   "name": "Trash Pickup Scheduler",
-  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Calls Trash Day Calc sub-workflow for date math, then creates calendar events and sends Gotify notification. Webhook: /webhook/trash-pickup",
+  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Calls Trash Day Calc sub-workflow for date math, then creates calendar events and sends Discord notification. Webhook: /webhook/trash-pickup",
   "nodes": [
     {
       "parameters": {
@@ -86,28 +86,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, message: $json.message, priority: $json.priority || 3 }) }}"
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 3) >= 7 ? 15158332 : ($json.priority || 3) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "trash-gotify-notify",
-      "name": "Notify via Gotify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
-        }
-      },
+      "name": "Discord Notify",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         1100,
         560
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {
@@ -172,7 +178,7 @@
       "main": [
         [
           {
-            "node": "Notify via Gotify",
+            "node": "Discord Notify",
             "type": "main",
             "index": 0
           }

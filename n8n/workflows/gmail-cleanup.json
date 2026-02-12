@@ -233,29 +233,34 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Globals').first().json.GOTIFY_URL }}/message",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: 'Gmail Cleanup', message: $json.report, priority: $json.mode === 'live' ? 5 : 3 }) }}",
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: 'Gmail Cleanup', description: $json.report, color: $json.mode === 'live' ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "gotify-notify",
-      "name": "Notify via Gotify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "hZM2wpBkhJwPJf32",
-          "name": "Gotify API"
-        }
-      },
+      "name": "Discord Notify",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
       "position": [
         1020,
         360
-      ]
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "410BCHcgoAHtBHHk",
+          "name": "Discord Webhook"
+        }
+      }
     },
     {
       "parameters": {
@@ -296,7 +301,7 @@
         "options": {
           "respondWithOptions": {
             "values": {
-              "formSubmittedText": "Gmail Cleanup started — check Gotify for results."
+              "formSubmittedText": "Gmail Cleanup started — check Discord for results."
             }
           }
         }
@@ -522,7 +527,7 @@
       "main": [
         [
           {
-            "node": "Notify via Gotify",
+            "node": "Discord Notify",
             "type": "main",
             "index": 0
           }

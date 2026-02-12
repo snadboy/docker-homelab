@@ -467,9 +467,94 @@ Added If node (`hasErrors` check) between Export and Discord. Only sends alert (
 
 ---
 
+## Homelab Status Dashboard (2026-02-12)
+
+**Status:** ✅ Complete
+
+Web dashboard at `status.isnadboy.com` showing real-time homelab status, auto-refreshing every 60 seconds.
+
+| Property | Value |
+|----------|-------|
+| URL | https://status.isnadboy.com |
+| Workflow ID | `FQGdFuIA1sVcR19b` |
+| Workflow Name | Homelab Status API |
+| Schedule | Every 15 min (`*/15 * * * *`) |
+| Webhook | GET `/webhook/homelab-status` |
+| Container | status-dashboard (nginx:alpine on utilities, port 3080) |
+| Dockhand Stack | status-dashboard (ID auto-assigned) |
+
+### Architecture
+
+- **n8n workflow** gathers data every 15 min from UniFi, Proxmox, Sonarr/Radarr/SABnzbd/Tautulli/Overseerr, Docker health (4 hosts), Cloudflare tunnels
+- Data cached in workflow static data (`$getWorkflowStaticData('global')`)
+- Webhook GET reads cache and responds with JSON + CORS headers
+- **nginx:alpine** container serves static HTML/CSS/JS dashboard
+- Dashboard fetches JSON from webhook, renders 4 sections
+
+### Workflow Nodes (18)
+
+| Path | Nodes |
+|------|-------|
+| Schedule | Every 15 min → Globals → [UniFi, PVE, Media, 5x Health SSH, 2x Tunnel SSH] → Merge (10 inputs) → Cache Results |
+| Webhook | GET → Read Cache → Respond to Webhook (JSON + CORS) |
+
+### Dashboard Sections
+
+| Section | Content |
+|---------|---------|
+| Network | WAN status/IP/latency, WAN2, gateway stats, speedtest, APs/switches, WiFi clients, Cloudflare tunnels |
+| Proxmox | Per-node cards (CPU/mem/disk bars + uptime), VM/CT counts, cluster totals |
+| Services | Per-host container grids with colored status chips, summary bar |
+| Media | Active Plex streams, today's Sonarr episodes, Radarr queue, SABnzbd status, Overseerr requests |
+
+### Globals Added
+
+- `TAUTULLI_URL` — Tautulli base URL
+- `TAUTULLI_API_KEY` — Tautulli API key
+- Total Homelab Constants: 32
+
+### Issues Fixed
+
+- **Host detection**: Initial code used container name heuristics to identify SSH host output, failed when cadre had cloudflare tunnel containers. Fixed by adding `echo "HOST:<hostname>"` prefix to each health SSH command.
+- **Sonarr series names**: Episodes showed "Unknown" because Sonarr `/api/v3/calendar` doesn't include series object by default. Fixed by adding `&includeSeries=true` query parameter.
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `n8n/workflows/homelab-status-api.json` | 18-node n8n workflow |
+| `status-dashboard/docker-compose.yml` | nginx container with REVP label |
+| `status-dashboard/nginx.conf` | Static file serving + gzip |
+| `status-dashboard/html/index.html` | Dashboard page structure |
+| `status-dashboard/html/style.css` | Dark theme (`#0d1117`) + responsive grid |
+| `status-dashboard/html/app.js` | Fetch + render logic, 60s auto-refresh |
+
+### Commits
+
+- `ff23b02` — Add Homelab Status Dashboard and API workflow
+- `9a4eee5` — Fix host detection in status API workflow
+- `abdd5e6` — Add includeSeries parameter to Sonarr calendar API call
+
+### Verification
+
+- Webhook returns complete JSON (network, proxmox, services, media)
+- 36/36 containers running across 4 hosts (arr, cadre, plex, utilities)
+- 3 PVE nodes online, 7 VMs, 4 CTs
+- Sonarr series names display correctly
+- Dashboard auto-refreshes with green pulse indicator
+- Mobile responsive (single column on narrow screens)
+
+### Known Issues
+
+- **HTTPS cert**: `CF_DNS_API_TOKEN` is empty in Traefik's `.env` on cadre — new certs can't be issued. Existing certs work from cache. Pre-existing issue affecting any new subdomains.
+- **iot host**: Not shown in services because no Docker containers are running on iot (expected behavior).
+
+---
+
 ## Outstanding Items
 
 - **Gotify decommission**: No workflows reference Gotify anymore. Consider removing the Gotify container from utilities and cleaning up Global Constants / credentials.
+- **HTTPS cert provisioning**: Fix `CF_DNS_API_TOKEN` in Traefik's `.env` on cadre to allow new Let's Encrypt certificates to be issued.
 
 ---
 

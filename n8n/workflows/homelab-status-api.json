@@ -6,8 +6,8 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 15
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
             }
           ]
         }
@@ -138,7 +138,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "command": "echo \"HOST:arr\"; docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
         "authentication": "privateKey",
         "options": {}
       },
@@ -159,7 +159,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "command": "echo \"HOST:plex\"; docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
         "authentication": "privateKey",
         "options": {}
       },
@@ -180,7 +180,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "command": "echo \"HOST:cadre\"; docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
         "authentication": "privateKey",
         "options": {}
       },
@@ -201,7 +201,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "command": "echo \"HOST:utilities\"; docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
         "authentication": "privateKey",
         "options": {}
       },
@@ -222,7 +222,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
+        "command": "echo \"HOST:iot\"; docker ps -a --format json | jq -r '[.Names, .State, .Status] | join(\"|\")'",
         "authentication": "privateKey",
         "options": {}
       },
@@ -253,7 +253,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\n// Parse structured data from Code nodes\nlet network = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {}, tunnels: [] };\nlet proxmox = { nodes: [], totals: {} };\nlet media = {};\nconst serviceHosts = [];\n\nconst hostMap = {\n  'hsa-health-arr': 'arr',\n  'hsa-health-plex': 'plex',\n  'hsa-health-cadre': 'cadre',\n  'hsa-health-utilities': 'utilities',\n  'hsa-health-iot': 'iot'\n};\n\n// Track which hosts we've seen for services\nconst hostContainers = {};\nfor (const h of Object.values(hostMap)) hostContainers[h] = [];\n\nlet totalContainers = 0, running = 0, unhealthy = 0, stopped = 0;\n\nconst expectedTunnels = ['cloudflare-plex', 'cloudflare-overseerr', 'cloudflared-gotify', 'cloudflare-dockhand'];\nconst foundTunnels = {};\n\nfor (const item of items) {\n  const d = item.json;\n\n  // Code node structured data\n  if (d.type === 'unifi') {\n    network = { ...network, ...d.data };\n  } else if (d.type === 'pve') {\n    proxmox = d.data;\n  } else if (d.type === 'media') {\n    media = d.data;\n  } else if (d.stdout !== undefined) {\n    // SSH node output - determine source by checking connection path\n    const stdout = (d.stdout || '').trim();\n    if (!stdout) continue;\n    const lines = stdout.split('\\n').filter(l => l.length > 0);\n\n    // Check if this is tunnel data (has cloudflare in names)\n    const isTunnel = lines.some(l => l.includes('cloudflare'));\n    if (isTunnel) {\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        if (name) foundTunnels[name] = state;\n      }\n    } else {\n      // Container health data - figure out which host based on container names\n      const containers = [];\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        if (name) {\n          containers.push({ name, state, status });\n          totalContainers++;\n          if (state === 'running') running++;\n          else if (state === 'exited' || state === 'dead') stopped++;\n          if (status.includes('unhealthy')) unhealthy++;\n        }\n      }\n      // Match host by known container names\n      const names = containers.map(c => c.name);\n      let host = 'unknown';\n      if (names.some(n => n === 'sonarr' || n === 'radarr')) host = 'arr';\n      else if (names.some(n => n === 'plex')) host = 'plex';\n      else if (names.some(n => n === 'traefik' || n.includes('zigbee2mqtt'))) host = 'cadre';\n      else if (names.some(n => n === 'n8n' || n === 'dockhand' || n === 'homepage')) host = 'utilities';\n      else if (names.some(n => n.includes('homeassistant') || n.includes('mosquitto'))) host = 'iot';\n      else if (containers.length > 0) {\n        // Try to match by any remaining host\n        const usedHosts = serviceHosts.map(h => h.name);\n        const available = Object.values(hostMap).filter(h => !usedHosts.includes(h));\n        if (available.length > 0) host = available[0];\n      }\n      if (host !== 'unknown') {\n        serviceHosts.push({ name: host, containers });\n      }\n    }\n  }\n}\n\n// Build tunnel list\nfor (const tunnel of expectedTunnels) {\n  const state = foundTunnels[tunnel] || 'not found';\n  network.tunnels.push({ name: tunnel, state });\n}\n\nconst cachedStatus = {\n  lastUpdated: new Date().toISOString(),\n  network,\n  proxmox,\n  services: {\n    hosts: serviceHosts.sort((a, b) => a.name.localeCompare(b.name)),\n    summary: { totalContainers, running, unhealthy, stopped }\n  },\n  media\n};\n\nstaticData.cachedStatus = JSON.stringify(cachedStatus);\n\nreturn [{ json: { cached: true, lastUpdated: cachedStatus.lastUpdated } }];"
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\nlet network = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {}, tunnels: [] };\nlet proxmox = { nodes: [], totals: {} };\nlet media = {};\nconst serviceHosts = [];\nlet totalContainers = 0, running = 0, unhealthy = 0, stopped = 0;\n\nconst expectedTunnels = ['cloudflare-plex', 'cloudflare-overseerr', 'cloudflared-gotify', 'cloudflare-dockhand'];\nconst foundTunnels = {};\n\nfor (const item of items) {\n  const d = item.json;\n\n  if (d.type === 'unifi') {\n    network = { ...network, ...d.data };\n  } else if (d.type === 'pve') {\n    proxmox = d.data;\n  } else if (d.type === 'media') {\n    media = d.data;\n  } else if (d.stdout !== undefined) {\n    const stdout = (d.stdout || '').trim();\n    if (!stdout) continue;\n    const lines = stdout.split('\\n').filter(l => l.length > 0);\n\n    // Check for HOST: prefix (container health data)\n    if (lines[0] && lines[0].startsWith('HOST:')) {\n      const host = lines[0].replace('HOST:', '').trim();\n      const containers = [];\n      for (let i = 1; i < lines.length; i++) {\n        const parts = lines[i].split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        if (name) {\n          containers.push({ name, state, status });\n          totalContainers++;\n          if (state === 'running') running++;\n          else if (state === 'exited' || state === 'dead') stopped++;\n          if (status.includes('unhealthy')) unhealthy++;\n        }\n      }\n      if (containers.length > 0) {\n        serviceHosts.push({ name: host, containers });\n      }\n    } else {\n      // Tunnel data (cloudflare container status)\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        if (name) foundTunnels[name] = state;\n      }\n    }\n  }\n}\n\nfor (const tunnel of expectedTunnels) {\n  const state = foundTunnels[tunnel] || 'not found';\n  network.tunnels.push({ name: tunnel, state });\n}\n\nconst cachedStatus = {\n  lastUpdated: new Date().toISOString(),\n  network,\n  proxmox,\n  services: {\n    hosts: serviceHosts.sort((a, b) => a.name.localeCompare(b.name)),\n    summary: { totalContainers, running, unhealthy, stopped }\n  },\n  media\n};\n\nstaticData.cachedStatus = JSON.stringify(cachedStatus);\n\nreturn [{ json: { cached: true, lastUpdated: cachedStatus.lastUpdated } }];"
       },
       "id": "hsa-cache",
       "name": "Cache Results",

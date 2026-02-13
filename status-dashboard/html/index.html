@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Homelab Status</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,33 +20,36 @@
     </div>
   </header>
 
+  <nav class="tab-nav" id="tab-nav">
+    <button class="tab active" data-tab="network">Network</button>
+    <button class="tab" data-tab="proxmox">Proxmox</button>
+    <button class="tab" data-tab="services">Services</button>
+    <button class="tab" data-tab="media">Media</button>
+  </nav>
+
   <main id="dashboard">
-    <!-- Network -->
-    <section class="card" id="network-card">
+    <section class="card tab-panel active" id="network-card">
       <h2>Network</h2>
       <div class="card-body" id="network-body">
         <div class="loading">Loading...</div>
       </div>
     </section>
 
-    <!-- Proxmox -->
-    <section class="card" id="proxmox-card">
+    <section class="card tab-panel" id="proxmox-card">
       <h2>Proxmox</h2>
       <div class="card-body" id="proxmox-body">
         <div class="loading">Loading...</div>
       </div>
     </section>
 
-    <!-- Services -->
-    <section class="card" id="services-card">
+    <section class="card tab-panel" id="services-card">
       <h2>Services</h2>
       <div class="card-body" id="services-body">
         <div class="loading">Loading...</div>
       </div>
     </section>
 
-    <!-- Media -->
-    <section class="card" id="media-card">
+    <section class="card tab-panel" id="media-card">
       <h2>Media</h2>
       <div class="card-body" id="media-body">
         <div class="loading">Loading...</div>

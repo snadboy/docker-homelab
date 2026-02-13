@@ -3,6 +3,26 @@ const REFRESH_INTERVAL = 60000;
 
 let lastData = null;
 let fetchError = false;
+let servicesSortBy = 'name'; // 'name' or 'host'
+
+// ---- Tab Navigation ----
+
+function initTabs() {
+  const nav = document.getElementById('tab-nav');
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    const tabId = btn.dataset.tab;
+
+    nav.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`${tabId}-card`).classList.add('active');
+  });
+}
+
+// ---- Helpers ----
 
 function formatUptime(seconds) {
   if (!seconds) return '0m';
@@ -43,6 +63,8 @@ function deviceTypeName(type) {
   const map = { uap: 'AP', usw: 'Switch', udm: 'Gateway', ugw: 'Gateway', udb: 'Bridge' };
   return map[type] || type;
 }
+
+// ---- Render: Network ----
 
 function renderNetwork(data) {
   const n = data.network || {};
@@ -91,40 +113,20 @@ function renderNetwork(data) {
     </div>`;
   }
 
-  // Devices & WiFi
+  // Devices & WiFi — dropdowns directly under their stat rows
   if (n.devices) {
     html += '<div class="section-title">Devices & WiFi</div>';
+
+    const aps = n.devices.list ? n.devices.list.filter(d => d.type === 'uap') : [];
+    const switches = n.devices.list ? n.devices.list.filter(d => d.type === 'usw' || d.type === 'udb') : [];
+
+    // APs stat row
     html += `<div class="stat-row">
       <span class="stat-label">APs</span>
       <span class="stat-value">${n.devices.apsOnline}/${n.devices.apsTotal} online</span>
     </div>`;
-    html += `<div class="stat-row">
-      <span class="stat-label">Switches</span>
-      <span class="stat-value">${n.devices.switchesOnline}/${n.devices.switchesTotal} online</span>
-    </div>`;
-  }
 
-  if (n.wifi) {
-    html += `<div class="stat-row">
-      <span class="stat-label">WiFi Clients</span>
-      <span class="stat-value">${n.wifi.clients} (${n.wifi.avgSatisfaction}% avg sat)</span>
-    </div>`;
-    if (n.wifi.poorCount > 0 || n.wifi.weakSignal > 0) {
-      let warns = [];
-      if (n.wifi.poorCount > 0) warns.push(`${n.wifi.poorCount} poor`);
-      if (n.wifi.weakSignal > 0) warns.push(`${n.wifi.weakSignal} weak`);
-      html += `<div class="stat-row">
-        <span class="stat-label"></span>
-        <span class="stat-value status-warn">${warns.join(', ')}</span>
-      </div>`;
-    }
-  }
-
-  // Device detail tables - separate APs and Switches
-  if (n.devices?.list && n.devices.list.length > 0) {
-    const aps = n.devices.list.filter(d => d.type === 'uap');
-    const switches = n.devices.list.filter(d => d.type === 'usw' || d.type === 'udb');
-
+    // AP detail dropdown directly under
     if (aps.length > 0) {
       const offlineAps = aps.filter(d => d.state !== 1).length;
       const apBadge = offlineAps > 0 ? `<span class="dropdown-alert error">${offlineAps}</span>` : '';
@@ -147,6 +149,13 @@ function renderNetwork(data) {
       html += '</table></details>';
     }
 
+    // Switches stat row
+    html += `<div class="stat-row">
+      <span class="stat-label">Switches</span>
+      <span class="stat-value">${n.devices.switchesOnline}/${n.devices.switchesTotal} online</span>
+    </div>`;
+
+    // Switch detail dropdown directly under
     if (switches.length > 0) {
       const offlineSwitches = switches.filter(d => d.state !== 1).length;
       const swBadge = offlineSwitches > 0 ? `<span class="dropdown-alert error">${offlineSwitches}</span>` : '';
@@ -166,6 +175,23 @@ function renderNetwork(data) {
         </tr>`;
       }
       html += '</table></details>';
+    }
+  }
+
+  // WiFi stats (after device entries)
+  if (n.wifi) {
+    html += `<div class="stat-row">
+      <span class="stat-label">WiFi Clients</span>
+      <span class="stat-value">${n.wifi.clients} (${n.wifi.avgSatisfaction}% avg sat)</span>
+    </div>`;
+    if (n.wifi.poorCount > 0 || n.wifi.weakSignal > 0) {
+      let warns = [];
+      if (n.wifi.poorCount > 0) warns.push(`${n.wifi.poorCount} poor`);
+      if (n.wifi.weakSignal > 0) warns.push(`${n.wifi.weakSignal} weak`);
+      html += `<div class="stat-row">
+        <span class="stat-label"></span>
+        <span class="stat-value status-warn">${warns.join(', ')}</span>
+      </div>`;
     }
   }
 
@@ -209,6 +235,8 @@ function renderNetwork(data) {
 
   document.getElementById('network-body').innerHTML = html;
 }
+
+// ---- Render: Proxmox ----
 
 function renderProxmox(data) {
   const p = data.proxmox || {};
@@ -311,44 +339,66 @@ function renderProxmox(data) {
   document.getElementById('proxmox-body').innerHTML = html;
 }
 
+// ---- Render: Services (flat list with sort toggle) ----
+
 function renderServices(data) {
   const s = data.services || {};
   let html = '';
 
+  // Flatten all containers from all hosts into one list
+  const allContainers = [];
   for (const host of (s.hosts || [])) {
-    const sorted = [...(host.containers || [])].sort((a, b) => {
-      if (a.state === 'running' && b.state !== 'running') return -1;
-      if (a.state !== 'running' && b.state === 'running') return 1;
+    for (const c of (host.containers || [])) {
+      allContainers.push({ ...c, host: host.name });
+    }
+  }
+
+  // Sort toggle
+  const byNameActive = servicesSortBy === 'name' ? 'active' : '';
+  const byHostActive = servicesSortBy === 'host' ? 'active' : '';
+  html += `<div class="sort-toggle">
+    <span class="sort-label">Sort:</span>
+    <button class="sort-btn ${byNameActive}" data-sort="name">Service</button>
+    <button class="sort-btn ${byHostActive}" data-sort="host">Host | Service</button>
+  </div>`;
+
+  // Sort the flat list
+  if (servicesSortBy === 'host') {
+    allContainers.sort((a, b) => {
+      const hostCmp = a.host.localeCompare(b.host);
+      if (hostCmp !== 0) return hostCmp;
       return a.name.localeCompare(b.name);
     });
-
-    const containerCount = sorted.length;
-    const problemCount = sorted.filter(c => c.state !== 'running' || (c.status || '').includes('unhealthy')).length;
-    const svcBadge = problemCount > 0 ? `<span class="dropdown-alert error">${problemCount}</span>` : '';
-
-    html += `<details class="detail-dropdown" open>
-      <summary class="detail-summary">
-        <span>${host.name}</span>
-        <span style="font-size:12px">${containerCount} containers${svcBadge}</span>
-      </summary>`;
-
-    // Container detail table
-    html += `<table class="detail-table">
-      <tr><th>Container</th><th>Version</th><th>Up Since</th><th>Status</th></tr>`;
-    for (const c of sorted) {
-      const isStopped = c.state !== 'running';
-      const isUnhealthy = (c.status || '').includes('unhealthy');
-      const rowCls = isStopped ? ' class="stopped"' : isUnhealthy ? ' class="warn"' : '';
-      const upSince = c.status || '';
-      html += `<tr${rowCls}>
-        <td>${c.name}</td>
-        <td>${c.version || '-'}${c.hasUpdate ? ' <span class="update-badge">&uarr;</span>' : ''}</td>
-        <td>${upSince}</td>
-        <td>${c.state}</td>
-      </tr>`;
-    }
-    html += '</table></details>';
+  } else {
+    allContainers.sort((a, b) => a.name.localeCompare(b.name));
   }
+
+  // Problems float to top within sort order
+  allContainers.sort((a, b) => {
+    const aProblem = a.state !== 'running' || (a.status || '').includes('unhealthy');
+    const bProblem = b.state !== 'running' || (b.status || '').includes('unhealthy');
+    if (aProblem && !bProblem) return -1;
+    if (!aProblem && bProblem) return 1;
+    return 0;
+  });
+
+  // Container table
+  html += `<table class="detail-table">
+    <tr><th>Service</th><th>Host</th><th>Version</th><th>Up Since</th><th>Status</th></tr>`;
+  for (const c of allContainers) {
+    const isStopped = c.state !== 'running';
+    const isUnhealthy = (c.status || '').includes('unhealthy');
+    const rowCls = isStopped ? ' class="stopped"' : isUnhealthy ? ' class="warn"' : '';
+    const upSince = c.status || '';
+    html += `<tr${rowCls}>
+      <td>${c.name}</td>
+      <td>${c.host}</td>
+      <td>${c.version || '-'}${c.hasUpdate ? ' <span class="update-badge">&uarr;</span>' : ''}</td>
+      <td>${upSince}</td>
+      <td>${c.state}</td>
+    </tr>`;
+  }
+  html += '</table>';
 
   if (s.summary) {
     const sm = s.summary;
@@ -360,7 +410,17 @@ function renderServices(data) {
   }
 
   document.getElementById('services-body').innerHTML = html;
+
+  // Attach sort toggle handlers
+  document.querySelectorAll('#services-body .sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      servicesSortBy = btn.dataset.sort;
+      renderServices(lastData);
+    });
+  });
 }
+
+// ---- Render: Media ----
 
 function renderMedia(data) {
   const m = data.media || {};
@@ -428,13 +488,15 @@ function renderMedia(data) {
   html += '<div class="media-subsection">';
   html += '<div class="section-title">Overseerr</div>';
   html += `<div class="stat-row">
-    <span class="stat-label">Pending Requests</span>
+    <span class="stat-label">Processing Requests</span>
     <span class="stat-value">${m.overseerr?.pendingRequests || 0}</span>
   </div>`;
   html += '</div>';
 
   document.getElementById('media-body').innerHTML = html;
 }
+
+// ---- Render All ----
 
 function render(data) {
   renderNetwork(data);
@@ -472,6 +534,9 @@ async function fetchData() {
     updateHeader(lastData);
   }
 }
+
+// Init
+initTabs();
 
 // Update the "Updated Xm ago" text every 10 seconds
 setInterval(() => updateHeader(lastData), 10000);

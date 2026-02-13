@@ -23,7 +23,10 @@ function timeAgo(isoString) {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours === 1) return '1h ago';
-  return `${hours}h ago`;
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return '1d ago';
+  return `${days}d ago`;
 }
 
 function barClass(pct) {
@@ -45,19 +48,34 @@ function renderNetwork(data) {
   const n = data.network || {};
   let html = '';
 
-  // WAN Status
+  // WAN Status with inline speedtest
   html += '<div class="section-title">WAN</div>';
   const wanOk = n.wan?.status === 'ok';
   html += `<div class="stat-row">
     <span class="stat-label"><span class="status-dot ${wanOk ? 'ok' : 'error'}"></span>WAN (${n.wan?.isp || 'Unknown'})</span>
     <span class="stat-value">${n.wan?.ip || 'N/A'} / ${n.wan?.latency || 0}ms</span>
   </div>`;
+  if (n.speedtest?.wan) {
+    const s = n.speedtest.wan;
+    html += `<div class="stat-row sub-row">
+      <span class="stat-label"></span>
+      <span class="stat-value dim">${s.down}&darr; / ${s.up}&uarr; Mbps</span>
+    </div>`;
+  }
 
   if (n.wan2) {
+    const wan2Label = n.wan2.ip ? `${n.wan2.ip} / ${n.wan2.latency || 0}ms` : `Standby / ${n.wan2.latency || 0}ms`;
     html += `<div class="stat-row">
       <span class="stat-label"><span class="status-dot ok"></span>WAN2 (Backup)</span>
-      <span class="stat-value">${n.wan2.ip ? n.wan2.ip + ' / ' : ''}${n.wan2.latency || 0}ms</span>
+      <span class="stat-value">${wan2Label}</span>
     </div>`;
+    if (n.speedtest?.wan2) {
+      const s = n.speedtest.wan2;
+      html += `<div class="stat-row sub-row">
+        <span class="stat-label"></span>
+        <span class="stat-value dim">${s.down}&darr; / ${s.up}&uarr; Mbps</span>
+      </div>`;
+    }
   }
 
   // Gateway
@@ -71,25 +89,6 @@ function renderNetwork(data) {
       <span class="stat-label">CPU / Mem / Uptime</span>
       <span class="stat-value">${Math.round(n.gateway.cpu || 0)}% / ${Math.round(n.gateway.mem || 0)}% / ${formatUptime(n.gateway.uptime)}</span>
     </div>`;
-  }
-
-  // Speedtest
-  if (n.speedtest) {
-    html += '<div class="section-title">Last Speedtest</div>';
-    if (n.speedtest.wan) {
-      const s = n.speedtest.wan;
-      html += `<div class="stat-row">
-        <span class="stat-label">WAN</span>
-        <span class="stat-value">${s.down}&darr; / ${s.up}&uarr; Mbps (${s.latency}ms)</span>
-      </div>`;
-    }
-    if (n.speedtest.wan2) {
-      const s = n.speedtest.wan2;
-      html += `<div class="stat-row">
-        <span class="stat-label">WAN2</span>
-        <span class="stat-value">${s.down}&darr; / ${s.up}&uarr; Mbps (${s.latency}ms)</span>
-      </div>`;
-    }
   }
 
   // Devices & WiFi
@@ -121,37 +120,91 @@ function renderNetwork(data) {
     }
   }
 
-  // Device detail table
+  // Device detail tables - separate APs and Switches
   if (n.devices?.list && n.devices.list.length > 0) {
-    const devCount = n.devices.list.length;
-    html += `<details class="detail-dropdown">
-      <summary class="detail-summary">${devCount} devices</summary>
-      <table class="detail-table">
-        <tr><th>Name</th><th>Type</th><th>IP</th><th>Status</th><th>Clients</th><th>Uptime</th></tr>`;
-    for (const d of n.devices.list) {
-      const online = d.state === 1;
-      const cls = !online ? ' class="stopped"' : (d.satisfaction !== undefined && d.satisfaction < 50) ? ' class="warn"' : '';
-      html += `<tr${cls}>
-        <td>${d.name}</td>
-        <td>${deviceTypeName(d.type)}</td>
-        <td>${d.ip}</td>
-        <td><span class="status-dot ${online ? 'ok' : 'error'}"></span>${online ? 'Online' : 'Offline'}</td>
-        <td>${d.clients || 0}</td>
-        <td>${formatUptime(d.uptime)}</td>
-      </tr>`;
+    const aps = n.devices.list.filter(d => d.type === 'uap');
+    const switches = n.devices.list.filter(d => d.type === 'usw' || d.type === 'udb');
+
+    if (aps.length > 0) {
+      const offlineAps = aps.filter(d => d.state !== 1).length;
+      const apBadge = offlineAps > 0 ? `<span class="dropdown-alert error">${offlineAps}</span>` : '';
+      html += `<details class="detail-dropdown">
+        <summary class="detail-summary">${aps.length} APs${apBadge}</summary>
+        <table class="detail-table">
+          <tr><th>Name</th><th>IP</th><th>Clients</th><th>Sat%</th><th>Uptime</th><th>Status</th></tr>`;
+      for (const d of aps) {
+        const online = d.state === 1;
+        const cls = !online ? ' class="stopped"' : (d.satisfaction !== undefined && d.satisfaction < 50) ? ' class="warn"' : '';
+        html += `<tr${cls}>
+          <td>${d.name}</td>
+          <td>${d.ip}</td>
+          <td>${d.clients || 0}</td>
+          <td>${d.satisfaction !== undefined ? d.satisfaction + '%' : '-'}</td>
+          <td>${formatUptime(d.uptime)}</td>
+          <td><span class="status-dot ${online ? 'ok' : 'error'}"></span>${online ? 'Online' : 'Offline'}</td>
+        </tr>`;
+      }
+      html += '</table></details>';
     }
-    html += '</table></details>';
+
+    if (switches.length > 0) {
+      const offlineSwitches = switches.filter(d => d.state !== 1).length;
+      const swBadge = offlineSwitches > 0 ? `<span class="dropdown-alert error">${offlineSwitches}</span>` : '';
+      html += `<details class="detail-dropdown">
+        <summary class="detail-summary">${switches.length} Switches${swBadge}</summary>
+        <table class="detail-table">
+          <tr><th>Name</th><th>IP</th><th>Clients</th><th>Uptime</th><th>Status</th></tr>`;
+      for (const d of switches) {
+        const online = d.state === 1;
+        const cls = !online ? ' class="stopped"' : '';
+        html += `<tr${cls}>
+          <td>${d.name}</td>
+          <td>${d.ip}</td>
+          <td>${d.clients || 0}</td>
+          <td>${formatUptime(d.uptime)}</td>
+          <td><span class="status-dot ${online ? 'ok' : 'error'}"></span>${online ? 'Online' : 'Offline'}</td>
+        </tr>`;
+      }
+      html += '</table></details>';
+    }
   }
 
-  // Tunnels
+  // Tunnels with uptime
   if (n.tunnels && n.tunnels.length > 0) {
     html += '<div class="section-title">Cloudflare Tunnels</div>';
     html += '<div class="tunnel-grid">';
     for (const t of n.tunnels) {
       const ok = t.state === 'running';
-      html += `<span class="tunnel-chip ${ok ? 'ok' : 'down'}">${ok ? '&check;' : '&cross;'} ${tunnelName(t.name)}</span>`;
+      let uptime = '';
+      if (t.status) {
+        const m = t.status.match(/Up\s+(.+?)(?:\s*\(|$)/);
+        if (m) uptime = ` (${m[1].trim()})`;
+      }
+      html += `<span class="tunnel-chip ${ok ? 'ok' : 'down'}">${ok ? '&check;' : '&cross;'} ${tunnelName(t.name)}${uptime}</span>`;
     }
     html += '</div>';
+  }
+
+  // Storage (NAS)
+  if (data.storage && data.storage.length > 0) {
+    html += '<div class="section-title">Storage</div>';
+    for (const nas of data.storage) {
+      html += `<div class="stat-row">
+        <span class="stat-label"><span class="status-dot ${nas.status === 'online' ? 'ok' : 'error'}"></span>${nas.name}</span>
+        <span class="stat-value">${nas.status === 'online' ? 'Online' : 'Offline'}</span>
+      </div>`;
+      if (nas.volumes) {
+        for (const vol of nas.volumes) {
+          html += `<div class="pbs-ds">
+            <div class="pbs-ds-header">
+              <span>${vol.name}</span>
+              <span>${vol.usedGB} / ${vol.totalGB} GB (${vol.usedPct}%)</span>
+            </div>
+            <div class="bar"><div class="bar-fill disk ${barClass(vol.usedPct)}" style="width:${vol.usedPct}%"></div></div>
+          </div>`;
+        }
+      }
+    }
   }
 
   document.getElementById('network-body').innerHTML = html;
@@ -193,8 +246,10 @@ function renderProxmox(data) {
       if (ctCount > 0) guestParts.push(`${node.ctsRunning}/${ctCount} CTs`);
 
       if (guests.length > 0) {
+        const stoppedGuests = guests.filter(g => g.status !== 'running').length;
+        const guestBadge = stoppedGuests > 0 ? `<span class="dropdown-alert warn">${stoppedGuests}</span>` : '';
         html += `<details class="detail-dropdown">
-          <summary class="detail-summary">${guestParts.join(', ')}</summary>
+          <summary class="detail-summary">${guestParts.join(', ')}${guestBadge}</summary>
           <table class="detail-table">
             <tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th><th>CPU</th><th>Mem</th></tr>`;
         for (const g of guests) {
@@ -239,6 +294,10 @@ function renderProxmox(data) {
           const gcTime = ds.gcLastRun ? new Date(ds.gcLastRun * 1000).toLocaleDateString() : 'never';
           html += `<div class="pbs-gc">GC: ${ds.gcState} (${gcTime})</div>`;
         }
+        if (ds.lastBackups && ds.lastBackups.length > 0) {
+          const backupTimes = ds.lastBackups.map(b => timeAgo(new Date(b.time * 1000).toISOString())).join(' &middot; ');
+          html += `<div class="pbs-gc">Last backups: ${backupTimes}</div>`;
+        }
         html += '</div>';
       }
       html += '</div>';
@@ -264,31 +323,22 @@ function renderServices(data) {
     });
 
     const containerCount = sorted.length;
+    const problemCount = sorted.filter(c => c.state !== 'running' || (c.status || '').includes('unhealthy')).length;
+    const svcBadge = problemCount > 0 ? `<span class="dropdown-alert error">${problemCount}</span>` : '';
 
     html += `<details class="detail-dropdown" open>
       <summary class="detail-summary">
         <span>${host.name}</span>
-        <span style="font-size:12px">${containerCount} containers</span>
-      </summary>
-      <div class="chip-grid" style="margin-top:6px">`;
-
-    for (const c of sorted) {
-      const isUnhealthy = (c.status || '').includes('unhealthy');
-      let cls = c.state;
-      if (isUnhealthy) cls = 'unhealthy';
-      const updateCls = c.hasUpdate ? ' has-update' : '';
-      html += `<span class="chip ${cls}${updateCls}" title="${c.status}">${c.name}${c.hasUpdate ? '<span class="update-badge">&uarr;</span>' : ''}</span>`;
-    }
-
-    html += '</div>';
+        <span style="font-size:12px">${containerCount} containers${svcBadge}</span>
+      </summary>`;
 
     // Container detail table
     html += `<table class="detail-table">
       <tr><th>Container</th><th>Version</th><th>Up Since</th><th>Status</th></tr>`;
     for (const c of sorted) {
       const isStopped = c.state !== 'running';
-      const rowCls = isStopped ? ' class="stopped"' : '';
-      // Parse uptime from status like "Up 3 hours (healthy)"
+      const isUnhealthy = (c.status || '').includes('unhealthy');
+      const rowCls = isStopped ? ' class="stopped"' : isUnhealthy ? ' class="warn"' : '';
       const upSince = c.status || '';
       html += `<tr${rowCls}>
         <td>${c.name}</td>

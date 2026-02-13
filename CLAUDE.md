@@ -478,9 +478,68 @@ Volume path: `/var/lib/docker/volumes/traefik-http-provider-config/_data/` on ca
 
 ---
 
-## Outstanding Items
+## Status Dashboard Enhancements (2026-02-12)
 
-None.
+**Status:** ✅ Complete
+
+Comprehensive overhaul of the homelab status dashboard (`status.isnadboy.com`).
+
+### HTTPS Fix
+
+Removed duplicate static route for `status.isnadboy.com` from Traefik HTTP provider (container label route already existed). Also recreated Traefik container to pick up `CF_DNS_API_TOKEN` env var. Cert now valid: Let's Encrypt R13.
+
+### Frontend Changes (app.js + style.css)
+
+| Change | Details |
+|--------|---------|
+| WAN + Speedtest merged | Inline speedtest sub-rows under each WAN entry; removed separate "Last Speedtest" section |
+| WAN2 standby | Shows "Standby / Xms" when no IP assigned |
+| AP/Switch split | Separate dropdown tables for APs (with Satisfaction%) and Switches |
+| Tunnel uptime | Parses "Up X hours/days" from Docker status, shown next to tunnel chip |
+| Services chips removed | Only detail tables remain (Container/Version/Up Since/Status) |
+| Dropdown error badges | Red/yellow badges on collapsed dropdowns showing problem counts |
+| PBS last backups | Shows 3 most recent backup times per datastore |
+| Storage section | Placeholder for NAS stats (no backend data yet) |
+| CSS additions | `.dropdown-alert`, `.stat-row.sub-row`, `.stat-value.dim` |
+
+### Backend Changes (n8n workflow)
+
+| Change | Details |
+|--------|---------|
+| Tunnel status | SSH output now includes Docker Status field; Cache Results stores `{state, status}` |
+| Overseerr fix | Uses `pageInfo.results` for accurate pending count |
+| cloud-pbs | New Code node queries PBS REST API; uses `ds.store` (not `ds.name`); friendly datastore name |
+| PBS snapshots | SSH commands now use local PBS API (`curl` with `status-dashboard` token) instead of `proxmox-backup-client` |
+| Merge inputs | 13 → 14 (added cloud-pbs at index 13) |
+| Workflow nodes | 20 → 22 |
+
+### PBS API Tokens Created
+
+| Server | Token ID | ACL | Token File |
+|--------|----------|-----|------------|
+| svalbard | `root@pam!status-dashboard` | Admin at `/` | `/etc/proxmox-backup/status-dashboard-token.txt` |
+| alexandria | `root@pam!status-dashboard` | Admin at `/` | `/etc/proxmox-backup/status-dashboard-token.txt` |
+
+### Globals Credential Updated
+
+Added 2 constants (now 32 total):
+- `CLOUD_PBS_URL=https://sh15-226.prod.cloud-pbs.com:8007`
+- `CLOUD_PBS_TOKEN=9094815d6a404b2ca0a6@pbs!homepage-token:...`
+
+### Traefik HTTP Provider Skill
+
+Added cert verification step and duplicate route warning to static route section.
+
+### Files Changed
+
+- `status-dashboard/html/app.js` — All frontend rendering changes
+- `status-dashboard/html/style.css` — Dropdown badges, sub-row styling
+- `n8n/workflows/homelab-status-api.json` — Tunnel status, Overseerr, PBS snapshots, cloud-pbs
+- `/mnt/shareables/.claude/skills/traefik-http-provider/skill.md` — Cert verification
+
+### Outstanding Items
+
+- **NAS storage stats**: UniFi NAS needs SSH enabled; Synology needs SSH key authorized. Frontend code is ready.
 
 ---
 

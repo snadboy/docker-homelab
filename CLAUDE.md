@@ -586,10 +586,82 @@ Added a "Coding Standards" section to `/mnt/shareables/.claude/skills/n8n/skill.
 
 ---
 
+## Consolidated Health Alert (2026-02-14)
+
+**Status:** ✅ Complete
+
+Replaced 7 separate monitoring/reporting workflows with a single Homelab Health Alert that reads cached data from the Status API.
+
+### New Workflow: Homelab Health Alert
+
+| Property | Value |
+|----------|-------|
+| Workflow ID | YP0wUZQB8DOfJgTA |
+| File | homelab-health-alert.json |
+| Schedule | Every 15 min at offset (`2/15 * * * *` → :02, :17, :32, :47) |
+| Nodes | 7 (Schedule + HTTP Request + Evaluate + Format + If + Discord + NoOp) |
+| Notification | Discord (on alert/recovery only) |
+
+**How it works:**
+1. Fetches cached status data from Status API webhook (`http://localhost:5678/webhook/homelab-status`)
+2. Evaluates all health thresholds (network, proxmox, services, containers, infra)
+3. 1-hour cooldown per alert key (no spam)
+4. Recovery notifications when previously alerted issues clear
+5. Single Discord embed: red for alerts, green for recovery
+
+### Health Thresholds
+
+| Category | Check | Threshold |
+|----------|-------|-----------|
+| Network | WAN status | != 'ok' |
+| Network | Gateway CPU/Memory | > 80% |
+| Network | Device offline | state != 1 |
+| Network | WiFi poor satisfaction | > 3 clients below 50% |
+| Network | Tunnel down | state != 'running' |
+| Proxmox | Node offline | status != 'online' |
+| Proxmox | Node memory | > 85% |
+| Proxmox | Node root disk | > 80% |
+| Proxmox | Node CPU | > 90% |
+| Proxmox | Expected guest stopped | VMIDs 103-114, 200 |
+| Proxmox | Guest memory | > 90% |
+| Services | Media API error | .error field present |
+| Containers | Unhealthy | status contains 'unhealthy' |
+| Containers | Restarting | state = 'restarting' |
+| Infra | Status API unavailable | no data returned |
+| Infra | Data staleness | cache > 20 min old |
+| Infra | Collection errors | collectionErrors array non-empty |
+
+### Status API Enhancement
+
+Added `collectionErrors` array to cached data in the Cache Results node. Tracks which data sources (unifi, pve, media-*) failed during collection, enabling the Health Alert to detect upstream failures.
+
+### Deactivated Workflows (7)
+
+| Workflow | ID | Reason |
+|----------|-----|--------|
+| Network Health Monitor | tFQDbJFTrwwYVJKu | Replaced by Health Alert (network thresholds) |
+| Network Daily Summary | ppH7nKbAfGkObNAk | Webpage is the summary |
+| Proxmox Health Monitor | Cs4Vu1hmLj82uBCQ | Replaced by Health Alert (PVE thresholds) |
+| Proxmox Daily Summary | Fc1CXcJUU3LZ46G2 | Webpage is the summary |
+| Arr Stack Health Check | qOZ6kS7MSlF9hOKb | Replaced by Health Alert (service error detection) |
+| Daily Homelab Report | 5fUpCHbIrTCOdZ6F | Webpage is the summary |
+| Daily Media Digest | puI2Gdj35nijpEey | Redundant with Daily Homelab Report |
+
+### Unchanged
+
+- **Weekly Version Audit** — runs weekly, collects unique data (GitHub releases, APT updates, Dockhand stacks)
+- **Status API** — continues as the single data collector + webpage backend
+
+### Files Changed
+- `n8n/workflows/homelab-health-alert.json` (new)
+- `n8n/workflows/homelab-status-api.json` (added collectionErrors to Cache Results)
+- `/mnt/shareables/.claude/skills/n8n/skill.md` (updated workflow table + WORKFLOW_MAP)
+
+---
+
 ## Outstanding Items
 
 - NAS storage stats for status dashboard (need SSH access to UniFi NAS and Synology)
-- Traefik HTTP provider skill — add cert verification step (plan item 11)
 
 ---
 

@@ -1,0 +1,210 @@
+{
+  "name": "Homelab Health Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "2/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "hha-schedule",
+      "name": "Every 15 min (offset)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/homelab-status",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hha-fetch",
+      "name": "Fetch Status API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.cooldowns) staticData.cooldowns = {};\nif (!staticData.activeAlerts) staticData.activeAlerts = {};\n\nconst now = Date.now();\nconst COOLDOWN_MS = 60 * 60 * 1000;\nconst currentIssues = [];\n\nfunction issue(key, category, message) {\n  currentIssues.push({ key, category, message });\n}\n\nif (!data || data.error) {\n  issue('status-api-unavailable', 'Infra', 'Status API returned no data');\n} else {\n  // Data staleness\n  const lastUpdated = new Date(data.lastUpdated).getTime();\n  if (now - lastUpdated > 20 * 60 * 1000) {\n    issue('data-stale', 'Infra', 'Status data is ' + Math.round((now - lastUpdated) / 60000) + ' min old (>20 min)');\n  }\n\n  // Collection errors\n  for (const err of (data.collectionErrors || [])) {\n    issue('collection-' + err.source, 'Infra', err.source + ' failed: ' + err.error);\n  }\n\n  // --- Network ---\n  const net = data.network || {};\n  if (net.wan && net.wan.status && net.wan.status !== 'ok') {\n    issue('wan-status', 'Network', 'WAN status: ' + net.wan.status);\n  }\n  if (net.gateway) {\n    if (net.gateway.cpu > 80) issue('gw-cpu', 'Network', 'Gateway CPU: ' + net.gateway.cpu + '% (>80%)');\n    if (net.gateway.mem > 80) issue('gw-mem', 'Network', 'Gateway memory: ' + net.gateway.mem + '% (>80%)');\n  }\n  if (net.devices && net.devices.list) {\n    for (const dev of net.devices.list) {\n      if (dev.state !== 1 && dev.state !== undefined) {\n        issue('dev-offline-' + dev.name, 'Network', dev.name + ' offline (' + dev.type + ')');\n      }\n    }\n  }\n  if (net.wifi && net.wifi.poorCount > 3) {\n    issue('wifi-poor', 'Network', net.wifi.poorCount + ' clients with satisfaction <50%');\n  }\n  if (net.tunnels) {\n    for (const t of net.tunnels) {\n      if (t.state !== 'running') {\n        issue('tunnel-' + t.name, 'Network', t.name + ' tunnel ' + t.state);\n      }\n    }\n  }\n\n  // --- Proxmox ---\n  const pve = data.proxmox || {};\n  const expectedGuests = ['103','104','105','106','108','109','110','112','113','114','200'];\n  for (const node of (pve.nodes || [])) {\n    if (node.status !== 'online') {\n      issue('pve-node-' + node.name, 'Proxmox', 'Node ' + node.name + ' ' + node.status);\n      continue;\n    }\n    if (node.memPct > 85) issue('pve-' + node.name + '-mem', 'Proxmox', node.name + ' memory: ' + node.memPct + '% (>85%)');\n    if (node.diskPct > 80) issue('pve-' + node.name + '-disk', 'Proxmox', node.name + ' root disk: ' + node.diskPct + '% (>80%)');\n    if (node.cpu > 90) issue('pve-' + node.name + '-cpu', 'Proxmox', node.name + ' CPU: ' + node.cpu + '% (>90%)');\n    for (const g of (node.guests || [])) {\n      const vmid = String(g.vmid);\n      if (g.status === 'stopped' && expectedGuests.includes(vmid)) {\n        issue('pve-guest-' + vmid, 'Proxmox', g.name + ' (' + g.type + ' ' + vmid + ') stopped');\n      }\n      if (g.status === 'running' && g.memPct > 90) {\n        issue('pve-guest-' + vmid + '-mem', 'Proxmox', g.name + ' memory: ' + g.memPct + '% (>90%)');\n      }\n    }\n  }\n\n  // --- Services ---\n  const media = data.media || {};\n  for (const [svc, info] of Object.entries(media)) {\n    if (info && typeof info === 'object' && info.error) {\n      issue('media-' + svc, 'Services', svc + ': ' + info.error);\n    }\n  }\n\n  // --- Containers ---\n  for (const host of ((data.services || {}).hosts || [])) {\n    for (const c of (host.containers || [])) {\n      if (c.status && c.status.includes('unhealthy')) {\n        issue('unhealthy-' + host.name + '-' + c.name, 'Containers', c.name + ' unhealthy on ' + host.name);\n      }\n      if (c.state === 'restarting') {\n        issue('restarting-' + host.name + '-' + c.name, 'Containers', c.name + ' restarting on ' + host.name);\n      }\n    }\n  }\n}\n\n// --- Cooldown filter ---\nconst newAlerts = [];\nfor (const iss of currentIssues) {\n  const lastNotified = staticData.cooldowns[iss.key] || 0;\n  if (now - lastNotified >= COOLDOWN_MS) {\n    newAlerts.push(iss);\n    staticData.cooldowns[iss.key] = now;\n  }\n}\n\n// --- Recovery detection ---\nconst currentKeys = new Set(currentIssues.map(i => i.key));\nconst recoveries = [];\nfor (const key of Object.keys(staticData.activeAlerts)) {\n  if (!currentKeys.has(key)) {\n    recoveries.push({ key, message: staticData.activeAlerts[key] });\n    delete staticData.activeAlerts[key];\n    delete staticData.cooldowns[key];\n  }\n}\n\n// Update active alerts\nfor (const iss of currentIssues) {\n  staticData.activeAlerts[iss.key] = iss.message;\n}\n\n// Clean stale cooldowns\nfor (const [k, v] of Object.entries(staticData.cooldowns)) {\n  if (now - v > 24 * 60 * 60 * 1000) delete staticData.cooldowns[k];\n}\n\nreturn [{ json: { alerts: newAlerts, recoveries, hasOutput: newAlerts.length > 0 || recoveries.length > 0, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "hha-evaluate",
+      "name": "Evaluate Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { alerts, recoveries, timestamp } = $json;\nconst sections = [];\n\nif (alerts.length > 0) {\n  const byCategory = {};\n  for (const a of alerts) {\n    if (!byCategory[a.category]) byCategory[a.category] = [];\n    byCategory[a.category].push(a.message);\n  }\n  for (const [cat, msgs] of Object.entries(byCategory)) {\n    sections.push('**' + cat + '**\\n' + msgs.map(m => '\\u2022 ' + m).join('\\n'));\n  }\n}\n\nif (recoveries.length > 0) {\n  sections.push('**Recovered**\\n' + recoveries.map(r => '\\u2705 ' + r.message).join('\\n'));\n}\n\nconst hasAlerts = alerts.length > 0;\nconst title = hasAlerts ? '\\u26a0\\ufe0f Homelab Health Alert' : '\\u2705 Homelab Recovery';\nconst color = hasAlerts ? 15158332 : 3066993;\nconst parts = [];\nif (alerts.length > 0) parts.push(alerts.length + ' alert(s)');\nif (recoveries.length > 0) parts.push(recoveries.length + ' recovered');\n\nreturn [{ json: { hasOutput: sections.length > 0, title, description: sections.join('\\n\\n'), color, footer: parts.join(' | '), timestamp } }];"
+      },
+      "id": "hha-format",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hha-cond-1",
+              "leftValue": "={{ $json.hasOutput }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hha-if",
+      "name": "Issues Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "resource": "webhook",
+        "operation": "sendLegacy",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify({ title: $json.title, description: $json.description, color: $json.color, footer: { text: $json.footer }, timestamp: $json.timestamp }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hha-discord",
+      "name": "Discord Alert",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "ChjLJM1kqQJWWMx7",
+          "name": "Discord Alerts Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "hha-noop",
+      "name": "All Healthy",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 min (offset)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Status API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Status API": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Health": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Issues Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issues Found?": {
+      "main": [
+        [
+          {
+            "node": "Discord Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Healthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

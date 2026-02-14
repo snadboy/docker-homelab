@@ -599,7 +599,7 @@ Replaced 7 separate monitoring/reporting workflows with a single Homelab Health 
 | Workflow ID | YP0wUZQB8DOfJgTA |
 | File | homelab-health-alert.json |
 | Schedule | Every 15 min at offset (`2/15 * * * *` → :02, :17, :32, :47) |
-| Nodes | 7 (Schedule + HTTP Request + Evaluate + Format + If + Discord + NoOp) |
+| Nodes | 8 (Schedule + Globals + HTTP Request + Evaluate + Format + If + Discord + NoOp) |
 | Notification | Discord (on alert/recovery only) |
 
 **How it works:**
@@ -656,6 +656,134 @@ Added `collectionErrors` array to cached data in the Cache Results node. Tracks 
 - `n8n/workflows/homelab-health-alert.json` (new)
 - `n8n/workflows/homelab-status-api.json` (added collectionErrors to Cache Results)
 - `/mnt/shareables/.claude/skills/n8n/skill.md` (updated workflow table + WORKFLOW_MAP)
+
+### Commits
+- `204c588` — Add Homelab Health Alert, consolidate monitoring workflows
+- `a40685e` — Update n8n skill (workflow table + WORKFLOW_MAP)
+
+---
+
+## Discord sendLegacy Node Fix (2026-02-14)
+
+**Status:** ✅ Complete
+
+Replaced all Discord v2 `sendLegacy` webhook nodes across 15 workflow files with HTTP Request nodes. The `sendLegacy` operation worked functionally but displayed "undefined" in the n8n editor UI.
+
+### What Changed
+
+Replaced `n8n-nodes-base.discord` typeVersion 2 nodes with `n8n-nodes-base.httpRequest` typeVersion 4.2 nodes that POST directly to Discord webhook URLs via Globals constants.
+
+### Globals Constants Added (2 new)
+
+| Constant | Channel |
+|----------|---------|
+| `DISCORD_ALERTS_WEBHOOK_URL` | Alerts channel (5 workflows) |
+| `DISCORD_REPORTS_WEBHOOK_URL` | Reports channel (10 workflows) |
+
+Total Globals constants: 36 (was 34)
+
+### Workflows Updated (15)
+
+**Alerts (DISCORD_ALERTS_WEBHOOK_URL):**
+- homelab-health-alert (also added Globals node to flow)
+- arr-stack-health-check
+- n8n-backup
+- proxmox-health-monitor
+- network-health-monitor
+
+**Reports (DISCORD_REPORTS_WEBHOOK_URL):**
+- gmail-cleanup (also changed from generic `DISCORD_WEBHOOK_URL`)
+- weekly-version-audit (3 embeds)
+- daily-homelab-report (3 embeds)
+- plex-recently-added
+- trash-pickup-scheduler
+- overseerr-request-notifier
+- gmail-labels-and-contacts
+- daily-media-digest
+- proxmox-daily-summary
+- network-daily-summary
+
+### Discord Webhook Credentials (reference)
+
+| Credential | ID | Webhook ID |
+|---|---|---|
+| Discord Webhook (generic) | — | 1470549509527441501 |
+| Discord Alerts Webhook | ChjLJM1kqQJWWMx7 | 1471359292211724499 |
+| Discord Reports Webhook | 2sFNFWT1cJPmliyb | 1471359836959674486 |
+
+### Verification
+- All 15 workflows deployed via API (PUT)
+- Health Alert execution 5795 at :32 — success with new Globals node
+- Zero `sendLegacy` references remaining in any workflow
+- Only Discord node type remaining: `discordTrigger` in discord-claude-bridge (unrelated)
+
+### Commit
+- `5c18ec3` — Replace Discord v2 sendLegacy nodes with HTTP Request nodes
+
+---
+
+## Gmail Cleanup — Scan Efficiency & CLEANUP_KEPT Label (2026-02-14)
+
+**Status:** ✅ Complete
+
+Overhauled Gmail Cleanup scanning logic to prevent preserved threads from blocking progress on deletable threads, and added a labeling system to avoid re-scanning already-evaluated threads.
+
+### Problem
+
+1. `maxThreads` (500) capped **scans**, not **deletions** — preserved threads (KEEP label, keeper contacts) consumed scan slots, potentially blocking all deletable threads from being reached
+2. Keeper contacts were only checked in Phase 5 (metadata fetch) — every old email from a keeper contact matched the query, wasting API calls
+3. Threads preserved on one run would match again on the next run, re-fetching metadata only to preserve them again
+
+### Fixes Applied (4 commits)
+
+**1. Match estimate visibility** (`55dea1f`)
+- Capture `resultSizeEstimate` from Gmail API on first page fetch
+- Report shows "Threads scanned: 500 of ~2,340 matching (limit: 500)" when capped
+
+**2. Cap deletions, not scans** (`c9f0e26`)
+- `maxThreads` now limits actual deletions (Phase 6), not thread fetching (Phase 4)
+- All matching threads are fetched and evaluated; only trashinng is capped at 500 per run
+- Report distinguishes eligible vs actually deleted: "Threads TRASHED: 500 (capped at 500, 1,203 eligible)"
+
+**3. Keeper contact query exclusion** (`4f1b6db`)
+- After loading keeper emails (Phase 2), injects `-from:(email1 OR email2 ...)` into the Gmail search query
+- Prevents most keeper-contact threads from matching at all (FROM only; TO/CC caught by Phase 5)
+- Capped at 60 addresses to stay within Gmail query length limits
+
+**4. CLEANUP_KEPT label system** (`a73761f`)
+- Hidden `CLEANUP_KEPT` Gmail label (auto-created, `labelHide`/`hide`)
+- In live mode, preserved threads get `CLEANUP_KEPT` applied via `threads.modify`
+- Search query includes `-label:CLEANUP_KEPT` — already-evaluated threads are excluded entirely
+- Eliminates redundant metadata API calls on subsequent runs
+
+### Verify Mode
+
+New `verify` mode re-evaluates all CLEANUP_KEPT threads against current state:
+- Checks each thread against current keeper contacts, KEEP label, KEEP_nnn retention
+- Removes `CLEANUP_KEPT` from threads that no longer qualify for preservation
+- Released threads re-enter the cleanup pipeline on the next run
+
+**Triggers:**
+| Endpoint | Mode |
+|----------|------|
+| `/webhook/gmail-cleanup-dry` | Dry run (no changes) |
+| `/webhook/gmail-cleanup-live` | Live (deletes + labels) |
+| `/webhook/gmail-cleanup-verify` | Verify CLEANUP_KEPT threads |
+| Daily 4 AM | Live |
+| Form trigger | Dropdown: dry-run / live / verify |
+
+**Discord embed colors:** Yellow = live, Green = dry-run, Blue = verify
+
+### Workflow Changes
+- Nodes: 10 → 12 (added Verify webhook trigger + Set Verify Config)
+- Code node: CLEANUP_KEPT label create/apply, verify phase (Phase 6b), updated report
+- Discord embed: handles verify mode stats
+
+### Commits
+- `55dea1f` — Add match estimate and limit warning to Gmail Cleanup report
+- `c9f0e26` — Cap deletions not scans in Gmail Cleanup
+- `4f1b6db` — Exclude keeper contacts from Gmail search query
+- `a73761f` — Add CLEANUP_KEPT label system and verify mode to Gmail Cleanup
 
 ---
 

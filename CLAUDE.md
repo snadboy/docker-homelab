@@ -478,69 +478,79 @@ Volume path: `/var/lib/docker/volumes/traefik-http-provider-config/_data/` on ca
 
 ---
 
-## Status Dashboard Enhancements (2026-02-12)
+## Status Dashboard Enhancements (2026-02-12/13)
 
-**Status:** ✅ Complete
+**Status:** ✅ Mostly Complete (NAS stats pending)
 
-Comprehensive overhaul of the homelab status dashboard (`status.isnadboy.com`).
+Implemented comprehensive status dashboard improvements — frontend redesign and backend data collection enhancements.
 
-### HTTPS Fix
+### Plan Items Completed
 
-Removed duplicate static route for `status.isnadboy.com` from Traefik HTTP provider (container label route already existed). Also recreated Traefik container to pick up `CF_DNS_API_TOKEN` env var. Cert now valid: Let's Encrypt R13.
+1. **HTTPS cert fix** — Cert was valid (Let's Encrypt R13) but user's browser had cached a stale cert. Resolved after Chrome restart.
+2. **WAN section** — Merged speedtest inline, fixed WAN2 display with public IP via `active_geo_info.WAN2.address` (T-Mobile CGNAT)
+3. **Devices & WiFi** — Separated AP and Switch dropdown tables with error badges
+4. **Cloudflare tunnel uptime** — Backend now parses `status` field from SSH output; frontend shows duration on chips
+5. **Services** — Removed chip-grid, kept detail tables only
+6. **Overseerr pending requests** — Verified working
+7. **cloud-pbs** — Added as PBS server via REST API; fixed `ds.store` vs `ds.name` field mapping
+8. **PBS backup times** — Created API tokens on svalbard/alexandria; SSH commands use local REST API with curl
+9. **Dropdown error badges** — Red/yellow badges on collapsed dropdowns when errors exist inside
 
-### Frontend Changes (app.js + style.css)
-
-| Change | Details |
-|--------|---------|
-| WAN + Speedtest merged | Inline speedtest sub-rows under each WAN entry; removed separate "Last Speedtest" section |
-| WAN2 standby | Shows "Standby / Xms" when no IP assigned |
-| AP/Switch split | Separate dropdown tables for APs (with Satisfaction%) and Switches |
-| Tunnel uptime | Parses "Up X hours/days" from Docker status, shown next to tunnel chip |
-| Services chips removed | Only detail tables remain (Container/Version/Up Since/Status) |
-| Dropdown error badges | Red/yellow badges on collapsed dropdowns showing problem counts |
-| PBS last backups | Shows 3 most recent backup times per datastore |
-| Storage section | Placeholder for NAS stats (no backend data yet) |
-| CSS additions | `.dropdown-alert`, `.stat-row.sub-row`, `.stat-value.dim` |
+### Not Yet Done
+- **NAS storage stats** — UniFi NAS needs SSH enabled; Synology needs SSH key authorized
+- **Traefik skill cert verification** — Plan item 11
 
 ### Backend Changes (n8n workflow)
-
-| Change | Details |
-|--------|---------|
-| Tunnel status | SSH output now includes Docker Status field; Cache Results stores `{state, status}` |
-| Overseerr fix | Uses `pageInfo.results` for accurate pending count |
-| cloud-pbs | New Code node queries PBS REST API; uses `ds.store` (not `ds.name`); friendly datastore name |
-| PBS snapshots | SSH commands now use local PBS API (`curl` with `status-dashboard` token) instead of `proxmox-backup-client` |
-| Merge inputs | 13 → 14 (added cloud-pbs at index 13) |
-| Workflow nodes | 20 → 22 |
+- Workflow ID: `FQGdFuIA1sVcR19b`
+- Added cloud-pbs Code node (PBS REST API)
+- PBS SSH commands rewritten to use local REST API with `PBSAPIToken` auth
+- Tunnel SSH parsing includes `status` field
+- WAN2 IP uses `gateway.active_geo_info.WAN2.address` (CGNAT fix)
+- Merge node bumped to 14 inputs
+- Globals updated: `CLOUD_PBS_URL`, `CLOUD_PBS_TOKEN`
 
 ### PBS API Tokens Created
+- svalbard: `root@pam!status-dashboard` → `/etc/proxmox-backup/status-dashboard-token.txt`
+- alexandria: `root@pam!status-dashboard` → `/etc/proxmox-backup/status-dashboard-token.txt`
+- ACL: `acl:1:/:root@pam!status-dashboard:Admin` in `/etc/proxmox-backup/acl.cfg`
 
-| Server | Token ID | ACL | Token File |
-|--------|----------|-----|------------|
-| svalbard | `root@pam!status-dashboard` | Admin at `/` | `/etc/proxmox-backup/status-dashboard-token.txt` |
-| alexandria | `root@pam!status-dashboard` | Admin at `/` | `/etc/proxmox-backup/status-dashboard-token.txt` |
-
-### Globals Credential Updated
-
-Added 2 constants (now 32 total):
-- `CLOUD_PBS_URL=https://sh15-226.prod.cloud-pbs.com:8007`
-- `CLOUD_PBS_TOKEN=9094815d6a404b2ca0a6@pbs!homepage-token:...`
-
-### Traefik HTTP Provider Skill
-
-Added cert verification step and duplicate route warning to static route section.
-
-### Files Changed
-
-- `status-dashboard/html/app.js` — All frontend rendering changes
-- `status-dashboard/html/style.css` — Dropdown badges, sub-row styling
-- `n8n/workflows/homelab-status-api.json` — Tunnel status, Overseerr, PBS snapshots, cloud-pbs
-- `/mnt/shareables/.claude/skills/traefik-http-provider/skill.md` — Cert verification
-
-### Outstanding Items
-
-- **NAS storage stats**: UniFi NAS needs SSH enabled; Synology needs SSH key authorized. Frontend code is ready.
+### Commits
+- `9cbdd93` — Status dashboard enhancements (main changes)
+- `d7bd311` — Fix WAN2 public IP for CGNAT connections
 
 ---
 
-**Last Updated:** 2026-02-12
+## Chrome Extension Fix (2026-02-13)
+
+**Status:** ✅ Infrastructure Fixed (needs session restart)
+
+### Problem
+Chrome browser automation tools (`mcp__claude-in-chrome__*`) not connecting on sdevs.
+
+### Root Cause
+1. Extension service worker went dormant and stopped spawning native host
+2. After extension reinstall, native host works but MCP server (running 14+ hours) had stale state
+3. MCP server (`--claude-in-chrome-mcp`) died after SIGHUP attempt
+
+### What Was Fixed
+- Removed duplicate npm global installation (`/usr/bin/claude` → removed via `sudo npm -g uninstall @anthropic-ai/claude-code`)
+- User reinstalled Chrome extension (same ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`, v1.0.49)
+- Native host running, bridge socket active
+- **Need to restart Claude Code session** for fresh MCP server to pick up the socket
+
+### Verified Working
+- Native messaging manifest: `~/.config/google-chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json`
+- Native host script: `~/.claude/chrome/chrome-native-host` → `versions/2.1.39 --chrome-native-host`
+- Bridge socket: `/tmp/claude-mcp-browser-bridge-snadboy/{pid}.sock`
+- Extension ID: `fcoeoabgfenejglbffodgkkbkcdhcgfn`
+
+---
+
+## Outstanding Items
+
+- NAS storage stats for status dashboard (need SSH access to UniFi NAS and Synology)
+- Traefik HTTP provider skill — add cert verification step (plan item 11)
+
+---
+
+**Last Updated:** 2026-02-13

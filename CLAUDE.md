@@ -546,6 +546,46 @@ Chrome browser automation tools (`mcp__claude-in-chrome__*`) not connecting on s
 
 ---
 
+## n8n Coding Standards & Workflow Audit (2026-02-14)
+
+**Status:** ✅ Complete
+
+Documented n8n workflow coding standards in the shared skill and applied them across all 20 workflows.
+
+### Coding Standards Added to n8n Skill
+
+Added a "Coding Standards" section to `/mnt/shareables/.claude/skills/n8n/skill.md` covering:
+- **Architecture** — standard flow pattern, sequential Globals, prefer credentials, one Code node per concern, webhook Respond Immediately
+- **Notifications** — Discord for reports, Gotify for alerts, always notify on completion with context
+- **Error Handling** — SSH `onError`, Code node try/catch, Merge node input indexing
+- **Shell Commands** — Go template escaping, `!=` vs `<>`, nested quoting
+- **File & Deployment** — workflow JSON location, API deploy, test before commit
+- **Naming Conventions** — workflow names, node names, Globals constants
+
+### Audit Findings & Fixes (11 workflows modified)
+
+| Fix | Workflows | Count |
+|-----|-----------|-------|
+| Removed `description` field | arr-stack-health-check, daily-media-digest, discord-claude-bridge, get-plex-token, gmail-cleanup, gmail-labels-and-contacts, overseerr-request-notifier, plex-recently-added, trash-day-calc, trash-pickup-scheduler, trash-pickup-status | 11 |
+| Webhook → Respond Immediately | gmail-cleanup (3 webhooks), trash-pickup-scheduler (1) | 2 |
+| Removed orphaned Respond to Webhook nodes | gmail-cleanup (3), trash-pickup-scheduler (1) | 2 |
+| Globals node repositioned (L→R flow) | gmail-cleanup, plex-recently-added | 2 |
+| Added SSH `onError: continueRegularOutput` | get-plex-token | 1 |
+
+### Workflows Not Changed (already compliant)
+- daily-homelab-report, homelab-status-api, n8n-backup, network-daily-summary, network-health-monitor, pending-updates-monitor, proxmox-daily-summary, proxmox-health-monitor, weekly-version-audit
+
+### Intentional `responseNode` Usage (returns data to caller)
+- gmail-labels-and-contacts — returns JSON with label counts and contacts
+- homelab-status-api — returns full status JSON
+
+### Commits
+- `97fdb6f` — Add webhook respond-immediately coding standard to n8n skill (skills repo)
+- `0409887` — Add coding standards section to n8n skill (skills repo)
+- `b137615` — Apply n8n coding standards across all workflows
+
+---
+
 ## Outstanding Items
 
 - NAS storage stats for status dashboard (need SSH access to UniFi NAS and Synology)
@@ -553,4 +593,4 @@ Chrome browser automation tools (`mcp__claude-in-chrome__*`) not connecting on s
 
 ---
 
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-14

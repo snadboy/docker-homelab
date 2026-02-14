@@ -46,34 +46,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: 'Gmail Labels & Contacts', description: $json.report, color: 3066993, timestamp: new Date().toISOString() }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: 'Gmail Labels & Contacts', description: $json.report, color: 3066993, timestamp: new Date().toISOString() }] }) }}",
         "options": {}
       },
       "id": "gotify-notify",
       "name": "Discord Notify",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         400
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "2sFNFWT1cJPmliyb",
-          "name": "Discord Reports Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {

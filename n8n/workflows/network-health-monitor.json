@@ -144,34 +144,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_ALERTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: $json.alertTitle, description: $json.description, color: $json.alertColor, timestamp: $json.timestamp }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.alertTitle, description: $json.description, color: $json.alertColor, timestamp: $json.timestamp }] }) }}",
         "options": {}
       },
       "id": "nhm-discord",
       "name": "Discord Alert",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1320,
         200
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "ChjLJM1kqQJWWMx7",
-          "name": "Discord Alerts Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {},

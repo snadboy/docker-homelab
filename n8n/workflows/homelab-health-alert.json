@@ -97,34 +97,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_ALERTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: $json.title, description: $json.description, color: $json.color, footer: { text: $json.footer }, timestamp: $json.timestamp }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.title, description: $json.description, color: $json.color, footer: { text: $json.footer }, timestamp: $json.timestamp }] }) }}",
         "options": {}
       },
       "id": "hha-discord",
       "name": "Discord Alert",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1100,
         200
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "ChjLJM1kqQJWWMx7",
-          "name": "Discord Alerts Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {},
@@ -136,10 +132,40 @@
         1100,
         400
       ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "hha-globals",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
     }
   ],
   "connections": {
     "Every 15 min (offset)": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
       "main": [
         [
           {

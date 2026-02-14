@@ -68,34 +68,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: $json.title, description: $json.message, color: ($json.priority || 3) >= 7 ? 15158332 : ($json.priority || 3) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.title, description: $json.message, color: ($json.priority || 3) >= 7 ? 15158332 : ($json.priority || 3) >= 5 ? 16776960 : 3066993, timestamp: new Date().toISOString() }] }) }}",
         "options": {}
       },
       "id": "d0a0a003-0003-4003-a003-000000000004",
       "name": "Discord Notify",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         780,
         200
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "2sFNFWT1cJPmliyb",
-          "name": "Discord Reports Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {},

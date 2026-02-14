@@ -128,32 +128,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "options": {},
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: 'Gmail Cleanup (' + $json.mode.toUpperCase() + ')', description: ($json.mode === 'live' ? 'Deleted ' + $json.stats.threadsDeleted + ' of ' + $json.stats.threadsScanned + ' scanned threads' : 'Would have deleted ' + $json.stats.threadsEligibleForDeletion + ' of ' + $json.stats.threadsScanned + ' scanned threads'), color: $json.mode === 'live' ? 16776960 : 3066993, timestamp: new Date().toISOString() }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: 'Gmail Cleanup (' + $json.mode.toUpperCase() + ')', description: ($json.mode === 'live' ? 'Deleted ' + $json.stats.threadsDeleted + ' of ' + $json.stats.threadsScanned + ' scanned threads' : 'Would have deleted ' + $json.stats.threadsEligibleForDeletion + ' of ' + $json.stats.threadsScanned + ' scanned threads'), color: $json.mode === 'live' ? 16776960 : 3066993, timestamp: new Date().toISOString() }] }) }}",
+        "options": {}
       },
       "id": "gotify-notify",
       "name": "Discord Notify",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         848,
         624
-      ],
-      "webhookId": "0d3d70e4-6223-449f-af47-2ceb3f47bfed",
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "2sFNFWT1cJPmliyb",
-          "name": "Discord Reports Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {

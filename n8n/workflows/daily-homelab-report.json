@@ -174,42 +174,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify($json.embeds[0]) }}"
-            },
-            {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify($json.embeds[1]) }}"
-            },
-            {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify($json.embeds[2]) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [$json.embeds[0], $json.embeds[1], $json.embeds[2]] }) }}",
         "options": {}
       },
       "id": "dhr-discord",
       "name": "Discord Report",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1320,
         300
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "2sFNFWT1cJPmliyb",
-          "name": "Discord Reports Webhook"
-        }
-      }
+      ]
     }
   ],
   "connections": {

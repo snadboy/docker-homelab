@@ -36,34 +36,30 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "resource": "webhook",
-        "operation": "sendLegacy",
-        "content": "",
-        "embeds": {
-          "values": [
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "inputMethod": "json",
-              "json": "={{ JSON.stringify({ title: $json.title, description: $json.description, color: $json.color, footer: { text: $json.footer }, timestamp: $json.timestamp }) }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.title, description: $json.description, color: $json.color, footer: { text: $json.footer }, timestamp: $json.timestamp }] }) }}",
         "options": {}
       },
       "id": "pds-discord",
       "name": "Discord Summary",
-      "type": "n8n-nodes-base.discord",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         660,
         300
-      ],
-      "credentials": {
-        "discordWebhookApi": {
-          "id": "2sFNFWT1cJPmliyb",
-          "name": "Discord Reports Webhook"
-        }
-      }
+      ]
     },
     {
       "parameters": {

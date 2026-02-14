@@ -1,6 +1,5 @@
 {
   "name": "Get Plex Token",
-  "description": "Sub-workflow that fetches the current Plex auth token via SSH from the Plex host. Returns PLEX_URL and PLEX_TOKEN for use by calling workflows.",
   "nodes": [
     {
       "parameters": {
@@ -24,6 +23,7 @@
       "id": "d0a0a010-0010-4010-a010-000000000002",
       "name": "SSH Read Token",
       "type": "n8n-nodes-base.ssh",
+      "onError": "continueRegularOutput",
       "typeVersion": 1,
       "position": [
         220,

@@ -1,6 +1,5 @@
 {
   "name": "Trash Pickup Status",
-  "description": "Lightweight read-only endpoint for Homepage dashboard widget. Returns trash pickup status as JSON. Calls Trash Day Calc sub-workflow for date math. Webhook: /webhook/trash-pickup-status",
   "nodes": [
     {
       "parameters": {

@@ -1,6 +1,5 @@
 {
   "name": "Discord Claude Bridge",
-  "description": "Bridges Discord messages to Claude Code CLI on sdevs via SSH. Each user gets a persistent session with conversation context. Say 'done' to end session.",
   "nodes": [
     {
       "parameters": {

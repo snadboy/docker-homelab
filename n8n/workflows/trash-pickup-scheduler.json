@@ -1,6 +1,5 @@
 {
   "name": "Trash Pickup Scheduler",
-  "description": "Creates weekly Google Calendar events on Anderson calendar for trash pickup. Runs Sunday 9 AM. Calls Trash Day Calc sub-workflow for date math, then creates calendar events and sends Discord notification. Webhook: /webhook/trash-pickup",
   "nodes": [
     {
       "parameters": {
@@ -26,7 +25,7 @@
       "parameters": {
         "httpMethod": "GET",
         "path": "trash-pickup",
-        "responseMode": "responseNode"
+        "responseMode": "onReceived"
       },
       "id": "trash-webhook-trigger",
       "name": "Webhook Trigger",
@@ -37,20 +36,6 @@
         500
       ],
       "webhookId": "trash-pickup"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "Trash pickup scheduler triggered"
-      },
-      "id": "trash-respond-webhook",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        440,
-        380
-      ]
     },
     {
       "parameters": {
@@ -150,11 +135,6 @@
     "Webhook Trigger": {
       "main": [
         [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Globals",
             "type": "main",

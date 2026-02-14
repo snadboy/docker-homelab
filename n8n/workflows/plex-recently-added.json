@@ -1,6 +1,5 @@
 {
   "name": "Plex Recently Added",
-  "description": "Monitors Plex for recently added movies and TV episodes. Sends Discord notification when new content is available.",
   "nodes": [
     {
       "parameters": {
@@ -135,8 +134,8 @@
       "type": "n8n-nodes-globals.globalConstants",
       "typeVersion": 1,
       "position": [
-        0,
-        500
+        110,
+        300
       ],
       "credentials": {
         "globalConstantsApi": {

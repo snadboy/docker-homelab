@@ -1,6 +1,5 @@
 {
   "name": "Trash Day Calc",
-  "description": "Sub-workflow with shared trash pickup date math. Called by Trash Pickup Scheduler and Trash Pickup Status via Execute Workflow node. No triggers - only callable as sub-workflow.",
   "nodes": [
     {
       "parameters": {

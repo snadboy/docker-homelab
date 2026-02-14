@@ -1,6 +1,5 @@
 {
   "name": "Daily Media Digest",
-  "description": "Daily digest of media activity across Sonarr, Radarr, and Plex. Summarizes downloads, upcoming episodes, library additions. Sends via Discord.",
   "nodes": [
     {
       "parameters": {

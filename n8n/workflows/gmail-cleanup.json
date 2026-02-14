@@ -1,11 +1,10 @@
 {
   "name": "Gmail Cleanup",
-  "description": "Ports gmail-trim cleanup logic. Discovers KEEP/KEEP_nnn labels, loads keeper contacts, scans threads. Default: dry-run. Live: ?mode=live. Webhook: /webhook/gmail-cleanup",
   "nodes": [
     {
       "parameters": {
         "path": "gmail-cleanup",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "webhook-trigger",
@@ -17,21 +16,6 @@
         144
       ],
       "webhookId": "gmail-cleanup"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "Gmail Cleanup started",
-        "options": {}
-      },
-      "id": "respond-webhook",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        384,
-        144
-      ]
     },
     {
       "parameters": {
@@ -77,7 +61,7 @@
     {
       "parameters": {
         "path": "gmail-cleanup-dry",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "dry-run-trigger",
@@ -89,21 +73,6 @@
         480
       ],
       "webhookId": "gmail-cleanup-dry"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "Gmail Cleanup dry-run started",
-        "options": {}
-      },
-      "id": "respond-dry-run",
-      "name": "Respond Dry Run",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        384,
-        480
-      ]
     },
     {
       "parameters": {
@@ -149,7 +118,7 @@
     {
       "parameters": {
         "path": "gmail-cleanup-live",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "live-run-trigger",
@@ -161,21 +130,6 @@
         832
       ],
       "webhookId": "gmail-cleanup-live"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "Gmail Cleanup LIVE started - threads will be trashed",
-        "options": {}
-      },
-      "id": "respond-live-run",
-      "name": "Respond Live Run",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        384,
-        832
-      ]
     },
     {
       "parameters": {
@@ -366,8 +320,8 @@
       "type": "n8n-nodes-globals.globalConstants",
       "typeVersion": 1,
       "position": [
-        192,
-        -100
+        520,
+        640
       ],
       "credentials": {
         "globalConstantsApi": {
@@ -382,11 +336,6 @@
       "main": [
         [
           {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Set Webhook Config",
             "type": "main",
             "index": 0
@@ -398,11 +347,6 @@
       "main": [
         [
           {
-            "node": "Respond Dry Run",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Set Dry Run Config",
             "type": "main",
             "index": 0
@@ -413,11 +357,6 @@
     "Live Run": {
       "main": [
         [
-          {
-            "node": "Respond Live Run",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Set Live Config",
             "type": "main",

@@ -1,6 +1,5 @@
 {
   "name": "Arr Stack Health Check",
-  "description": "Checks health of Sonarr, Radarr, Prowlarr, SABnzbd, and Overseerr APIs using credential-based authentication. Reports status via Discord.",
   "nodes": [
     {
       "parameters": {

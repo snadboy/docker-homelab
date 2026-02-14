@@ -1,6 +1,5 @@
 {
   "name": "Overseerr Request Notifier",
-  "description": "Monitors Overseerr for new media requests. Sends Discord notification with request details.",
   "nodes": [
     {
       "parameters": {

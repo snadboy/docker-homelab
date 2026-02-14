@@ -1,6 +1,5 @@
 {
   "name": "Gmail Labels & Contacts",
-  "description": "Lists all Gmail labels with message counts and keeper contact group members. Returns JSON for Homepage widget + sends Discord report. Webhook: /webhook/gmail-labels-contacts",
   "nodes": [
     {
       "parameters": {

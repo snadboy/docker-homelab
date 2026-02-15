@@ -1,0 +1,334 @@
+{
+  "name": "Todoist Claude Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "triage-schedule",
+      "name": "Daily 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "todoist-claude-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "triage-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        440
+      ],
+      "webhookId": "todoist-claude-triage"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Triage started",
+        "options": {}
+      },
+      "id": "triage-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "triage-globals",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.todoist.com/api/v1/tasks?project_id={{ $('Globals').first().json.TODOIST_TRIAGE_PROJECT_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Globals').first().json.TODOIST_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "triage-fetch-tasks",
+      "name": "Fetch Triage Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\n// Todoist v1 API wraps results in a { results: [...] } object\nconst results = input.results || [];\n\nconst tasks = [];\nfor (const item of results) {\n  if (item.id && item.content) {\n    tasks.push({\n      id: item.id,\n      content: item.content,\n      description: item.description || ''\n    });\n  }\n}\n\nif (tasks.length === 0) {\n  return [{ json: { hasTasks: false, taskCount: 0, taskList: '', taskIds: [] } }];\n}\n\nconst taskList = tasks.map((t, i) => {\n  let line = `${i + 1}. ${t.content}`;\n  if (t.description) {\n    line += ` -- ${t.description}`;\n  }\n  return line;\n}).join('\\n');\n\nreturn [{\n  json: {\n    hasTasks: true,\n    taskCount: tasks.length,\n    taskList,\n    taskIds: tasks.map(t => t.id)\n  }\n}];"
+      },
+      "id": "triage-format-tasks",
+      "name": "Format Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-tasks",
+              "leftValue": "={{ $json.hasTasks }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "triage-check-tasks",
+      "name": "Tasks Exist?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "=claude -p \"You are a homelab assistant triaging a batch of ideas/tasks. The homelab runs: Proxmox cluster (3 nodes), Docker containers (arr stack, n8n, Traefik, Semaphore, Dockhand, Home Assistant, Plex, Technitium DNS, Zigbee2MQTT), with Tailscale mesh networking.\n\nFor each item, evaluate and categorize. Then provide:\n1. A prioritized list sorted by importance/urgency\n2. Each item with: category, effort estimate, and 1-line assessment\n3. A summary at the end: how many items, suggested order of execution, any items that can be grouped\n\nFormat as clean markdown.\n\nTasks to triage:\n{{ $('Format Tasks').first().json.taskList }}\" --output-format text --max-turns 1 --dangerously-skip-permissions",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "triage-claude-ssh",
+      "name": "Claude Triage",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        200
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_REPORTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: 'Claude Triage: ' + $('Format Tasks').first().json.taskCount + ' items evaluated', description: ($json.stdout || $json.stderr || 'No output from Claude').substring(0, 4096), color: 3447003, footer: { text: 'Daily triage from Todoist Claude-Triage' }, timestamp: new Date().toISOString() }] }) }}",
+        "options": {}
+      },
+      "id": "triage-discord",
+      "name": "Discord Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const globals = $('Globals').first().json;\nconst http = this.helpers.httpRequest.bind(this.helpers);\nconst taskIds = $('Format Tasks').first().json.taskIds;\nconst token = globals.TODOIST_API_TOKEN;\n\nconst results = [];\nconst errors = [];\n\nfor (const id of taskIds) {\n  try {\n    await http({\n      method: 'POST',\n      url: `https://api.todoist.com/api/v1/tasks/${id}/close`,\n      headers: {\n        'Authorization': `Bearer ${token}`\n      }\n    });\n    results.push(id);\n  } catch (err) {\n    errors.push(`${id}: ${err.message}`);\n  }\n}\n\nreturn [{\n  json: {\n    closedCount: results.length,\n    errorCount: errors.length,\n    errors: errors.length > 0 ? errors : undefined\n  }\n}];"
+      },
+      "id": "triage-close-tasks",
+      "name": "Close All Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "triage-no-tasks",
+      "name": "No Tasks",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Fetch Triage Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Triage Tasks": {
+      "main": [
+        [
+          {
+            "node": "Format Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Tasks": {
+      "main": [
+        [
+          {
+            "node": "Tasks Exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tasks Exist?": {
+      "main": [
+        [
+          {
+            "node": "Claude Triage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Triage": {
+      "main": [
+        [
+          {
+            "node": "Discord Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord Report": {
+      "main": [
+        [
+          {
+            "node": "Close All Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

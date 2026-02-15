@@ -114,7 +114,7 @@
       "parameters": {
         "resource": "command",
         "operation": "execute",
-        "command": "={{ 'claude -p \"You are a homelab assistant evaluating a task/idea. The homelab runs: Proxmox cluster (3 nodes), Docker containers (arr stack, n8n, Traefik, Semaphore, Dockhand, Home Assistant, Plex, Technitium DNS, Zigbee2MQTT), with Tailscale mesh networking.\\n\\nFor this task, provide:\\n1. **Category**: infrastructure | automation | media | monitoring | networking | security | other\\n2. **Effort**: quick (< 30 min) | medium (1-3 hours) | large (half day+)\\n3. **Priority**: high | medium | low\\n4. **Summary**: 1-2 sentence evaluation — is this feasible? Any gotchas?\\n5. **Suggested approach**: Brief actionable steps\\n\\nTask: ' + $json.content.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') + '\" --output-format text --max-turns 5 --dangerously-skip-permissions' }}",
+        "command": "={{ 'cd /home/snadboy/claude-inbox && claude -p \"' + $json.content.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') + '\" --output-format text --max-turns 10 --dangerously-skip-permissions' }}",
         "authentication": "privateKey",
         "options": {}
       },

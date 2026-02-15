@@ -3,22 +3,21 @@
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "messageCreate"
-        ]
+        "type": "message",
+        "pattern": "every"
       },
       "id": "dcb-trigger",
       "name": "Discord Trigger",
-      "type": "n8n-nodes-base.discordTrigger",
+      "type": "n8n-nodes-discord-trigger.discordTrigger",
       "typeVersion": 1,
       "position": [
         0,
         300
       ],
       "credentials": {
-        "discordBotApi": {
-          "id": "AZmPOR1usnaJBCna",
-          "name": "Discord Bot Token"
+        "discordBotTriggerApi": {
+          "id": "dcb-trigger-cred",
+          "name": "Discord Bot Trigger"
         }
       }
     },
@@ -33,7 +32,7 @@
           "conditions": [
             {
               "id": "cond-not-bot",
-              "leftValue": "={{ $json.author?.bot }}",
+              "leftValue": "={{ $json.authorIsBot }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -65,7 +64,7 @@
           "conditions": [
             {
               "id": "cond-channel",
-              "leftValue": "={{ $json.channel_id }}",
+              "leftValue": "={{ $json.channelId }}",
               "rightValue": "={{ $('Globals').first().json.DISCORD_CHANNEL_ID }}",
               "operator": {
                 "type": "string",
@@ -103,33 +102,27 @@
               "type": "string"
             },
             {
-              "id": "e3",
-              "name": "CLAUDE_WORK_DIR",
-              "value": "={{ $('Globals').first().json.CLAUDE_WORK_DIR }}",
-              "type": "string"
-            },
-            {
               "id": "e4",
               "name": "content",
-              "value": "={{ $('Discord Trigger').first().json.content }}",
+              "value": "={{ $('Filter Channel').first().json.content }}",
               "type": "string"
             },
             {
               "id": "e5",
               "name": "userId",
-              "value": "={{ $('Discord Trigger').first().json.author.id }}",
+              "value": "={{ $('Filter Channel').first().json.authorId }}",
               "type": "string"
             },
             {
               "id": "e6",
               "name": "username",
-              "value": "={{ $('Discord Trigger').first().json.author.username }}",
+              "value": "={{ $('Filter Channel').first().json.authorName }}",
               "type": "string"
             },
             {
               "id": "e7",
               "name": "channelId",
-              "value": "={{ $('Discord Trigger').first().json.channel_id }}",
+              "value": "={{ $('Filter Channel').first().json.channelId }}",
               "type": "string"
             }
           ]
@@ -146,7 +139,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst userId = input.userId;\nconst username = input.username;\nconst message = input.content;\nconst workDir = input.CLAUDE_WORK_DIR || '/home/snadboy/projects';\n\n// Session management via workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\n\nconst now = Date.now();\nconst FOUR_HOURS = 4 * 60 * 60 * 1000;\n\n// Auto-prune sessions inactive >4 hours\nfor (const [uid, session] of Object.entries(staticData.sessions)) {\n  if (now - session.lastActivity > FOUR_HOURS) {\n    delete staticData.sessions[uid];\n  }\n}\n\n// Check for end-session commands\nconst trimmed = message.trim().toLowerCase();\nif (['done', 'end', 'quit', 'exit'].includes(trimmed)) {\n  const session = staticData.sessions[userId];\n  const sessionId = session ? session.sessionId : null;\n  delete staticData.sessions[userId];\n  return [{\n    json: {\n      action: 'end_session',\n      sessionId,\n      userId,\n      username\n    }\n  }];\n}\n\n// Generate UUID v4\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nlet session = staticData.sessions[userId];\nlet isNewSession = false;\n\nif (!session) {\n  // New session\n  session = {\n    sessionId: uuidv4(),\n    createdAt: new Date().toISOString(),\n    lastActivity: now,\n    username\n  };\n  staticData.sessions[userId] = session;\n  isNewSession = true;\n} else {\n  session.lastActivity = now;\n}\n\n// Base64-encode the message to avoid shell escaping issues\nconst base64Msg = Buffer.from(message, 'utf-8').toString('base64');\n\n// Build the SSH command\nlet cmd;\nif (isNewSession) {\n  cmd = `cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude -p --session-id '${session.sessionId}'\"`;\n} else {\n  cmd = `cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude --resume '${session.sessionId}' -p\"`;\n}\n\nreturn [{\n  json: {\n    action: 'send_claude',\n    command: cmd,\n    sessionId: session.sessionId,\n    isNewSession,\n    userId,\n    username\n  }\n}];"
+        "jsCode": "const input = $input.first().json;\nconst userId = input.userId;\nconst username = input.username;\nconst message = input.content;\nconst workDir = '/home/snadboy/claude-inbox';\n\n// Session management via workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\n\nconst now = Date.now();\nconst FOUR_HOURS = 4 * 60 * 60 * 1000;\n\n// Auto-prune sessions inactive >4 hours\nfor (const [uid, session] of Object.entries(staticData.sessions)) {\n  if (now - session.lastActivity > FOUR_HOURS) {\n    delete staticData.sessions[uid];\n  }\n}\n\n// Check for end-session commands\nconst trimmed = message.trim().toLowerCase();\nif (['done', 'end', 'quit', 'exit'].includes(trimmed)) {\n  const session = staticData.sessions[userId];\n  const sessionId = session ? session.sessionId : null;\n  delete staticData.sessions[userId];\n  return [{\n    json: {\n      action: 'end_session',\n      sessionId,\n      userId,\n      username\n    }\n  }];\n}\n\n// Generate UUID v4\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nlet session = staticData.sessions[userId];\nlet isNewSession = false;\n\nif (!session) {\n  // New session\n  session = {\n    sessionId: uuidv4(),\n    createdAt: new Date().toISOString(),\n    lastActivity: now,\n    username\n  };\n  staticData.sessions[userId] = session;\n  isNewSession = true;\n} else {\n  session.lastActivity = now;\n}\n\n// Base64-encode the message to avoid shell escaping issues\nconst base64Msg = Buffer.from(message, 'utf-8').toString('base64');\n\n// Build the SSH command — source env for uvx (HA MCP), use claude-inbox workdir\nconst envSetup = 'source /home/snadboy/.local/bin/env 2>/dev/null; ';\nconst claudeFlags = '--output-format text --max-turns 10 --dangerously-skip-permissions';\nlet cmd;\nif (isNewSession) {\n  cmd = `${envSetup}cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude -p --session-id '${session.sessionId}' ${claudeFlags}\"`;\n} else {\n  cmd = `${envSetup}cd '${workDir}' && timeout 300 bash -c \"echo '${base64Msg}' | base64 -d | claude --resume '${session.sessionId}' -p ${claudeFlags}\"`;\n}\n\nreturn [{\n  json: {\n    action: 'send_claude',\n    command: cmd,\n    sessionId: session.sessionId,\n    isNewSession,\n    userId,\n    username\n  }\n}];"
       },
       "id": "dcb-session-mgr",
       "name": "Session Manager",
@@ -218,7 +211,8 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
+        "resource": "command",
+        "operation": "execute",
         "command": "={{ $('Session Manager').first().json.command }}",
         "authentication": "privateKey",
         "options": {}
@@ -233,8 +227,8 @@
       ],
       "credentials": {
         "sshPrivateKey": {
-          "id": "biwSA51JSiJamqaz",
-          "name": "sdevs SSH"
+          "id": "n8816WsRbTEbFnjD",
+          "name": "utilities SSH"
         }
       },
       "onError": "continueRegularOutput"

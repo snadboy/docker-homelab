@@ -1,13 +1,11 @@
 services:
   uptime-kuma:
-    image: louislam/uptime-kuma:latest
+    image: louislam/uptime-kuma:2
     container_name: uptime-kuma
     labels:
       - "snadboy.revp.3001.domain=uptime-kuma.isnadboy.com"
     environment:
       - TZ=America/Chicago
-    user: "1000:1000"
-    entrypoint: ["/usr/bin/dumb-init", "--", "node", "server/server.js"]
     volumes:
       # Use named volume for SQLite - CIFS/network storage causes locking issues
       - uptime-kuma-data:/app/data

@@ -3,7 +3,7 @@ services:
     image: semaphoreui/semaphore:latest
     container_name: semaphore
     labels:
-      - "snadboy.revp.3000.domain=semaphore.isnadboy.com"
+      - "snadboy.revp.3002.domain=semaphore.isnadboy.com"
     environment:
       - SEMAPHORE_DB_DIALECT=bolt
       - SEMAPHORE_ADMIN=admin
@@ -15,7 +15,7 @@ services:
     volumes:
       - semaphore-data:/etc/semaphore
     ports:
-      - 3000:3000
+      - 3002:3000
     restart: unless-stopped
 
 volumes:

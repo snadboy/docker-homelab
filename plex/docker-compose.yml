@@ -4,8 +4,7 @@ services:
     container_name: plex
     restart: unless-stopped
     network_mode: host
-    devices:
-      - /dev/dri:/dev/dri
+    mem_limit: 12g
     environment:
       - PUID=1000
       - PGID=1000

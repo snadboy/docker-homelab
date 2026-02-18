@@ -1,0 +1,113 @@
+{
+  "name": "Plex Maintenance",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 4:30 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "putAllInOneKey": false
+      },
+      "id": "globals-node",
+      "name": "Globals",
+      "type": "n8n-nodes-globals.globalConstants",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "credentials": {
+        "globalConstantsApi": {
+          "id": "kt9rQnvdyaBeZlR2",
+          "name": "Homelab Constants"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const globals = $('Globals').first().json;\nconst plexUrl = globals.PLEX_URL;\nconst plexToken = globals.PLEX_TOKEN;\nconst httpRequest = this.helpers.httpRequest.bind(this.helpers);\n\nconst results = [];\nconst startTime = Date.now();\n\n// Step 1: Clean bundles\ntry {\n  await httpRequest({\n    method: 'PUT',\n    url: `${plexUrl}/library/clean/bundles?async=0&X-Plex-Token=${plexToken}`,\n    timeout: 120000,\n  });\n  results.push({ step: 'Clean Bundles', status: 'OK' });\n} catch (e) {\n  results.push({ step: 'Clean Bundles', status: 'FAILED', error: e.message });\n}\n\n// Step 2: Empty trash - Movies (section 1)\ntry {\n  await httpRequest({\n    method: 'PUT',\n    url: `${plexUrl}/library/sections/1/emptyTrash?X-Plex-Token=${plexToken}`,\n    timeout: 120000,\n  });\n  results.push({ step: 'Empty Trash (Movies)', status: 'OK' });\n} catch (e) {\n  results.push({ step: 'Empty Trash (Movies)', status: 'FAILED', error: e.message });\n}\n\n// Step 3: Empty trash - TV Shows (section 2)\ntry {\n  await httpRequest({\n    method: 'PUT',\n    url: `${plexUrl}/library/sections/2/emptyTrash?X-Plex-Token=${plexToken}`,\n    timeout: 120000,\n  });\n  results.push({ step: 'Empty Trash (TV Shows)', status: 'OK' });\n} catch (e) {\n  results.push({ step: 'Empty Trash (TV Shows)', status: 'FAILED', error: e.message });\n}\n\n// Step 4: Optimize database\ntry {\n  await httpRequest({\n    method: 'PUT',\n    url: `${plexUrl}/library/optimize?async=0&X-Plex-Token=${plexToken}`,\n    timeout: 300000,\n  });\n  results.push({ step: 'Optimize Database', status: 'OK' });\n} catch (e) {\n  results.push({ step: 'Optimize Database', status: 'FAILED', error: e.message });\n}\n\nconst elapsed = ((Date.now() - startTime) / 1000).toFixed(1);\nconst failed = results.filter(r => r.status === 'FAILED');\nconst allOk = failed.length === 0;\n\nreturn [{\n  json: {\n    results,\n    elapsed,\n    allOk,\n    failedCount: failed.length,\n    summary: results.map(r => `${r.status === 'OK' ? '\\u2705' : '\\u274c'} ${r.step}${r.error ? ': ' + r.error : ''}`).join('\\n'),\n  }\n}];"
+      },
+      "id": "maintenance-code",
+      "name": "Run Maintenance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Globals').first().json.DISCORD_ALERTS_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: $json.allOk ? '\\ud83d\\udee0\\ufe0f Plex Maintenance Complete' : '\\u26a0\\ufe0f Plex Maintenance \\u2014 ' + $json.failedCount + ' Failed', description: $json.summary + '\\n\\nDuration: ' + $json.elapsed + 's', color: $json.allOk ? 3066993 : 15158332, timestamp: new Date().toISOString() }] }) }}",
+        "options": {}
+      },
+      "id": "discord-notify",
+      "name": "Discord Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    }
+  ],
+  "connections": {
+    "Daily 4:30 AM": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Globals": {
+      "main": [
+        [
+          {
+            "node": "Run Maintenance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Maintenance": {
+      "main": [
+        [
+          {
+            "node": "Discord Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": []
+}

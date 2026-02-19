@@ -500,68 +500,98 @@ function renderMedia(data) {
 
 function renderSmartHome(data) {
   const sh = data.smarthome || {};
-  let html = '';
-
-  // Thread Topology (tree layout)
   const thread = sh.thread || {};
   const matter = sh.matter || {};
-  const networkName = thread.networkName || 'Unknown';
-  html += `<div class="section-title">Thread Network &mdash; ${networkName}</div>`;
-
-  // Build RLOC16 -> device name map from Matter devices
-  const rlocToName = {};
-  for (const d of (matter.devices || [])) {
-    if (d.rloc16) rlocToName[d.rloc16] = d.name;
-  }
-
-  const allRouters = thread.routers || [];
-  if (allRouters.length > 0) {
-    let totalChildren = 0;
-    html += '<div class="thread-tree">';
-    for (const r of allRouters) {
-      const isSelf = thread.selfRloc16 !== undefined &&
-        parseInt(r.rloc16, 16) === thread.selfRloc16;
-      const label = r.name || `Router ${r.rloc16}`;
-      const selfBadge = isSelf ? ' <span class="transport-chip thread">Self</span>' : '';
-      const children = r.children || [];
-      totalChildren += children.length;
-      html += `<div class="tree-router">
-        <div class="tree-router-header">
-          <span class="status-dot ok"></span>
-          <span class="tree-router-name">${label}${selfBadge}</span>
-          <span class="tree-router-meta">${r.rloc16}</span>
-        </div>`;
-      if (children.length > 0) {
-        html += '<div class="tree-children">';
-        for (let i = 0; i < children.length; i++) {
-          const c = children[i];
-          const resolved = rlocToName[c.rloc16];
-          const childName = resolved || c.rloc16;
-          const isLast = i === children.length - 1;
-          const connector = isLast ? 'tree-connector-last' : 'tree-connector';
-          const rlocLabel = resolved ? `<span class="tree-child-rloc">${c.rloc16}</span>` : '';
-          html += `<div class="tree-child ${connector}">
-            <span class="tree-child-name">${childName}</span>
-            ${rlocLabel}
-          </div>`;
-        }
-        html += '</div>';
-      }
-      html += '</div>';
-    }
-    html += '</div>';
-    html += `<div class="stat-row">
-      <span class="stat-label">Topology</span>
-      <span class="stat-value">${allRouters.length} routers &middot; ${totalChildren} end devices</span>
-    </div>`;
-  } else {
-    html += '<div class="empty-state">No Thread routers detected</div>';
-  }
-
-  // Matter Devices
+  const devices = matter.devices || [];
   const summary = matter.summary || {};
-  html += '<div class="section-title" style="margin-top:16px">Matter Devices</div>';
+  const networkName = thread.networkName || 'Unknown';
 
+  // Preserve search input value across re-renders
+  const searchEl = document.querySelector('#smarthome-search');
+  const searchVal = searchEl ? searchEl.value : '';
+
+  // Build RLOC16 -> Matter device map
+  const rlocToDevice = {};
+  for (const d of devices) {
+    if (d.rloc16) rlocToDevice[d.rloc16] = d;
+  }
+
+  // Track which Matter devices are placed in the tree
+  const placed = new Set();
+
+  // Build router groups: OTBR routers + virtual routers for orphaned Thread devices
+  const routerGroups = [];
+  const otbrRouters = thread.routers || [];
+  const otbrRlocs = new Set(otbrRouters.map(r => r.rloc16));
+
+  for (const r of otbrRouters) {
+    const isSelf = thread.selfRloc16 !== undefined &&
+      parseInt(r.rloc16, 16) === thread.selfRloc16;
+    const children = (r.children || []).map(c => {
+      const dev = rlocToDevice[c.rloc16];
+      if (dev) placed.add(dev.nodeId);
+      return {
+        name: dev ? dev.name : null,
+        rloc16: c.rloc16,
+        available: dev ? dev.available : null,
+        vendor: dev ? dev.vendor : null
+      };
+    });
+    routerGroups.push({
+      name: r.name || `Router ${r.rloc16}`,
+      rloc16: r.rloc16,
+      isSelf,
+      children
+    });
+  }
+
+  // Find Thread devices whose parent router isn't in OTBR diagnostics
+  const orphanRouters = {};
+  for (const d of devices) {
+    if (d.transport !== 'thread' || placed.has(d.nodeId)) continue;
+    if (d.parentRouter && d.rloc16) {
+      const parentRloc = '0x' + (parseInt(d.rloc16, 16) & 0xFC00).toString(16).toUpperCase().padStart(4, '0');
+      if (!otbrRlocs.has(parentRloc)) {
+        if (!orphanRouters[d.parentRouter]) orphanRouters[d.parentRouter] = { rloc16: parentRloc, children: [] };
+        orphanRouters[d.parentRouter].children.push({
+          name: d.name, rloc16: d.rloc16, available: d.available, vendor: d.vendor
+        });
+        placed.add(d.nodeId);
+      }
+    }
+  }
+  for (const [name, info] of Object.entries(orphanRouters)) {
+    routerGroups.push({ name, rloc16: info.rloc16, isSelf: false, children: info.children });
+  }
+
+  // Unassigned Thread devices (no RLOC16 or parent)
+  const unassignedThread = devices.filter(d => d.transport === 'thread' && !placed.has(d.nodeId));
+
+  // WiFi devices
+  const wifiDevices = devices.filter(d => d.transport === 'wifi');
+
+  // Filter function
+  const filter = searchVal.toLowerCase().trim();
+  function matchesFilter(name) {
+    return !filter || (name && name.toLowerCase().includes(filter));
+  }
+
+  // Status icon helper
+  function statusIcon(available) {
+    if (available === null) return '<span class="status-icon unknown" title="Unknown">?</span>';
+    return available
+      ? '<span class="status-icon online" title="Online"></span>'
+      : '<span class="status-icon offline" title="Offline"></span>';
+  }
+
+  let html = '';
+
+  // Search box
+  html += `<div class="sh-search-wrap">
+    <input type="text" id="smarthome-search" class="sh-search" placeholder="Search devices..." value="${searchVal}">
+  </div>`;
+
+  // Summary stats
   html += '<div class="smarthome-summary">';
   html += `<span class="stat-chip"><strong>${summary.total || 0}</strong> devices</span>`;
   html += `<span class="stat-chip"><strong>${summary.thread || 0}</strong> thread</span>`;
@@ -571,43 +601,112 @@ function renderSmartHome(data) {
   }
   html += '</div>';
 
-  const devices = matter.devices || [];
-  if (devices.length > 0) {
-    // Preserve details open state across re-renders
-    const detailsEl = document.querySelector('#smarthome-body .detail-dropdown');
-    const wasOpen = detailsEl ? detailsEl.open : false;
-    const offlineCount = devices.filter(d => !d.available).length;
-    const badge = offlineCount > 0 ? `<span class="dropdown-alert warn">${offlineCount}</span>` : '';
-    html += `<details class="detail-dropdown"${wasOpen ? ' open' : ''}>
-      <summary class="detail-summary">${devices.length} Matter devices${badge}</summary>
-      <div class="detail-scroll-container">
-      <table class="detail-table">
-        <tr><th>Name</th><th>Transport</th><th>Info</th><th>Vendor</th><th>Status</th></tr>`;
-    const sorted = [...devices].sort((a, b) => {
-      if (a.available !== b.available) return a.available ? 1 : -1;
-      return a.name.localeCompare(b.name);
-    });
-    for (const d of sorted) {
-      const cls = !d.available ? ' class="stopped"' : '';
-      const transportCls = d.transport || 'unknown';
-      let info = '-';
-      if (d.transport === 'thread' && d.parentRouter) {
-        info = d.parentRouter;
-      } else if (d.transport === 'wifi' && d.ipv4) {
-        info = d.ipv4;
+  // ---- Thread section ----
+  html += `<div class="section-title">Thread &mdash; ${networkName}</div>`;
+
+  let totalChildren = 0;
+  html += '<div class="thread-tree">';
+  for (const r of routerGroups) {
+    const filteredChildren = r.children.filter(c => matchesFilter(c.name || c.rloc16));
+    if (filter && filteredChildren.length === 0 && !matchesFilter(r.name)) continue;
+    const displayChildren = filter ? filteredChildren : r.children;
+
+    totalChildren += r.children.length;
+    const selfBadge = r.isSelf ? ' <span class="transport-chip thread">Self</span>' : '';
+    const displayName = r.name.startsWith('0x') ? 'Unknown Router' : r.name;
+    html += `<div class="tree-router">
+      <div class="tree-router-header">
+        <span class="tree-router-name">${displayName}${selfBadge}</span>
+        <span class="tree-router-meta">${r.rloc16}</span>
+      </div>`;
+    if (displayChildren.length > 0) {
+      html += '<div class="tree-children">';
+      for (let i = 0; i < displayChildren.length; i++) {
+        const c = displayChildren[i];
+        const isLast = i === displayChildren.length - 1;
+        const connector = isLast ? 'tree-connector-last' : 'tree-connector';
+        const nameHtml = c.name
+          ? `<span class="tree-child-name">${c.name}</span>`
+          : `<span class="tree-child-name unnamed">Unknown device</span>`;
+        html += `<div class="tree-child ${connector}">
+          ${statusIcon(c.available)}
+          ${nameHtml}
+          <span class="tree-child-rloc">${c.rloc16}</span>
+        </div>`;
       }
-      html += `<tr${cls}>
-        <td>${d.name}</td>
-        <td><span class="transport-chip ${transportCls}">${d.transport}</span></td>
-        <td class="info-cell">${info}</td>
-        <td>${d.vendor || '-'}</td>
-        <td><span class="status-dot ${d.available ? 'ok' : 'error'}"></span>${d.available ? 'Online' : 'Offline'}</td>
-      </tr>`;
+      html += '</div>';
     }
-    html += '</table></div></details>';
+    html += '</div>';
+  }
+
+  // Unassigned Thread devices
+  const filteredUnassigned = unassignedThread.filter(d => matchesFilter(d.name));
+  if (filteredUnassigned.length > 0) {
+    html += `<div class="tree-router">
+      <div class="tree-router-header">
+        <span class="tree-router-name">Unassigned</span>
+      </div>
+      <div class="tree-children">`;
+    for (let i = 0; i < filteredUnassigned.length; i++) {
+      const d = filteredUnassigned[i];
+      const isLast = i === filteredUnassigned.length - 1;
+      const connector = isLast ? 'tree-connector-last' : 'tree-connector';
+      html += `<div class="tree-child ${connector}">
+        ${statusIcon(d.available)}
+        <span class="tree-child-name">${d.name}</span>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+
+  html += '</div>';
+
+  if (!filter) {
+    html += `<div class="stat-row">
+      <span class="stat-label">Topology</span>
+      <span class="stat-value">${otbrRouters.length} routers &middot; ${totalChildren} end devices</span>
+    </div>`;
+  }
+
+  // ---- WiFi section ----
+  const filteredWifi = wifiDevices.filter(d => matchesFilter(d.name) || matchesFilter(d.ipv4));
+  if (filter && filteredWifi.length === 0) {
+    // skip WiFi section entirely if filter matches nothing
+  } else {
+    html += '<div class="section-title" style="margin-top:16px">WiFi</div>';
+    const displayWifi = filter ? filteredWifi : wifiDevices;
+    if (displayWifi.length > 0) {
+      html += '<div class="tree-children wifi-list">';
+      const sortedWifi = [...displayWifi].sort((a, b) => {
+        if (a.available !== b.available) return a.available ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+      for (let i = 0; i < sortedWifi.length; i++) {
+        const d = sortedWifi[i];
+        const isLast = i === sortedWifi.length - 1;
+        const connector = isLast ? 'tree-connector-last' : 'tree-connector';
+        html += `<div class="tree-child ${connector}">
+          ${statusIcon(d.available)}
+          <span class="tree-child-name">${d.name}</span>
+          <span class="tree-child-rloc">${d.ipv4 || ''}</span>
+        </div>`;
+      }
+      html += '</div>';
+    }
   }
 
   document.getElementById('smarthome-body').innerHTML = html;
+
+  // Attach search handler (re-renders on input)
+  const newSearchEl = document.getElementById('smarthome-search');
+  if (newSearchEl) {
+    newSearchEl.addEventListener('input', () => renderSmartHome(lastData));
+    // Restore cursor position
+    if (searchVal) {
+      newSearchEl.focus();
+      newSearchEl.setSelectionRange(newSearchEl.value.length, newSearchEl.value.length);
+    }
+  }
 }
 
 // ---- Render All ----

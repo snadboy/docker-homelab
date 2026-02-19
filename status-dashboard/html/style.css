@@ -926,15 +926,79 @@ main {
   flex-shrink: 0;
 }
 
-.detail-scroll-container {
-  max-height: 400px;
-  overflow-y: auto;
+/* ---- Smart Home Search Box ---- */
+
+.sh-search-wrap {
+  margin-bottom: 12px;
 }
 
-.detail-table .info-cell {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+.sh-search {
+  width: 100%;
+  padding: 8px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.sh-search::placeholder {
   color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.sh-search:focus {
+  border-color: var(--accent-cyan);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Smart Home Status Icons ---- */
+
+.status-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-icon.online {
+  background: var(--status-ok);
+  box-shadow: 0 0 6px var(--status-ok);
+}
+
+.status-icon.offline {
+  background: var(--status-error);
+  box-shadow: 0 0 6px var(--status-error);
+}
+
+.status-icon.unknown {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ---- Unknown Device Name ---- */
+
+.tree-child-name.unnamed {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* ---- WiFi Device List ---- */
+
+.wifi-list {
+  margin-left: 0;
+  border-left: none;
 }
 
 .smarthome-summary {

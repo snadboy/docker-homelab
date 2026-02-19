@@ -840,33 +840,101 @@ main {
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-.thread-router-item {
+.thread-tree {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 13px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  flex-direction: column;
+  gap: 4px;
 }
 
-.thread-router-item:last-child {
-  border-bottom: none;
+.tree-router {
+  margin-bottom: 4px;
 }
 
-.thread-router-name {
-  color: var(--text-main);
+.tree-router-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 0;
+  font-weight: 500;
 }
 
-.thread-router-meta {
-  font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text-muted);
+.tree-router-name {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+}
+
+.tree-router-meta {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.tree-children {
+  margin-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.tree-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 3px 16px;
+  position: relative;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tree-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.tree-connector-last {
+  border-left-color: transparent;
+}
+
+.tree-connector-last::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0;
+  width: 1px;
+  height: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.tree-child-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-child-rloc {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.detail-scroll-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.detail-table .info-cell {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .smarthome-summary {

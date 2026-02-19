@@ -502,33 +502,54 @@ function renderSmartHome(data) {
   const sh = data.smarthome || {};
   let html = '';
 
-  // Thread Topology
+  // Thread Topology (tree layout)
   const thread = sh.thread || {};
+  const matter = sh.matter || {};
   const networkName = thread.networkName || 'Unknown';
   html += `<div class="section-title">Thread Network &mdash; ${networkName}</div>`;
 
-  const allRouters = [...(thread.borderRouters || []), ...(thread.routers || [])];
+  // Build RLOC16 -> device name map from Matter devices
+  const rlocToName = {};
+  for (const d of (matter.devices || [])) {
+    if (d.rloc16) rlocToName[d.rloc16] = d.name;
+  }
+
+  const allRouters = thread.routers || [];
   if (allRouters.length > 0) {
     let totalChildren = 0;
+    html += '<div class="thread-tree">';
     for (const r of allRouters) {
-      const isBR = (thread.borderRouters || []).some(br => br.rloc16 === r.rloc16);
       const isSelf = thread.selfRloc16 !== undefined &&
         parseInt(r.rloc16, 16) === thread.selfRloc16;
-      const label = r.name || (isSelf ? 'HA OTBR' : `Router ${r.rloc16}`);
-      const badges = [];
-      if (isBR) badges.push('BR');
-      if (isSelf) badges.push('Self');
-      const badgeHtml = badges.length > 0
-        ? ` <span class="transport-chip thread">${badges.join(' / ')}</span>` : '';
-      totalChildren += r.childCount || 0;
-      html += `<div class="thread-router-item">
-        <span class="thread-router-name"><span class="status-dot ok"></span>${label}${badgeHtml}</span>
-        <span class="thread-router-meta">
-          <span>${r.rloc16}</span>
-          <span>${r.childCount || 0} children</span>
-        </span>
-      </div>`;
+      const label = r.name || `Router ${r.rloc16}`;
+      const selfBadge = isSelf ? ' <span class="transport-chip thread">Self</span>' : '';
+      const children = r.children || [];
+      totalChildren += children.length;
+      html += `<div class="tree-router">
+        <div class="tree-router-header">
+          <span class="status-dot ok"></span>
+          <span class="tree-router-name">${label}${selfBadge}</span>
+          <span class="tree-router-meta">${r.rloc16}</span>
+        </div>`;
+      if (children.length > 0) {
+        html += '<div class="tree-children">';
+        for (let i = 0; i < children.length; i++) {
+          const c = children[i];
+          const resolved = rlocToName[c.rloc16];
+          const childName = resolved || c.rloc16;
+          const isLast = i === children.length - 1;
+          const connector = isLast ? 'tree-connector-last' : 'tree-connector';
+          const rlocLabel = resolved ? `<span class="tree-child-rloc">${c.rloc16}</span>` : '';
+          html += `<div class="tree-child ${connector}">
+            <span class="tree-child-name">${childName}</span>
+            ${rlocLabel}
+          </div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
     }
+    html += '</div>';
     html += `<div class="stat-row">
       <span class="stat-label">Topology</span>
       <span class="stat-value">${allRouters.length} routers &middot; ${totalChildren} end devices</span>
@@ -538,7 +559,6 @@ function renderSmartHome(data) {
   }
 
   // Matter Devices
-  const matter = sh.matter || {};
   const summary = matter.summary || {};
   html += '<div class="section-title" style="margin-top:16px">Matter Devices</div>';
 
@@ -553,12 +573,16 @@ function renderSmartHome(data) {
 
   const devices = matter.devices || [];
   if (devices.length > 0) {
+    // Preserve details open state across re-renders
+    const detailsEl = document.querySelector('#smarthome-body .detail-dropdown');
+    const wasOpen = detailsEl ? detailsEl.open : false;
     const offlineCount = devices.filter(d => !d.available).length;
     const badge = offlineCount > 0 ? `<span class="dropdown-alert warn">${offlineCount}</span>` : '';
-    html += `<details class="detail-dropdown">
+    html += `<details class="detail-dropdown"${wasOpen ? ' open' : ''}>
       <summary class="detail-summary">${devices.length} Matter devices${badge}</summary>
+      <div class="detail-scroll-container">
       <table class="detail-table">
-        <tr><th>Name</th><th>Transport</th><th>Vendor</th><th>Status</th></tr>`;
+        <tr><th>Name</th><th>Transport</th><th>Info</th><th>Vendor</th><th>Status</th></tr>`;
     const sorted = [...devices].sort((a, b) => {
       if (a.available !== b.available) return a.available ? 1 : -1;
       return a.name.localeCompare(b.name);
@@ -566,14 +590,21 @@ function renderSmartHome(data) {
     for (const d of sorted) {
       const cls = !d.available ? ' class="stopped"' : '';
       const transportCls = d.transport || 'unknown';
+      let info = '-';
+      if (d.transport === 'thread' && d.parentRouter) {
+        info = d.parentRouter;
+      } else if (d.transport === 'wifi' && d.ipv4) {
+        info = d.ipv4;
+      }
       html += `<tr${cls}>
         <td>${d.name}</td>
         <td><span class="transport-chip ${transportCls}">${d.transport}</span></td>
+        <td class="info-cell">${info}</td>
         <td>${d.vendor || '-'}</td>
         <td><span class="status-dot ${d.available ? 'ok' : 'error'}"></span>${d.available ? 'Online' : 'Offline'}</td>
       </tr>`;
     }
-    html += '</table></details>';
+    html += '</table></div></details>';
   }
 
   document.getElementById('smarthome-body').innerHTML = html;

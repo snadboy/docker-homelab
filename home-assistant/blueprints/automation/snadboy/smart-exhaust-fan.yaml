@@ -1,0 +1,253 @@
+blueprint:
+  name: "Smart Exhaust Fan"
+  description: >-
+    Consolidated exhaust fan control: turns fan ON on humidity spike or occupancy,
+    OFF when room is unoccupied AND humidity is stable. Includes built-in extended
+    mode via stated runtime variables with TTL auto-expiry. Extended mode activates
+    automatically when the fan switch is toggled off then back on within 15 seconds
+    (stutter feedback confirms activation), or manually via stated.set with
+    name "{fan_name}_extended" and a TTL. fan_name is auto-slugified for safe
+    entity ID construction.
+  domain: automation
+  input:
+    fan_name:
+      name: Fan Name
+      description: >-
+        Namespace for stated variables (e.g., "upstairs_bath"). Used to create
+        stated.{fan_name}_extended for extended mode. Auto-slugified to ensure
+        valid entity IDs.
+      selector:
+        text:
+    occupancy_sensor:
+      name: Occupancy Sensor
+      description: Binary sensor that detects room occupancy
+      selector:
+        entity:
+          domain: binary_sensor
+    fan_entity:
+      name: Fan Entity
+      description: Fan or switch entity that controls the exhaust fan
+      selector:
+        entity:
+          domain:
+            - fan
+            - switch
+    humidity_rate_sensor:
+      name: Humidity Rate Sensor
+      description: Sensor that measures humidity rate of change (%/min)
+      selector:
+        entity:
+          domain: sensor
+    humidity_rate_trigger:
+      name: Humidity Rate Trigger
+      description: Humidity rate above which the fan turns on
+      default: 2
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+    humidity_rate_threshold:
+      name: Humidity Rate Threshold
+      description: Rate below which humidity is considered "not rising"
+      default: 0.1
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.1
+    no_occupancy_delay:
+      name: No Occupancy Delay
+      description: Minutes to wait after occupancy clears
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          unit_of_measurement: minutes
+    humidity_falling_delay:
+      name: Humidity Falling Delay
+      description: Minutes the humidity rate must stay below 0 before turning off
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+          unit_of_measurement: minutes
+    max_on_duration:
+      name: Maximum On Duration
+      description: Safety timeout — turn off fan if on longer than this
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+          unit_of_measurement: minutes
+    extended_duration:
+      name: Extended Duration
+      description: Minutes to keep the fan running when extended mode is activated
+      default: 90
+      selector:
+        number:
+          min: 5
+          max: 180
+          step: 5
+          unit_of_measurement: minutes
+
+variables:
+  fan_name: "{{ fan_name_raw | slugify('_') }}"
+  fan_name_raw: !input fan_name
+  extended_duration: !input extended_duration
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input humidity_rate_sensor
+    above: !input humidity_rate_trigger
+    id: humidity_on
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "on"
+    id: occupancy_on
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "off"
+    for:
+      minutes: !input no_occupancy_delay
+    id: occupancy_off
+  - trigger: numeric_state
+    entity_id: !input humidity_rate_sensor
+    below: 0
+    for:
+      minutes: !input humidity_falling_delay
+    id: humidity_off
+  - trigger: state
+    entity_id: !input fan_entity
+    to: "on"
+    for:
+      minutes: !input max_on_duration
+    id: safety_timeout
+  - trigger: state
+    entity_id: !input fan_entity
+    from: "off"
+    to: "on"
+    id: toggle_on
+  - trigger: event
+    event_type: stated.value_changed
+    id: extended_expired
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+  - trigger: event
+    event_type: automation_reloaded
+    id: reload
+
+actions:
+  - choose:
+      - alias: "Fan ON — humidity spike or occupancy"
+        conditions:
+          - condition: trigger
+            id:
+              - humidity_on
+              - occupancy_on
+        sequence:
+          - condition: state
+            entity_id: !input fan_entity
+            state: "off"
+          - action: homeassistant.turn_on
+            target:
+              entity_id: !input fan_entity
+
+      - alias: "Safety timeout — force OFF"
+        conditions:
+          - condition: trigger
+            id: safety_timeout
+        sequence:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: !input fan_entity
+          - action: stated.delete
+            data:
+              name: "{{ fan_name }}_extended"
+
+      - alias: "Extended mode expired — evaluate OFF"
+        conditions:
+          - condition: trigger
+            id: extended_expired
+          - condition: template
+            value_template: >-
+              {{ trigger.event.data.entity_id == 'stated.' ~ fan_name ~ '_extended'
+              and trigger.event.data.new_value != 'on' }}
+        sequence:
+          - condition: state
+            entity_id: !input fan_entity
+            state: "on"
+          - condition: state
+            entity_id: !input occupancy_sensor
+            state: "off"
+          - condition: numeric_state
+            entity_id: !input humidity_rate_sensor
+            below: !input humidity_rate_threshold
+          - action: homeassistant.turn_off
+            target:
+              entity_id: !input fan_entity
+
+      - alias: "Toggle detection — activate extended mode"
+        conditions:
+          - condition: trigger
+            id: toggle_on
+          - condition: template
+            value_template: >-
+              {{ (now() - trigger.from_state.last_changed).total_seconds() < 15 }}
+          - condition: state
+            entity_id: !input occupancy_sensor
+            state: "on"
+          - condition: template
+            value_template: >-
+              {{ not is_state('stated.' ~ fan_name ~ '_extended', 'on') }}
+        sequence:
+          - action: stated.set
+            data:
+              name: "{{ fan_name }}_extended"
+              value: "on"
+              var_type: boolean
+              ttl: "{{ (extended_duration * 60) | int }}"
+          - delay:
+              seconds: 2
+          - action: homeassistant.turn_off
+            target:
+              entity_id: !input fan_entity
+          - delay:
+              seconds: 1
+          - action: homeassistant.turn_on
+            target:
+              entity_id: !input fan_entity
+
+      - alias: "Normal OFF — unoccupied, humidity stable, not extended"
+        conditions:
+          - condition: trigger
+            id:
+              - occupancy_off
+              - humidity_off
+              - ha_start
+              - reload
+        sequence:
+          - condition: state
+            entity_id: !input fan_entity
+            state: "on"
+          - condition: state
+            entity_id: !input occupancy_sensor
+            state: "off"
+          - condition: numeric_state
+            entity_id: !input humidity_rate_sensor
+            below: !input humidity_rate_threshold
+          - condition: template
+            value_template: >-
+              {{ not is_state('stated.' ~ fan_name ~ '_extended', 'on') }}
+          - action: homeassistant.turn_off
+            target:
+              entity_id: !input fan_entity
+
+mode: restart

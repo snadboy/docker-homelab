@@ -10,7 +10,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/New_York
+      - TZ=America/Chicago
+      - GENERIC_TIMEZONE=America/Chicago
       - WEBHOOK_URL=https://n8n.isnadboy.com/
       - N8N_HOST=n8n.isnadboy.com
       - N8N_PROTOCOL=https

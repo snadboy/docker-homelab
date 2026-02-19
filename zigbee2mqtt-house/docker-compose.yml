@@ -1,0 +1,14 @@
+services:
+  zigbee2mqtt-house:
+    container_name: zigbee2mqtt-house
+    hostname: zigbee2mqtt-house
+    labels:
+      - "snadboy.revp.8080.domain=zigbee2mqtt-house.isnadboy.com"
+    image: koenkk/zigbee2mqtt
+    restart: unless-stopped
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-house/app-data:/app/data
+    ports:
+      - "8082:8080"
+    environment:
+      - TZ=America/Chicago

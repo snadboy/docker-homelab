@@ -812,6 +812,81 @@ main {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
+/* ---- Transport Chips (Smart Home) ---- */
+
+.transport-chip {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-block;
+}
+
+.transport-chip.thread {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-purple);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.transport-chip.wifi {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.transport-chip.unknown {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.thread-router-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.thread-router-item:last-child {
+  border-bottom: none;
+}
+
+.thread-router-name {
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thread-router-meta {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.smarthome-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.smarthome-summary .stat-chip {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+}
+
+.smarthome-summary .stat-chip strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
 /* ---- Responsive ---- */
 
 @media (max-width: 900px) {

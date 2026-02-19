@@ -373,8 +373,32 @@
     },
     {
       "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "command": "python3 << 'SCRIPTEOF'\nimport json, subprocess, sys\n\ndef curl_get(url):\n    try:\n        r = subprocess.run(['curl', '-s', '-m', '10', url], capture_output=True, text=True, timeout=15)\n        return json.loads(r.stdout) if r.stdout.strip() else {}\n    except:\n        return {}\n\ndef curl_post(url, data):\n    try:\n        r = subprocess.run(['curl', '-s', '-m', '10', '-X', 'POST', '-H', 'Content-Type: application/json', '-d', json.dumps(data), url], capture_output=True, text=True, timeout=15)\n        return json.loads(r.stdout) if r.stdout.strip() else []\n    except:\n        return []\n\nresult = {'thread': {'borderRouters': [], 'routers': [], 'networkName': ''}, 'matter': {'devices': [], 'summary': {'total': 0, 'thread': 0, 'wifi': 0, 'online': 0, 'offline': 0}}}\n\n# Thread: OTBR self info\nnode_info = curl_get('http://core-openthread-border-router:8081/node')\nif node_info:\n    result['thread']['networkName'] = node_info.get('NetworkName', '')\n    result['thread']['selfRloc16'] = node_info.get('Rloc16', 0)\n\n# Thread: network diagnostics (all routers)\ndiag = curl_post('http://core-openthread-border-router:8081/diagnostics', {'destination': 'ff03::2', 'networkDiagnosticsTlvs': [0, 1, 2, 5, 16, 19]})\nif isinstance(diag, list):\n    for entry in diag:\n        rloc16 = entry.get('Rloc16', 0)\n        ext_addr = entry.get('ExtAddress', '')\n        child_table = entry.get('ChildTable', [])\n        router = {\n            'rloc16': f'0x{rloc16:04X}' if isinstance(rloc16, int) else str(rloc16),\n            'extAddress': ext_addr,\n            'childCount': len(child_table) if isinstance(child_table, list) else 0\n        }\n        result['thread']['routers'].append(router)\n\n# Device registry for Matter friendly names\ndev_names = {}\nMATTER_ENTRY = '60ce5004e41c84cb92fedbd17cc7cc81'\ntry:\n    with open('/config/.storage/core.device_registry') as f:\n        reg = json.load(f)\n    for dev in reg.get('data', {}).get('devices', []):\n        for ident in dev.get('identifiers', []):\n            if isinstance(ident, list) and len(ident) == 2 and ident[0] == 'matter':\n                dev_names[ident[1]] = dev.get('name_by_user') or dev.get('name', '')\nexcept:\n    pass\n\n# Matter diagnostics\ntry:\n    token = open('/config/.ha_status_token').read().strip()\n    r = subprocess.run(['curl', '-s', '-m', '15', '-H', f'Authorization: Bearer {token}', f'http://homeassistant:8123/api/diagnostics/config_entry/{MATTER_ENTRY}'], capture_output=True, text=True, timeout=20)\n    md = json.loads(r.stdout) if r.stdout.strip() else {}\n    nodes = md.get('data', {}).get('server', {}).get('nodes', [])\n    for nd in nodes:\n        nid = nd.get('node_id', 0)\n        avail = nd.get('available', False)\n        attrs = nd.get('attributes', {})\n        fm = attrs.get('0/49/65532', 0)\n        if not isinstance(fm, int): fm = 0\n        transport = 'thread' if (fm & 2) else ('wifi' if (fm & 1) else 'unknown')\n        vendor = attrs.get('0/40/1', '')\n        if not isinstance(vendor, str): vendor = ''\n        nid_hex = f'{nid:016X}'\n        name = ''\n        for key, val in dev_names.items():\n            if nid_hex in key:\n                name = val\n                break\n        if not name:\n            name = attrs.get('0/40/3', f'Node {nid}')\n            if not isinstance(name, str): name = f'Node {nid}'\n        result['matter']['devices'].append({'name': name, 'nodeId': nid, 'transport': transport, 'available': avail, 'vendor': vendor})\nexcept:\n    pass\n\ns = result['matter']\ns['summary'] = {\n    'total': len(s['devices']),\n    'thread': sum(1 for d in s['devices'] if d['transport'] == 'thread'),\n    'wifi': sum(1 for d in s['devices'] if d['transport'] == 'wifi'),\n    'online': sum(1 for d in s['devices'] if d['available']),\n    'offline': sum(1 for d in s['devices'] if not d['available'])\n}\n\nprint('SMARTHOME:')\nprint(json.dumps(result))\nSCRIPTEOF",
+        "authentication": "privateKey",
+        "options": {}
+      },
+      "id": "hsa-ssh-ha-smarthome",
+      "name": "SSH HA Smart Home",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        440,
+        1900
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "YgRW8lB1lXMvtPjF",
+          "name": "ha SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
         "mode": "append",
-        "numberInputs": 14,
+        "numberInputs": 15,
         "options": {}
       },
       "id": "hsa-merge",
@@ -388,7 +412,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\nlet network = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {}, tunnels: [] };\nlet proxmox = { nodes: [], totals: {} };\nlet media = {};\nconst serviceHosts = [];\nlet totalContainers = 0, running = 0, unhealthy = 0, stopped = 0;\nconst pbsServers = [];\nlet latestVersions = {};\n\nconst expectedTunnels = ['cloudflare-plex', 'cloudflare-overseerr', 'cloudflared-gotify', 'cloudflare-dockhand'];\nconst foundTunnels = {};\n\nfor (const item of items) {\n  const d = item.json;\n\n  if (d.type === 'unifi') {\n    network = { ...network, ...d.data };\n  } else if (d.type === 'pve') {\n    proxmox = d.data;\n  } else if (d.type === 'media') {\n    media = d.data;\n  } else if (d.stdout !== undefined) {\n    const stdout = (d.stdout || '').trim();\n    if (!stdout) continue;\n    const lines = stdout.split('\\n').filter(l => l.length > 0);\n\n    if (lines[0] && lines[0].startsWith('PBS:')) {\n      const serverName = lines[0].replace('PBS:', '').trim();\n      const server = { name: serverName, version: '', datastores: [] };\n      for (let i = 1; i < lines.length; i++) {\n        const line = lines[i].trim();\n        if (line.startsWith('VER:')) {\n          server.version = line.replace('VER:', '').trim();\n        } else if (line.startsWith('DS:')) {\n          const parts = line.split(':');\n          const dsName = parts[1] || '';\n          const usageParts = (parts[2] || '').trim().split(/\\s+/);\n          const totalBytes = parseInt(usageParts[0] || '0', 10);\n          const usedBytes = parseInt(usageParts[1] || '0', 10);\n          const totalGB = Math.round(totalBytes / 1073741824);\n          const usedGB = Math.round(usedBytes / 1073741824);\n          const usedPct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;\n          let gcState = 'unknown', gcLastRun = 0;\n          try {\n            const gcJson = parts.slice(3).join(':');\n            if (gcJson) {\n              const gc = JSON.parse(gcJson);\n              gcState = gc['last-run-state'] || gc.state || 'unknown';\n              gcLastRun = gc['last-run-endtime'] || 0;\n            }\n          } catch (e) {}\n          server.datastores.push({ name: dsName, totalGB, usedGB, usedPct, gcState, gcLastRun, lastBackups: [] });\n        } else if (line.startsWith('SNAP:')) {\n          const snapParts = line.split(':');\n          const snapDs = snapParts[1] || '';\n          const snapId = snapParts[2] || '';\n          const snapTime = parseInt(snapParts[3] || '0', 10);\n          const ds = server.datastores.find(d => d.name === snapDs);\n          if (ds && snapTime > 0) ds.lastBackups.push({ id: snapId, time: snapTime });\n        }\n      }\n      pbsServers.push(server);\n    } else if (lines[0] && lines[0].startsWith('LATEST_VERSIONS:')) {\n      try {\n        const jsonStr = lines.slice(1).join('\\n').trim();\n        if (jsonStr && jsonStr !== '{}') latestVersions = JSON.parse(jsonStr);\n      } catch (e) {}\n    } else if (lines[0] && lines[0].startsWith('HOST:')) {\n      const host = lines[0].replace('HOST:', '').trim();\n      const containers = [];\n      for (let i = 1; i < lines.length; i++) {\n        const parts = lines[i].split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        const version = (parts[3] || '').trim();\n        if (name) {\n          const c = { name, state, status };\n          if (version) c.version = version;\n          containers.push(c);\n          totalContainers++;\n          if (state === 'running') running++;\n          else if (state === 'exited' || state === 'dead') stopped++;\n          if (status.includes('unhealthy')) unhealthy++;\n        }\n      }\n      if (containers.length > 0) serviceHosts.push({ name: host, containers });\n    } else {\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        if (name) foundTunnels[name] = { state, status };\n      }\n    }\n  }\n}\n\nfor (const tunnel of expectedTunnels) {\n  const info = foundTunnels[tunnel] || { state: 'not found', status: '' };\n  network.tunnels.push({ name: tunnel, state: info.state, status: info.status });\n}\n\nfunction norm(ver) {\n  return ver.replace(/-ls\\d+$/, '').replace(/^v/, '').replace(/-[a-f0-9]{9,}$/, '');\n}\n\nif (Object.keys(latestVersions).length > 0) {\n  for (const host of serviceHosts) {\n    for (const c of host.containers) {\n      if (c.version && latestVersions[c.name]) {\n        const cur = norm(c.version);\n        const lat = norm(latestVersions[c.name]);\n        c.hasUpdate = cur !== lat && !cur.startsWith(lat) && !lat.startsWith(cur);\n      }\n    }\n  }\n}\n\nconst collectionErrors = [];\nif (network.error) collectionErrors.push({ source: 'unifi', error: network.error });\nif (proxmox.error) collectionErrors.push({ source: 'pve', error: proxmox.error });\nfor (const [svc, info] of Object.entries(media)) {\n  if (info && typeof info === 'object' && info.error) {\n    collectionErrors.push({ source: 'media-' + svc, error: info.error });\n  }\n}\n\nconst cachedStatus = {\n  lastUpdated: new Date().toISOString(),\n  collectionErrors,\n  network,\n  proxmox,\n  pbs: { servers: pbsServers.sort((a, b) => a.name.localeCompare(b.name)) },\n  services: {\n    hosts: serviceHosts.sort((a, b) => a.name.localeCompare(b.name)),\n    summary: { totalContainers, running, unhealthy, stopped }\n  },\n  media\n};\n\nstaticData.cachedStatus = JSON.stringify(cachedStatus);\n\nreturn [{ json: { cached: true, lastUpdated: cachedStatus.lastUpdated } }];"
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\nlet network = { wan: {}, wan2: {}, gateway: {}, speedtest: {}, devices: {}, wifi: {}, tunnels: [] };\nlet proxmox = { nodes: [], totals: {} };\nlet media = {};\nconst serviceHosts = [];\nlet totalContainers = 0, running = 0, unhealthy = 0, stopped = 0;\nconst pbsServers = [];\nlet latestVersions = {};\nlet smarthome = {};\n\nconst expectedTunnels = ['cloudflare-plex', 'cloudflare-overseerr', 'cloudflared-gotify', 'cloudflare-dockhand'];\nconst foundTunnels = {};\n\nfor (const item of items) {\n  const d = item.json;\n\n  if (d.type === 'unifi') {\n    network = { ...network, ...d.data };\n  } else if (d.type === 'pve') {\n    proxmox = d.data;\n  } else if (d.type === 'media') {\n    media = d.data;\n  } else if (d.stdout !== undefined) {\n    const stdout = (d.stdout || '').trim();\n    if (!stdout) continue;\n    const lines = stdout.split('\\n').filter(l => l.length > 0);\n\n    if (lines[0] && lines[0].startsWith('PBS:')) {\n      const serverName = lines[0].replace('PBS:', '').trim();\n      const server = { name: serverName, version: '', datastores: [] };\n      for (let i = 1; i < lines.length; i++) {\n        const line = lines[i].trim();\n        if (line.startsWith('VER:')) {\n          server.version = line.replace('VER:', '').trim();\n        } else if (line.startsWith('DS:')) {\n          const parts = line.split(':');\n          const dsName = parts[1] || '';\n          const usageParts = (parts[2] || '').trim().split(/\\s+/);\n          const totalBytes = parseInt(usageParts[0] || '0', 10);\n          const usedBytes = parseInt(usageParts[1] || '0', 10);\n          const totalGB = Math.round(totalBytes / 1073741824);\n          const usedGB = Math.round(usedBytes / 1073741824);\n          const usedPct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;\n          let gcState = 'unknown', gcLastRun = 0;\n          try {\n            const gcJson = parts.slice(3).join(':');\n            if (gcJson) {\n              const gc = JSON.parse(gcJson);\n              gcState = gc['last-run-state'] || gc.state || 'unknown';\n              gcLastRun = gc['last-run-endtime'] || 0;\n            }\n          } catch (e) {}\n          server.datastores.push({ name: dsName, totalGB, usedGB, usedPct, gcState, gcLastRun, lastBackups: [] });\n        } else if (line.startsWith('SNAP:')) {\n          const snapParts = line.split(':');\n          const snapDs = snapParts[1] || '';\n          const snapId = snapParts[2] || '';\n          const snapTime = parseInt(snapParts[3] || '0', 10);\n          const ds = server.datastores.find(d => d.name === snapDs);\n          if (ds && snapTime > 0) ds.lastBackups.push({ id: snapId, time: snapTime });\n        }\n      }\n      pbsServers.push(server);\n    } else if (lines[0] && lines[0].startsWith('LATEST_VERSIONS:')) {\n      try {\n        const jsonStr = lines.slice(1).join('\\n').trim();\n        if (jsonStr && jsonStr !== '{}') latestVersions = JSON.parse(jsonStr);\n      } catch (e) {}\n    } else if (lines[0] && lines[0].startsWith('SMARTHOME:')) {\n      try {\n        const jsonStr = lines.slice(1).join('\\n').trim();\n        if (jsonStr) smarthome = JSON.parse(jsonStr);\n      } catch (e) {\n        collectionErrors.push({ source: 'smarthome', error: e.message });\n      }\n    } else if (lines[0] && lines[0].startsWith('HOST:')) {\n      const host = lines[0].replace('HOST:', '').trim();\n      const containers = [];\n      for (let i = 1; i < lines.length; i++) {\n        const parts = lines[i].split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        const version = (parts[3] || '').trim();\n        if (name) {\n          const c = { name, state, status };\n          if (version) c.version = version;\n          containers.push(c);\n          totalContainers++;\n          if (state === 'running') running++;\n          else if (state === 'exited' || state === 'dead') stopped++;\n          if (status.includes('unhealthy')) unhealthy++;\n        }\n      }\n      if (containers.length > 0) serviceHosts.push({ name: host, containers });\n    } else {\n      for (const line of lines) {\n        const parts = line.split('|');\n        const name = (parts[0] || '').trim();\n        const state = (parts[1] || '').trim();\n        const status = (parts[2] || '').trim();\n        if (name) foundTunnels[name] = { state, status };\n      }\n    }\n  }\n}\n\nfor (const tunnel of expectedTunnels) {\n  const info = foundTunnels[tunnel] || { state: 'not found', status: '' };\n  network.tunnels.push({ name: tunnel, state: info.state, status: info.status });\n}\n\nfunction norm(ver) {\n  return ver.replace(/-ls\\d+$/, '').replace(/^v/, '').replace(/-[a-f0-9]{9,}$/, '');\n}\n\nif (Object.keys(latestVersions).length > 0) {\n  for (const host of serviceHosts) {\n    for (const c of host.containers) {\n      if (c.version && latestVersions[c.name]) {\n        const cur = norm(c.version);\n        const lat = norm(latestVersions[c.name]);\n        c.hasUpdate = cur !== lat && !cur.startsWith(lat) && !lat.startsWith(cur);\n      }\n    }\n  }\n}\n\nconst collectionErrors = [];\nif (network.error) collectionErrors.push({ source: 'unifi', error: network.error });\nif (proxmox.error) collectionErrors.push({ source: 'pve', error: proxmox.error });\nfor (const [svc, info] of Object.entries(media)) {\n  if (info && typeof info === 'object' && info.error) {\n    collectionErrors.push({ source: 'media-' + svc, error: info.error });\n  }\n}\n\nconst cachedStatus = {\n  lastUpdated: new Date().toISOString(),\n  collectionErrors,\n  network,\n  proxmox,\n  pbs: { servers: pbsServers.sort((a, b) => a.name.localeCompare(b.name)) },\n  services: {\n    hosts: serviceHosts.sort((a, b) => a.name.localeCompare(b.name)),\n    summary: { totalContainers, running, unhealthy, stopped }\n  },\n  media,\n  smarthome\n};\n\nstaticData.cachedStatus = JSON.stringify(cachedStatus);\n\nreturn [{ json: { cached: true, lastUpdated: cachedStatus.lastUpdated } }];"
       },
       "id": "hsa-cache",
       "name": "Cache Results",
@@ -442,6 +466,38 @@
       "position": [
         440,
         900
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab-status-refresh",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "hsa-webhook-refresh",
+      "name": "Refresh Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1300
+      ],
+      "webhookId": "homelab-status-refresh"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "hsa-respond-refresh",
+      "name": "Respond Refresh",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        500
       ]
     }
   ],
@@ -527,6 +583,11 @@
           },
           {
             "node": "PBS cloud-pbs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SSH HA Smart Home",
             "type": "main",
             "index": 0
           }
@@ -698,6 +759,17 @@
         ]
       ]
     },
+    "SSH HA Smart Home": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 14
+          }
+        ]
+      ]
+    },
     "Merge Results": {
       "main": [
         [
@@ -725,6 +797,28 @@
         [
           {
             "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Webhook": {
+      "main": [
+        [
+          {
+            "node": "Globals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Results": {
+      "main": [
+        [
+          {
+            "node": "Respond Refresh",
             "type": "main",
             "index": 0
           }

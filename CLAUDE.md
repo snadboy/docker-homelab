@@ -787,10 +787,117 @@ New `verify` mode re-evaluates all CLEANUP_KEPT threads against current state:
 
 ---
 
+## SLZB-MR1U Multi-Radio Setup (2026-02-18/19)
+
+**Status:** ✅ Zigbee + Thread Complete | BLE Proxy Not Pursued
+
+Set up SLZB-MR1U multi-radio device for whole-house Zigbee coordination and Thread border routing.
+
+### Device
+
+| Property | Value |
+|----------|-------|
+| Model | SMLIGHT SLZB-MR1U |
+| Firmware | SLZB-OS v3.2.4 |
+| Hostname | SLZB-MR1U-HOUSE.local |
+| LAN IP | 192.168.86.130 |
+| MAC (Wired) | 94:54:c5:86:e2:4c |
+| UniFi Name | slzb-mr1u-house |
+| Web UI | http://192.168.86.130 |
+
+### Radio Configuration
+
+| Radio | Chip | Firmware | Function | TCP Port |
+|-------|------|----------|----------|----------|
+| Radio 0 | EFR32MG21 | Thread RCP | Thread Border Router (OTBR) | 6638 |
+| Radio 1 | CC2652P7 | ZStack coordinator | Zigbee coordinator (Z2M) | 7638 |
+| ESP32 | — | SLZB-OS | Device management MCU | — |
+
+### 1. Zigbee Coordinator — zigbee2mqtt-house
+
+| Property | Value |
+|----------|-------|
+| Container | zigbee2mqtt-house (koenkk/zigbee2mqtt) |
+| Host | utilities |
+| Port | 8082:8080 |
+| Frontend | https://zigbee2mqtt-house.isnadboy.com |
+| MQTT Topic | zigbee2mqtt-house |
+| MQTT Broker | mqtt://host-ha.isnadboy.com:1883 |
+| Serial | tcp://192.168.86.130:7638 (zstack adapter) |
+| Channel | 20 (changed from 11 — PAN ID conflict) |
+| Dockhand Stack | ID 14 |
+| Commit | `13c59f9` |
+
+**Files:**
+- `docker-homelab/zigbee2mqtt-house/docker-compose.yml`
+- `/mnt/docker/zigbee2mqtt/zigbee2mqtt-house/app-data/configuration.yaml` (on utilities)
+
+### 2. Thread Border Router — HA OTBR Add-on
+
+| Property | Value |
+|----------|-------|
+| Add-on | OpenThread Border Router |
+| Radio | EFR32MG21 RCP via tcp://192.168.86.130:6638 |
+| Baudrate | 460800 |
+| HW Flow Control | Disabled |
+| Thread Version | 1.3.0 |
+| otbr-agent | v0.3.0 |
+| Config Entry | `01KHVB99EP6J256DG4SKD7BGWZ` |
+| Thread Network | NEST-PAN-0AF0 (channel 23, PAN ID 0af0) |
+
+**Architecture:** MR1U ESP32 bridges EFR32MG21 UART over TCP:6638 → HA OTBR add-on runs socat TCP→`/tmp/ttyOTBR` → otbr-agent speaks Spinel/HDLC to RCP firmware.
+
+**OTBR add-on config quirk:** "Device" (serial port) field is required even when using Network Device (TCP). Selected `/dev/ttyS3` as dummy — Network Device takes precedence.
+
+**Result:** 4th border router on NEST-PAN-0AF0 network:
+1. Google TV Streamer #3365
+2. Google Nest Hub Max (95c5)
+3. Home Assistant OpenThread Border Router #3376 (MR1U)
+4. OpenThread BorderRouter #E55D (SMHUB)
+
+### 3. Bluetooth Proxy — Not Pursued
+
+Research found significant trade-offs:
+- Requires flashing ESPHome firmware onto the ESP32, **completely replacing SLZB-OS**
+- Loses web management UI for the device
+- Requires USB connection to revert
+- Single location coverage vs two existing BLE proxies
+- 2.4 GHz interference risk with all three radios active
+
+**Decision:** Keep SLZB-OS for device management. Existing BLE proxies provide adequate coverage.
+
+### 4. SMLIGHT Integration
+
+| Property | Value |
+|----------|-------|
+| Config Entry | `01KHVBF3K40BNM17VBPX8Y32RT` |
+| Title | SLZB-MR1U-HOUSE |
+| State | loaded |
+
+**Key entities:**
+- `sensor.slzb_mr1u_house_zigbee_type` = thread (Radio 0)
+- `sensor.slzb_mr1u_house_zigbee_type_2` = coordinator (Radio 1)
+- `sensor.slzb_mr1u_house_core_chip_temp` / `zigbee_chip_temp` / `zigbee_chip_temp_2` — temperature monitoring
+- `update.slzb_mr1u_house_core_firmware` / `zigbee_firmware` / `zigbee_firmware_2` — firmware update tracking
+- `binary_sensor.slzb_mr1u_house_ping` — availability monitoring
+- `button.slzb_mr1u_house_core_restart` / `zigbee_restart` — remote restart
+
+### Issues Resolved
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Z2M failed on channel 11 | PAN ID conflict with existing network | Changed to channel 20 |
+| HA Supervisor API empty responses | Long-lived token can't access supervisor REST endpoints fully | Used Playwright browser automation for add-on management |
+| OTBR config save "missing device" | Serial Device field required even for TCP mode | Selected `/dev/ttyS3` as dummy |
+| OTBR formed own Thread network | OTBR integration config entry was removed in prior cleanup | Recreated config entry via REST API flow |
+| OTBR "No API loaded" | Config entry missing | Created via `POST /api/config/config_entries/flow` with handler "otbr" |
+
+---
+
 ## Outstanding Items
 
 - NAS storage stats for status dashboard (need SSH access to UniFi NAS and Synology)
 
 ---
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-19

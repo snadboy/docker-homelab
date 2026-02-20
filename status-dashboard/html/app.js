@@ -1,4 +1,5 @@
 const API_URL = 'https://n8n.isnadboy.com/webhook/homelab-status';
+const REFRESH_URL = 'https://n8n.isnadboy.com/webhook/homelab-status-refresh';
 const REFRESH_INTERVAL = 60000;
 
 let lastData = null;
@@ -751,9 +752,24 @@ async function fetchData() {
 
 async function manualRefresh() {
   const btn = document.getElementById('refresh-btn');
+  const updated = document.getElementById('updated');
   btn.classList.add('spinning');
   btn.disabled = true;
-  await fetchData();
+  updated.textContent = 'Refreshing...';
+
+  try {
+    await fetch(REFRESH_URL, { method: 'POST' });
+  } catch (_) { /* ignore */ }
+
+  // Poll until lastUpdated changes (max 30s)
+  const prevUpdated = lastData?.lastUpdated;
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 2000));
+    await fetchData();
+    if (lastData?.lastUpdated && lastData.lastUpdated !== prevUpdated) break;
+  }
+
   btn.classList.remove('spinning');
   btn.disabled = false;
 }

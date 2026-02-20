@@ -4,6 +4,7 @@ const REFRESH_INTERVAL = 60000;
 
 let lastData = null;
 let fetchError = false;
+let isRefreshing = false;
 let servicesSortBy = 'name'; // 'name' or 'host'
 
 // ---- Tab Navigation ----
@@ -721,6 +722,8 @@ function render(data) {
 }
 
 function updateHeader(data) {
+  if (isRefreshing) return;
+
   const pulse = document.getElementById('pulse');
   const updated = document.getElementById('updated');
 
@@ -753,6 +756,7 @@ async function fetchData() {
 async function manualRefresh() {
   const btn = document.getElementById('refresh-btn');
   const updated = document.getElementById('updated');
+  isRefreshing = true;
   btn.classList.add('spinning');
   btn.disabled = true;
   updated.textContent = 'Refreshing...';
@@ -770,8 +774,10 @@ async function manualRefresh() {
     if (lastData?.lastUpdated && lastData.lastUpdated !== prevUpdated) break;
   }
 
+  isRefreshing = false;
   btn.classList.remove('spinning');
   btn.disabled = false;
+  updateHeader(lastData);
 }
 
 // Init

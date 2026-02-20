@@ -125,6 +125,36 @@ h1 {
   font-family: 'JetBrains Mono', monospace;
 }
 
+.refresh-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 7px;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.refresh-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.refresh-btn.spinning {
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ---- Tab Navigation ---- */
 
 .tab-nav {

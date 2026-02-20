@@ -749,6 +749,15 @@ async function fetchData() {
   }
 }
 
+async function manualRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  await fetchData();
+  btn.classList.remove('spinning');
+  btn.disabled = false;
+}
+
 // Init
 initTabs();
 

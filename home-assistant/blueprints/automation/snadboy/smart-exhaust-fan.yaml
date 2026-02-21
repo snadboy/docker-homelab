@@ -88,10 +88,32 @@ blueprint:
           max: 180
           step: 5
           unit_of_measurement: minutes
+    stutter_pre_delay:
+      name: Stutter Pre-delay
+      description: Seconds to wait after toggle detected before turning fan off (stutter feedback)
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: seconds
+    stutter_off_duration:
+      name: Stutter Off Duration
+      description: Seconds the fan stays off during stutter feedback — increase if the fan isn't audibly noticeable
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 15
+          step: 1
+          unit_of_measurement: seconds
 
 variables:
   fan_name: "{{ this.entity_id | replace('automation.', '') }}"
   extended_duration: !input extended_duration
+  stutter_pre_delay: !input stutter_pre_delay
+  stutter_off_duration: !input stutter_off_duration
 
 triggers:
   - trigger: numeric_state
@@ -129,7 +151,7 @@ triggers:
     entity_id: !input fan_entity
     to: "off"
     for:
-      seconds: 5
+      seconds: 20
     id: fan_off
   - trigger: event
     event_type: stated.value_changed
@@ -212,12 +234,12 @@ actions:
               var_type: boolean
               ttl: "{{ (extended_duration * 60) | int }}"
           - delay:
-              seconds: 2
+              seconds: "{{ stutter_pre_delay }}"
           - action: homeassistant.turn_off
             target:
               entity_id: !input fan_entity
           - delay:
-              seconds: 3
+              seconds: "{{ stutter_off_duration }}"
           - action: homeassistant.turn_on
             target:
               entity_id: !input fan_entity

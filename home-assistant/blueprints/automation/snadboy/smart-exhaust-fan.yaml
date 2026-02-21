@@ -98,8 +98,8 @@ blueprint:
           unit_of_measurement: minutes
 
 variables:
-  fan_name: "{{ fan_name_raw | slugify('_') }}"
   fan_name_raw: !input fan_name
+  fan_name: "{{ fan_name_raw | slugify('_') }}"
   extended_duration: !input extended_duration
 
 triggers:

@@ -1,0 +1,68 @@
+#!/usr/bin/with-contenv bash
+# ==============================================================================
+# OpenThread BorderRouter start script (socat TCP variant)
+# Replaces flow-control options that break PTYs.
+# ==============================================================================
+
+. /etc/s6-overlay/scripts/otbr-agent-common
+
+declare backbone_if
+declare trel_if
+declare otbr_log_level
+declare otbr_log_level_int
+declare otbr_rest_listen
+declare otbr_rest_listen_port
+
+backbone_if=${BACKBONE_IF:-eth0}
+
+if [ -z "${trel_if}" ]; then
+    trel_if=${backbone_if}
+fi
+
+otbr_log_level=${OTBR_LOG_LEVEL:-info}
+case "${otbr_log_level}" in
+    debug)   otbr_log_level_int="7" ;;
+    info)    otbr_log_level_int="6" ;;
+    notice)  otbr_log_level_int="5" ;;
+    warning) otbr_log_level_int="4" ;;
+    error)   otbr_log_level_int="3" ;;
+    *)       otbr_log_level_int="6" ;;
+esac
+
+# ipsets always needed (otbr-agent reads them at runtime)
+ipset create -exist otbr-ingress-deny-src hash:net family inet6
+ipset create -exist otbr-ingress-deny-src-swap hash:net family inet6
+ipset create -exist otbr-ingress-allow-dst hash:net family inet6
+ipset create -exist otbr-ingress-allow-dst-swap hash:net family inet6
+
+if [ "$FIREWALL" != "0" ]; then
+    echo "INFO: Setup OTBR firewall..."
+    ip6tables -N $otbr_forward_ingress_chain 2>/dev/null || true
+    ip6tables -I FORWARD 1 -o $thread_if -j $otbr_forward_ingress_chain 2>/dev/null || true
+    ip6tables -A $otbr_forward_ingress_chain -m pkttype --pkt-type unicast -i ${thread_if} -j DROP 2>/dev/null || true
+    ip6tables -A $otbr_forward_ingress_chain -m set --match-set otbr-ingress-deny-src src -j DROP 2>/dev/null || true
+    ip6tables -A $otbr_forward_ingress_chain -m set --match-set otbr-ingress-allow-dst dst -j ACCEPT 2>/dev/null || true
+    ip6tables -A $otbr_forward_ingress_chain -m pkttype --pkt-type unicast -j DROP 2>/dev/null || true
+    ip6tables -A $otbr_forward_ingress_chain -j ACCEPT 2>/dev/null || true
+    ip6tables -N $otbr_forward_egress_chain 2>/dev/null || true
+    ip6tables -I FORWARD 2 -i $thread_if -j $otbr_forward_egress_chain 2>/dev/null || true
+    ip6tables -A $otbr_forward_egress_chain -j ACCEPT 2>/dev/null || true
+else
+    ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+    ip6tables-legacy -P FORWARD ACCEPT 2>/dev/null || true
+fi
+
+otbr_rest_listen="::"
+otbr_rest_listen_port="${OTBR_REST_PORT:-8081}"
+
+echo "${otbr_rest_listen}" > /tmp/otbr-agent-rest-api
+echo "${otbr_rest_listen_port}" >> /tmp/otbr-agent-rest-api
+
+echo "INFO: Starting otbr-agent (thread_if=${thread_if}, backbone=${backbone_if}, rest_port=${otbr_rest_listen_port})..."
+exec s6-notifyoncheck -d -s 300 -w 300 -n 0 stdbuf -oL \
+    "/usr/sbin/otbr-agent" -I ${thread_if} -B "${backbone_if}" \
+        --rest-listen-address "${otbr_rest_listen}" \
+        --rest-listen-port "${otbr_rest_listen_port}" \
+        -d${otbr_log_level_int} -v -s \
+        "spinel+hdlc+uart:///tmp/ttyOTBR?uart-baudrate=460800" \
+        "trel://${trel_if}"

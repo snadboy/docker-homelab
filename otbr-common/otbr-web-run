@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bash
+# otbr-web disabled — port 8080 is in use by another service on this host.
+echo "INFO: otbr-web disabled (port 8080 occupied). REST API still available on OTBR_REST_PORT."
+exec sleep infinity

@@ -1,0 +1,21 @@
+services:
+  otbr-house:
+    image: ghcr.io/ownbee/hass-otbr-docker:latest
+    container_name: otbr-house
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/net/tun
+    volumes:
+      - /mnt/docker/otbr/otbr-house:/var/lib/thread
+      - /home/snadboy/docker-homelab/otbr-common/otbr-agent-common:/etc/s6-overlay/scripts/otbr-agent-common:ro
+      - /home/snadboy/docker-homelab/otbr-common/otbr-run:/etc/s6-overlay/s6-rc.d/otbr-agent/run:ro
+      - /home/snadboy/docker-homelab/otbr-common/otbr-finish:/etc/s6-overlay/s6-rc.d/otbr-agent/finish:ro
+      - /home/snadboy/docker-homelab/otbr-common/otbr-web-run:/etc/s6-overlay/s6-rc.d/otbr-web/run:ro
+    environment:
+      - NETWORK_DEVICE=192.168.86.130:6638
+      - BACKBONE_IF=eth0
+      - OTBR_REST_PORT=8081
+      - OTBR_THREAD_IF=wpan0
+      - FIREWALL=0

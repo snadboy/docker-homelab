@@ -1,0 +1,78 @@
+blueprint:
+  name: "Occupancy Scene Toggle"
+  description: >-
+    Activates one scene when occupancy is detected and a different scene when
+    occupancy clears. Both transitions support an optional time delay.
+  domain: automation
+  input:
+    occupancy_sensor:
+      name: Occupancy Sensor
+      description: Binary sensor that detects room occupancy
+      selector:
+        entity:
+          domain: binary_sensor
+    scene_on:
+      name: Occupied Scene
+      description: Scene to activate when occupancy is detected
+      selector:
+        entity:
+          domain: scene
+    on_delay:
+      name: Occupied Delay
+      description: Minutes to wait after occupancy is detected before activating the scene
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: minutes
+    scene_off:
+      name: Unoccupied Scene
+      description: Scene to activate when occupancy clears
+      selector:
+        entity:
+          domain: scene
+    off_delay:
+      name: Unoccupied Delay
+      description: Minutes to wait after occupancy clears before activating the scene
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: minutes
+
+triggers:
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "on"
+    for:
+      minutes: !input on_delay
+    id: occupied
+  - trigger: state
+    entity_id: !input occupancy_sensor
+    to: "off"
+    for:
+      minutes: !input off_delay
+    id: unoccupied
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: occupied
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_on
+      - conditions:
+          - condition: trigger
+            id: unoccupied
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_off
+
+mode: restart

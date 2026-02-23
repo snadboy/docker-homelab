@@ -1,0 +1,180 @@
+blueprint:
+  name: "TV Ambience Lighting"
+  description: >-
+    Controls ambience lighting scenes based on media player state.
+    Supports playing, paused, idle, off, and unavailable states.
+    Uses stated integration for unavailability cooldown to prevent
+    rapid scene changes when TV briefly goes unavailable.
+  domain: automation
+  input:
+    media_player:
+      name: Media Player
+      description: The media player entity to monitor
+      selector:
+        entity:
+          domain: media_player
+
+    scene_playing:
+      name: Scene - Playing
+      selector:
+        entity:
+          domain: scene
+
+    scene_paused:
+      name: Scene - Paused
+      selector:
+        entity:
+          domain: scene
+
+    scene_idle:
+      name: Scene - Idle
+      selector:
+        entity:
+          domain: scene
+
+    scene_off:
+      name: Scene - Off
+      selector:
+        entity:
+          domain: scene
+
+    scene_transition:
+      name: Scene Transition (seconds)
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 10
+          unit_of_measurement: seconds
+          mode: slider
+
+    state_debounce:
+      name: State Debounce (seconds)
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: seconds
+          mode: slider
+
+    unavailable_cooldown:
+      name: Unavailable Cooldown (seconds)
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 600
+          unit_of_measurement: seconds
+          mode: box
+
+variables:
+  media_player_entity: !input media_player
+  cooldown_seconds: !input unavailable_cooldown
+  stated_key: "{{ 'unavail_' ~ (media_player_entity | replace('.', '_')) }}"
+
+trigger:
+  - trigger: state
+    entity_id: !input media_player
+    to: unavailable
+    id: UNAVAILABLE
+
+  - trigger: state
+    entity_id: !input media_player
+    to: paused
+    id: PAUSED
+    for:
+      seconds: !input state_debounce
+
+  - trigger: state
+    entity_id: !input media_player
+    to: playing
+    id: PLAYING
+    for:
+      seconds: !input state_debounce
+
+  - trigger: state
+    entity_id: !input media_player
+    to: 'off'
+    id: TV_OFF
+    for:
+      seconds: !input state_debounce
+
+  - trigger: state
+    entity_id: !input media_player
+    to: idle
+    id: IDLE
+    for:
+      seconds: !input state_debounce
+
+condition:
+  - alias: "Pass through UNAVAILABLE, or cooldown has elapsed"
+    condition: template
+    value_template: >
+      {% if trigger.id == 'UNAVAILABLE' %}
+        true
+      {% else %}
+        {% set last = states('stated.' ~ stated_key) %}
+        {{ last in ('unknown', 'unavailable', 'none') or
+           cooldown_seconds <= (as_timestamp(now()) - as_timestamp(last)) }}
+      {% endif %}
+
+action:
+  - alias: "Trigger ID: UNAVAILABLE"
+    if:
+      - condition: trigger
+        id: UNAVAILABLE
+    then:
+      - action: stated.set
+        data:
+          key: "{{ stated_key }}"
+          value: "{{ now().isoformat() }}"
+          ttl: 300
+
+  - alias: "Trigger ID: PAUSED"
+    if:
+      - condition: trigger
+        id: PAUSED
+    then:
+      - action: scene.turn_on
+        data:
+          transition: !input scene_transition
+        target:
+          entity_id: !input scene_paused
+
+  - alias: "Trigger ID: PLAYING"
+    if:
+      - condition: trigger
+        id: PLAYING
+    then:
+      - action: scene.turn_on
+        data:
+          transition: !input scene_transition
+        target:
+          entity_id: !input scene_playing
+
+  - alias: "Trigger ID: TV_OFF"
+    if:
+      - condition: trigger
+        id: TV_OFF
+      - condition: template
+        value_template: "{{ trigger.from_state.state != 'unavailable' }}"
+    then:
+      - action: scene.turn_on
+        data:
+          transition: !input scene_transition
+        target:
+          entity_id: !input scene_off
+
+  - alias: "Trigger ID: IDLE"
+    if:
+      - condition: trigger
+        id: IDLE
+    then:
+      - action: scene.turn_on
+        data:
+          transition: !input scene_transition
+        target:
+          entity_id: !input scene_idle
+
+mode: restart

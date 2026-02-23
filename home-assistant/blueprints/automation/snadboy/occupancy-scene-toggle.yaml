@@ -2,7 +2,9 @@ blueprint:
   name: "Occupancy Scene Toggle"
   description: >-
     Activates one scene when occupancy is detected and a different scene when
-    occupancy clears. Both transitions support an optional time delay.
+    occupancy clears. Both transitions support an optional time delay. On HA
+    restart or automation reload, restores the correct scene immediately based
+    on the current occupancy state (no delay applied).
   domain: automation
   input:
     occupancy_sensor:
@@ -57,6 +59,12 @@ triggers:
     for:
       minutes: !input off_delay
     id: unoccupied
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+  - trigger: event
+    event_type: automation_reloaded
+    id: reload
 
 actions:
   - choose:
@@ -70,6 +78,30 @@ actions:
       - conditions:
           - condition: trigger
             id: unoccupied
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_off
+      - conditions:
+          - condition: trigger
+            id:
+              - ha_start
+              - reload
+          - condition: state
+            entity_id: !input occupancy_sensor
+            state: "on"
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_on
+      - conditions:
+          - condition: trigger
+            id:
+              - ha_start
+              - reload
+          - condition: state
+            entity_id: !input occupancy_sensor
+            state: "off"
         sequence:
           - action: scene.turn_on
             target:

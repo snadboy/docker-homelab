@@ -1,0 +1,12 @@
+services:
+  pwa-appserver:
+    image: ghcr.io/snadboy/pwa:latest
+    container_name: pwa-appserver
+    restart: unless-stopped
+    volumes:
+      - pwa-logs:/app/logs
+    labels:
+      - "snadboy.revp.8200.domain=calculator.isnadboy.com"
+
+volumes:
+  pwa-logs:

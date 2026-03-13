@@ -3,6 +3,8 @@ services:
     image: ghcr.io/snadboy/pwa:latest
     container_name: pwa-appserver
     restart: unless-stopped
+    ports:
+      - "8200:8200"
     volumes:
       - pwa-logs:/app/logs
     labels:

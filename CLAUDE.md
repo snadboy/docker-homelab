@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/snadboy/docker-homelab (main)
 **Local:** `/home/snadboy/projects/docker-homelab`
-**Last Updated:** 2026-02-20
+**Last Updated:** 2026-03-24
 
 ---
 
@@ -12,9 +12,11 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 
 | Host | Dockhand Env ID | Key Stacks |
 |------|-----------------|------------|
-| utilities | 9 (was ansible-controller before migration) | semaphore, n8n, uptime-kuma, dockhand, gotify, homepage |
-| arr | — | sonarr, radarr, prowlarr, overseerr, sabnzbd, tautulli, agregarr |
-| cadre | — | traefik, traefik-http-provider, zigbee2mqtt-office, zigbee2mqtt-laundry |
+| utilities | 9 (was ansible-controller before migration) | semaphore, uptime-kuma, dockhand, gotify, homepage |
+| arr | — | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr |
+| fetch | — | sabnzbd |
+| bedrock | — | pulse, pwa-appserver, windmill |
+| cadre | — | traefik + traefik-http-provider, zigbee2mqtt (×3) |
 | plex | — | plex |
 
 ---
@@ -47,12 +49,10 @@ Located in `ansible/` subdirectory, used by Semaphore.
 - **Config:** `ansible/ansible.cfg` (ServerAliveInterval=30, pipelining on)
 - **Schedule:** Biweekly `0 4 */14 * *` (Semaphore project "homelab")
 
-⚠️ `iot` still in `ubuntu_vms` group but VM 113 was destroyed — remove it.
+- `iot` removed from inventory (VM 113 destroyed)
+- `fetch` added to `ubuntu_vms` group
+- `bedrock` added to `ubuntu_vms` group
 
 ---
 
-## n8n Workflows
-
-Workflow JSON files in `n8n/workflows/`. Backed up daily to snadboy/n8n-workflows (private) via n8n-backup workflow.
-
-See `~/CLAUDE.md` for full workflow table with IDs.
+## Last Updated: 2026-03-24

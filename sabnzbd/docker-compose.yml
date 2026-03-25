@@ -9,12 +9,12 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - sabnzbd-data:/config
+      - sabnzbd-config:/config
       - /mnt/docker/downloads:/downloads
     ports:
       - 8080:8080
     restart: unless-stopped
 
 volumes:
-  sabnzbd-data:
+  sabnzbd-config:
     external: true

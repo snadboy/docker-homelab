@@ -1,0 +1,23 @@
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: stirling-pdf
+    ports:
+      - "8080:8080"
+    volumes:
+      - stirling-pdf-data:/usr/share/tessdata
+      - stirling-pdf-config:/configs
+      - stirling-pdf-logs:/logs
+    labels:
+      - "snadboy.revp.8080.domain=pdf.isnadboy.com"
+    environment:
+      - TZ=America/Chicago
+    restart: unless-stopped
+
+volumes:
+  stirling-pdf-data:
+    external: true
+  stirling-pdf-config:
+    external: true
+  stirling-pdf-logs:
+    external: true

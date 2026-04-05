@@ -1,0 +1,13 @@
+services:
+  pve-api:
+    image: ghcr.io/snadboy/pve-api:latest
+    container_name: pve-api
+    labels:
+      - "snadboy.revp.8585.domain=pve-api.isnadboy.com"
+      - "snadboy.revp.8585.health=/health"
+    environment:
+      - TZ=America/Chicago
+    env_file: .env
+    ports:
+      - 8585:8585
+    restart: unless-stopped

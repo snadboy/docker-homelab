@@ -10,7 +10,7 @@
     }
   ],
   "pbs_instances": [
-    { "name": "svalbard",   "host": "host-svalbard.isnadboy.com",   "datastore": "backups-ssd"    },
-    { "name": "alexandria", "host": "host-alexandria.isnadboy.com", "datastore": "alexandria-ssd" }
+    { "name": "svalbard",   "host": "host-svalbard.isnadboy.com",   "datastore": "backups-ssd",    "token": "root@pam!status-dashboard:572b9a14-3f05-4a4d-b05e-b050d8baaafb" },
+    { "name": "alexandria", "host": "host-alexandria.isnadboy.com", "datastore": "alexandria-ssd", "token": "root@pam!status-dashboard:c83bc461-efe9-4a97-bb2a-d7d325d1a57d" }
   ]
 }

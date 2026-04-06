@@ -8,5 +8,9 @@
         { "name": "pve-multivac", "ip": "192.168.86.104" }
       ]
     }
+  ],
+  "pbs_instances": [
+    { "name": "svalbard",   "host": "host-svalbard.isnadboy.com",   "datastore": "backups-ssd"    },
+    { "name": "alexandria", "host": "host-alexandria.isnadboy.com", "datastore": "alexandria-ssd" }
   ]
 }

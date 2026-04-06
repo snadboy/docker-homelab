@@ -10,4 +10,6 @@ services:
     env_file: .env
     ports:
       - 8585:8585
+    volumes:
+      - ./config.json:/config/config.json:ro
     restart: unless-stopped

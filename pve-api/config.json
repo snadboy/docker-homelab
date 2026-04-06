@@ -1,0 +1,12 @@
+{
+  "clusters": [
+    {
+      "name": "forbin",
+      "nodes": [
+        { "name": "pve-colossus", "ip": "192.168.86.105" },
+        { "name": "pve-guardian", "ip": "192.168.86.106" },
+        { "name": "pve-multivac", "ip": "192.168.86.104" }
+      ]
+    }
+  ]
+}

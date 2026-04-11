@@ -34,9 +34,10 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 - `devs` disabled in `ssh-hosts.yaml`
 
 **plex** (`plex/docker-compose.yml`)
-- `mem_limit: 12g` — prevents multivac OOM freezes
-- No GPU passthrough (removed — caused hard host lockups)
-- CPU-only transcoding, 10 cores
+- Migrated from multivac VM 110 to colossus LXC 107 on 2026-04-10 (multivac was crash-looping due to suspected Intel Raptor Lake Vmin Shift Instability)
+- `mem_limit: 12g`
+- Hardware transcoding via `/dev/dri` bind-mount (LXC, not VM-level VFIO). Uses colossus's Meteor Lake Intel Arc iGPU. Verified 8 simultaneous transcodes.
+- Earlier GPU-passthrough attempt on multivac VM was reverted because VFIO caused hard host lockups; the LXC bind-mount path is fundamentally different and stable.
 
 ---
 

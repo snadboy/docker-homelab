@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     network_mode: host
     mem_limit: 12g
+    devices:
+      - /dev/dri:/dev/dri
     environment:
       - PUID=1000
       - PGID=1000

@@ -2,45 +2,225 @@
   hosts: apt_hosts
   become: true
   serial: "50%"
+  gather_facts: true
+  any_errors_fatal: false
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: true
-        cache_valid_time: 3600
+    - block:
+        - name: Count security updates pending
+          ansible.builtin.shell: |
+            set -o pipefail
+            apt-get -s -o Debug::NoLocking=true upgrade 2>/dev/null \
+              | grep -E '^Inst .*security' | wc -l
+          args:
+            executable: /bin/bash
+          register: sec_count
+          changed_when: false
+          failed_when: false
 
-    - name: Upgrade all packages
-      apt:
-        upgrade: dist
-        autoremove: true
-        autoclean: true
-      register: upgrade_result
+        - name: Update apt cache
+          apt:
+            update_cache: true
+            cache_valid_time: 3600
 
-    - name: Check if reboot required
-      stat:
-        path: /var/run/reboot-required
-      register: reboot_file
+        - name: Upgrade all packages
+          apt:
+            upgrade: dist
+            autoremove: true
+            autoclean: true
+          register: upgrade_result
 
-    - name: Display upgrade summary
-      debug:
-        msg: >-
-          {{ inventory_hostname }}:
-          {{ upgrade_result.stdout_lines | select('match', '.*upgraded.*') | list | first | default('No changes') }}.
-          Reboot required: {{ reboot_file.stat.exists | default(false) }}
+        - name: Check if reboot required
+          stat:
+            path: /var/run/reboot-required
+          register: reboot_file
+
+        - name: Record per-host apt status (success)
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _apt_section }}"
+              upgraded_line: "{{ (upgrade_result.stdout_lines | default([])) | select('match', '.*upgraded.*') | list | first | default('No changes') }}"
+              reboot: "{{ reboot_file.stat.exists | default(false) }}"
+              security_count: "{{ (sec_count.stdout | default('0') | trim) | int }}"
+              status: "{{ 'warn' if reboot_file.stat.exists | default(false) else 'ok' }}"
+              error: ""
+      rescue:
+        - name: Record per-host apt status (failure)
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _apt_section }}"
+              upgraded_line: ""
+              reboot: false
+              security_count: 0
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('task failed'))[:160] }}"
+  vars:
+    _apt_section: >-
+      {%- if inventory_hostname in groups['pve_nodes'] -%}pve_nodes
+      {%- elif inventory_hostname in groups['pbs_servers'] -%}pbs_servers
+      {%- elif inventory_hostname in groups['ubuntu_vms'] -%}ubuntu_vms
+      {%- elif inventory_hostname in groups['debian_containers'] -%}debian_containers
+      {%- else -%}other
+      {%- endif -%}
 
 - name: Apply system updates (LXC containers via pct exec)
   hosts: lxc_containers
   gather_facts: false
   serial: 1
+  any_errors_fatal: false
   tasks:
-    - name: Run apt update and upgrade in container
-      delegate_to: "{{ pve_host }}"
-      become: false
-      ansible.builtin.shell: |
-        pct exec {{ pve_vmid }} -- bash -c 'export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get upgrade -y -qq && apt-get autoremove -y -qq'
-      register: lxc_result
-      vars:
-        ansible_user: root
+    - block:
+        - name: Run apt update and upgrade in container
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- bash -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get upgrade -y 2>&1 | tail -20
+              apt-get autoremove -y -qq
+              if [ -f /var/run/reboot-required ]; then echo REBOOT=1; else echo REBOOT=0; fi
+            '
+          register: lxc_result
 
-    - name: Display LXC upgrade output
+        - name: Record per-host apt status (success)
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              upgraded_line: "{{ (lxc_result.stdout_lines | default([])) | select('match', '.*upgraded.*') | list | first | default('No changes') }}"
+              reboot: "{{ 'REBOOT=1' in (lxc_result.stdout | default('')) }}"
+              security_count: 0
+              status: "{{ 'warn' if 'REBOOT=1' in (lxc_result.stdout | default('')) else 'ok' }}"
+              error: ""
+      rescue:
+        - name: Record per-host apt status (failure)
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              upgraded_line: ""
+              reboot: false
+              security_count: 0
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('pct exec failed'))[:160] }}"
+
+- name: Post apt-update summary to bulletin board
+  hosts: localhost
+  gather_facts: true
+  vars:
+    bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
+    bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
+    reporting_hosts: "{{ (groups['apt_hosts'] | default([])) + (groups['lxc_containers'] | default([])) }}"
+  tasks:
+    - name: Collect per-host apt_status facts (where set)
+      set_fact:
+        summary_items: >-
+          {{
+            reporting_hosts
+            | map('extract', hostvars, 'apt_status')
+            | select('defined')
+            | list
+          }}
+
+    - name: Identify hosts with no apt_status (unreachable)
+      set_fact:
+        unreachable_hosts: >-
+          {{
+            reporting_hosts
+            | reject('in', (summary_items | map(attribute='host') | list))
+            | list
+          }}
+
+    - name: Synthesise entries for unreachable hosts
+      set_fact:
+        summary_items: "{{ summary_items + [_u] }}"
+      vars:
+        _section: >-
+          {%- if item in (groups['pve_nodes'] | default([])) -%}pve_nodes
+          {%- elif item in (groups['pbs_servers'] | default([])) -%}pbs_servers
+          {%- elif item in (groups['ubuntu_vms'] | default([])) -%}ubuntu_vms
+          {%- elif item in (groups['debian_containers'] | default([])) -%}debian_containers
+          {%- elif item in (groups['lxc_containers'] | default([])) -%}lxc_containers
+          {%- else -%}other
+          {%- endif -%}
+        _u:
+          host: "{{ item }}"
+          section: "{{ _section }}"
+          upgraded_line: ""
+          reboot: false
+          security_count: 0
+          status: "error"
+          error: "unreachable"
+      loop: "{{ unreachable_hosts }}"
+
+    - name: Build bulletin items payload
+      set_fact:
+        bulletin_items: "{{ bulletin_items | default([]) + [_item] }}"
+      vars:
+        h: "{{ item }}"
+        sec_note: "{% if (h.security_count | int) > 0 %} ({{ h.security_count }} security){% endif %}"
+        reboot_note: "{% if h.reboot %} · reboot required{% endif %}"
+        sub: >-
+          {%- if h.status == 'error' -%}error: {{ h.error }}
+          {%- elif h.upgraded_line in ['', 'No changes'] -%}no changes{{ reboot_note }}
+          {%- else -%}{{ h.upgraded_line }}{{ sec_note }}{{ reboot_note }}
+          {%- endif -%}
+        _item:
+          title: "{{ h.host }}"
+          subtitle: "{{ sub }}"
+          section: "{{ h.section }}"
+          status: "{{ h.status }}"
+      loop: "{{ summary_items }}"
+
+    - name: Compute aggregate stats
+      set_fact:
+        total_hosts: "{{ summary_items | length }}"
+        error_hosts: "{{ summary_items | selectattr('status', 'eq', 'error') | list | length }}"
+        reboot_hosts: "{{ summary_items | selectattr('reboot', 'equalto', true) | list | length }}"
+        upgraded_hosts: "{{ summary_items | rejectattr('upgraded_line', 'in', ['', 'No changes']) | list | length }}"
+        total_security: "{{ summary_items | map(attribute='security_count') | map('int') | sum }}"
+
+    - name: Pick embed color by severity
+      set_fact:
+        overall_color: >-
+          {%- if (error_hosts | int) > 0 -%}15158332
+          {%- elif (reboot_hosts | int) > 0 -%}15105570
+          {%- else -%}3066993
+          {%- endif -%}
+
+    - name: POST apt-update summary to bulletin
+      uri:
+        url: "{{ bulletin_api_url }}"
+        method: POST
+        headers:
+          X-API-Key: "{{ bulletin_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        status_code: [200, 201]
+        body:
+          source: ansible
+          topic: apt-update
+          embed:
+            title: "apt-update · {{ ansible_date_time.date }} {{ ansible_date_time.time[:5] }}"
+            description: |-
+              **{{ upgraded_hosts }}** / {{ total_hosts }} hosts upgraded · **{{ reboot_hosts }}** reboots needed · **{{ error_hosts }}** errors{% if (total_security | int) > 0 %} · **{{ total_security }}** security pkgs{% endif %}
+            color: "{{ overall_color | int }}"
+            footer:
+              text: "Ansible · Semaphore · dist-upgrade (security + regular)"
+            items: "{{ bulletin_items }}"
+      when: bulletin_api_key | length > 0
+      register: bulletin_post_result
+
+    - name: Warn if bulletin API key missing
       debug:
-        msg: "{{ inventory_hostname }} (CT {{ pve_vmid }}): {{ lxc_result.stdout_lines | last | default('Done') }}"
+        msg: "BULLETIN_API_KEY not set — summary not posted to bulletin board"
+      when: bulletin_api_key | length == 0
+
+    - name: Display bulletin post outcome
+      debug:
+        msg: "Posted {{ total_hosts }} hosts to bulletin ({{ error_hosts }} errors, {{ reboot_hosts }} reboots)"
+      when: bulletin_api_key | length > 0

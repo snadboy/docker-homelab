@@ -12,6 +12,9 @@ services:
       - SEMAPHORE_ADMIN_EMAIL=admin@localhost
       - SEMAPHORE_PLAYBOOK_PATH=/etc/semaphore
       - SEMAPHORE_ACCESS_KEY_ENCRYPTION=${SEMAPHORE_ENCRYPTION_KEY:-}
+      # Passed through to ansible playbooks (apt-update posts summaries to the bulletin board)
+      - BULLETIN_API_URL=${BULLETIN_API_URL:-https://bulletin.isnadboy.com/api/post}
+      - BULLETIN_API_KEY=${BULLETIN_API_KEY:-}
     volumes:
       - semaphore-data:/etc/semaphore
     ports:

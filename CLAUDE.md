@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/snadboy/docker-homelab (main)
 **Local:** `/home/snadboy/projects/docker-homelab`
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-04-21
 
 ---
 
@@ -49,11 +49,16 @@ Located in `ansible/` subdirectory, used by Semaphore.
 - **Playbooks:** `ansible/playbooks/apt-update.yml`
 - **Config:** `ansible/ansible.cfg` (ServerAliveInterval=30, pipelining on)
 - **Schedule:** Biweekly `0 4 */14 * *` (Semaphore project "homelab")
+- **Bulletin summary:** `apt-update.yml` final play POSTs a single summary to `ansible/apt-update` on the bulletin board (requires `BULLETIN_API_KEY` in Semaphore env — see `semaphore/.env.example`). Per-host rows use `status=error|warn|ok` to colour-accent errors red and reboot-required orange.
 
 - `iot` removed from inventory (VM 113 destroyed)
 - `fetch` added to `ubuntu_vms` group
 - `bedrock` added to `ubuntu_vms` group
+- `host-plex` removed from `ubuntu_vms` (VM retired 2026-04-10)
+- `plex-lxc` (CT 107 on colossus) added to `lxc_containers`
+- `sdevs` added to `managed_locally` (unattended-upgrades; excluded from apt_hosts)
+- `pve-multivac` dormant indefinitely — playbook fails on multivac and ns-tertius (CT 112) until restored
 
 ---
 
-## Last Updated: 2026-03-24
+## Last Updated: 2026-04-21

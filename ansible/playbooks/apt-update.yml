@@ -1,9 +1,9 @@
 - name: Apply system updates (SSH hosts)
   hosts: apt_hosts
   become: true
-  serial: "50%"
   gather_facts: true
   any_errors_fatal: false
+  max_fail_percentage: 100
   tasks:
     - block:
         - name: Count security updates pending
@@ -67,8 +67,8 @@
 - name: Apply system updates (LXC containers via pct exec)
   hosts: lxc_containers
   gather_facts: false
-  serial: 1
   any_errors_fatal: false
+  max_fail_percentage: 100
   tasks:
     - block:
         - name: Run apt update and upgrade in container
@@ -110,8 +110,14 @@
 
 - name: Post apt-update summary to bulletin board
   hosts: localhost
-  gather_facts: true
+  gather_facts: false
+  connection: local
   vars:
+    # Override inventory-wide ansible_become=true (semaphore container has no sudo)
+    ansible_become: false
+    run_iso: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    run_date: "{{ lookup('pipe', 'date -u +%Y-%m-%d') }}"
+    run_hm: "{{ lookup('pipe', 'date -u +%H:%M') }}"
     bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
     bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
     reporting_hosts: "{{ (groups['apt_hosts'] | default([])) + (groups['lxc_containers'] | default([])) }}"
@@ -181,7 +187,7 @@
         total_hosts: "{{ summary_items | length }}"
         error_hosts: "{{ summary_items | selectattr('status', 'eq', 'error') | list | length }}"
         reboot_hosts: "{{ summary_items | selectattr('reboot', 'equalto', true) | list | length }}"
-        upgraded_hosts: "{{ summary_items | rejectattr('upgraded_line', 'in', ['', 'No changes']) | list | length }}"
+        clean_hosts: "{{ summary_items | selectattr('status', 'eq', 'ok') | list | length }}"
         total_security: "{{ summary_items | map(attribute='security_count') | map('int') | sum }}"
 
     - name: Pick embed color by severity
@@ -205,12 +211,12 @@
           source: ansible
           topic: apt-update
           embed:
-            title: "apt-update · {{ ansible_date_time.date }} {{ ansible_date_time.time[:5] }}"
+            title: "apt-update · {{ run_date }} {{ run_hm }}"
             description: |-
-              **{{ upgraded_hosts }}** / {{ total_hosts }} hosts upgraded · **{{ reboot_hosts }}** reboots needed · **{{ error_hosts }}** errors{% if (total_security | int) > 0 %} · **{{ total_security }}** security pkgs{% endif %}
+              {{ total_hosts }} hosts · **{{ clean_hosts }}** clean · **{{ reboot_hosts }}** need reboot · **{{ error_hosts }}** errors{% if (total_security | int) > 0 %} · **{{ total_security }}** pending security pkgs{% endif %}
             color: "{{ overall_color | int }}"
             footer:
-              text: "Ansible · Semaphore · dist-upgrade (security + regular)"
+              text: "Ansible · Semaphore · dist-upgrade (security + regular) · {{ run_iso }}"
             items: "{{ bulletin_items }}"
       when: bulletin_api_key | length > 0
       register: bulletin_post_result
@@ -222,5 +228,5 @@
 
     - name: Display bulletin post outcome
       debug:
-        msg: "Posted {{ total_hosts }} hosts to bulletin ({{ error_hosts }} errors, {{ reboot_hosts }} reboots)"
+        msg: "Posted {{ total_hosts }} hosts to bulletin ({{ clean_hosts }} clean, {{ reboot_hosts }} reboot, {{ error_hosts }} error)"
       when: bulletin_api_key | length > 0

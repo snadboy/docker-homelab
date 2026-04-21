@@ -121,6 +121,9 @@
     run_hm: "{{ lookup('pipe', 'date -u +%H:%M') }}"
     bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
     bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
+    semaphore_url: "{{ lookup('env', 'SEMAPHORE_URL') | default('https://semaphore.isnadboy.com', true) }}"
+    semaphore_project_id: "{{ lookup('env', 'SEMAPHORE_PROJECT_ID') | default('1', true) }}"
+    semaphore_link: "{{ semaphore_url }}/project/{{ semaphore_project_id }}"
     reporting_hosts: "{{ (groups['apt_hosts'] | default([])) + (groups['lxc_containers'] | default([])) }}"
   tasks:
     - name: Collect per-host apt_status facts (where set)
@@ -229,6 +232,8 @@
           embed:
             title: "apt-update · {{ run_date }} {{ run_hm }}"
             description: |-
+              [View in Semaphore]({{ semaphore_link }})
+
               {{ total_hosts }} hosts · **{{ clean_hosts }}** clean · **{{ reboot_hosts }}** need reboot · **{{ error_hosts }}** errors{% if (total_security | int) > 0 %} · **{{ total_security }}** pending security pkgs{% endif %}
             color: "{{ overall_color | int }}"
             footer:

@@ -163,6 +163,20 @@
           error: "unreachable"
       loop: "{{ unreachable_hosts }}"
 
+    - name: Synthesise entries for managed_locally hosts (unattended-upgrades)
+      set_fact:
+        summary_items: "{{ summary_items + [_m] }}"
+      vars:
+        _m:
+          host: "{{ item }}"
+          section: "managed_locally"
+          upgraded_line: "unattended-upgrades (not Ansible-managed)"
+          reboot: false
+          security_count: 0
+          status: "ok"
+          error: ""
+      loop: "{{ groups['managed_locally'] | default([]) }}"
+
     - name: Build bulletin items payload
       set_fact:
         bulletin_items: "{{ bulletin_items | default([]) + [_item] }}"

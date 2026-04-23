@@ -61,7 +61,6 @@
       {%- elif inventory_hostname in groups['pbs_servers'] -%}pbs_servers
       {%- elif inventory_hostname in groups['ubuntu_vms'] -%}ubuntu_vms
       {%- elif inventory_hostname in groups['workstations'] | default([]) -%}workstations
-      {%- elif inventory_hostname in groups['debian_containers'] -%}debian_containers
       {%- else -%}other
       {%- endif -%}
 
@@ -154,7 +153,6 @@
           {%- elif item in (groups['pbs_servers'] | default([])) -%}pbs_servers
           {%- elif item in (groups['ubuntu_vms'] | default([])) -%}ubuntu_vms
           {%- elif item in (groups['workstations'] | default([])) -%}workstations
-          {%- elif item in (groups['debian_containers'] | default([])) -%}debian_containers
           {%- elif item in (groups['lxc_containers'] | default([])) -%}lxc_containers
           {%- else -%}other
           {%- endif -%}

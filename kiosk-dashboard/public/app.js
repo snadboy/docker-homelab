@@ -49,17 +49,31 @@ function rotate() {
 }
 setView(ROTATION[0]);
 
-// Pause button — touchable hold/resume
+// Pause / Prev / Next — touchable controls
 const pauseBtn = document.getElementById("pause-btn");
+const prevBtn = document.getElementById("prev-btn");
+const nextBtn = document.getElementById("next-btn");
+
 function setPaused(p) {
 	paused = p;
 	pauseBtn.classList.toggle("paused", paused);
 	pauseBtn.textContent = paused ? "▶" : "❚❚";
 	pauseBtn.setAttribute("aria-label", paused ? "resume rotation" : "pause rotation");
+	prevBtn.disabled = !paused;
+	nextBtn.disabled = !paused;
 }
-pauseBtn.addEventListener("click", () => setPaused(!paused));
-// Some touchscreens deliver touchstart but click is delayed/lost
-pauseBtn.addEventListener("touchstart", e => { e.preventDefault(); setPaused(!paused); }, { passive: false });
+function step(delta) {
+	if (!paused) return;
+	currentViewIdx = (currentViewIdx + delta + ROTATION.length) % ROTATION.length;
+	setView(ROTATION[currentViewIdx]);
+}
+function bindToggle(el, fn) {
+	el.addEventListener("click", fn);
+	el.addEventListener("touchstart", e => { e.preventDefault(); fn(); }, { passive: false });
+}
+bindToggle(pauseBtn, () => setPaused(!paused));
+bindToggle(prevBtn, () => step(-1));
+bindToggle(nextBtn, () => step(1));
 
 // --- alerts ---
 async function fetchAlerts() {

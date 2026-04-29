@@ -22,18 +22,21 @@ body { display: grid; grid-template-rows: 48px 1fr 20px; }
 #date { font-size: 13px; font-weight: 700; color: #ffffff; opacity: 0.85; white-space: nowrap; }
 #temp { font-size: 18px; font-weight: 700; color: #ffffff; }
 #hdr-right { display: flex; align-items: center; gap: 12px; }
-#pause-btn {
-	width: 56px; height: 40px;
+#pause-btn, .nav-btn {
+	width: 44px; height: 40px;
 	background: #21242c; color: #ffffff;
 	border: 1px solid #2a2e38; border-radius: 6px;
-	font-size: 16px; font-weight: 700;
+	font-size: 18px; font-weight: 700;
 	cursor: pointer;
 	display: grid; place-items: center;
-	transition: background 150ms;
+	transition: background 150ms, opacity 150ms;
 	-webkit-tap-highlight-color: rgba(108,197,255,0.3);
 }
-#pause-btn:active { background: #2a2e38; }
+#pause-btn { width: 56px; }
+#pause-btn:active, .nav-btn:not(:disabled):active { background: #2a2e38; }
 #pause-btn.paused { background: #6cc5ff; color: #0c0d10; border-color: #6cc5ff; }
+.nav-btn { font-size: 22px; }
+.nav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 #clock { font-weight: 700; font-size: 24px; color: #ffffff; }
 #view-name { text-align: center; color: #ffffff; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 16px; }
 #dots { display: flex; gap: 8px; justify-content: flex-end; }

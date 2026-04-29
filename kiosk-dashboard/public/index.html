@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280,initial-scale=1">
+<title>Homelab Strip</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header id="hdr">
+	<div id="clock">--:--</div>
+	<div id="view-name">starting…</div>
+	<div id="dots"></div>
+</header>
+<main id="body">
+	<div id="alerts-view" class="view">
+		<div class="alerts-summary">
+			<div class="big-num" id="alerts-count">–</div>
+			<div class="alerts-label">monitors down</div>
+		</div>
+		<ul id="alerts-list"></ul>
+	</div>
+	<div id="utilities-view" class="view metrics-view" data-host="utilities"></div>
+	<div id="cadre-view" class="view metrics-view" data-host="cadre"></div>
+	<div id="sdevs-view" class="view metrics-view" data-host="sdevs"></div>
+</main>
+<footer id="ftr">
+	<span id="alert-counter">0 down</span>
+	<span id="last-update">–</span>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

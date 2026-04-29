@@ -1,0 +1,19 @@
+:80 {
+	root * /srv/public
+	encode gzip
+	file_server
+
+	handle_path /api/metrics/utilities/* {
+		reverse_proxy http://utilities:61208
+	}
+	handle_path /api/metrics/cadre/* {
+		reverse_proxy http://cadre:61208
+	}
+	handle_path /api/metrics/sdevs/* {
+		reverse_proxy http://sdevs:61208
+	}
+
+	handle_path /api/alerts/* {
+		reverse_proxy http://utilities:3001
+	}
+}

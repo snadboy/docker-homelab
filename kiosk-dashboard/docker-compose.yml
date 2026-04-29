@@ -1,0 +1,12 @@
+services:
+  kiosk-dashboard:
+    image: caddy:2-alpine
+    container_name: kiosk-dashboard
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./public:/srv/public:ro
+    labels:
+      - "snadboy.revp.80.domain=kiosk.isnadboy.com"

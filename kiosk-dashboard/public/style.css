@@ -122,7 +122,15 @@ body { display: grid; grid-template-rows: 48px 1fr 48px; }
 .wifi-v { font-size: 14px; font-weight: 700; color: #ffffff; font-variant-numeric: tabular-nums; }
 
 /* metrics views — 2x2 sparkline grid */
-.metrics-view { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; }
+.metrics-view { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; position: relative; }
+.metrics-window {
+	position: absolute; top: -2px; right: 4px;
+	background: rgba(20,22,28,0.85);
+	color: #6cc5ff;
+	font-size: 11px; font-weight: 700;
+	padding: 2px 8px; border-radius: 4px;
+	pointer-events: none; z-index: 5;
+}
 .metric {
 	background: #14161c; border-radius: 6px;
 	padding: 8px 12px;
@@ -169,14 +177,22 @@ body { display: grid; grid-template-rows: 48px 1fr 48px; }
 	z-index: 100;
 }
 .settings-card {
-	width: 760px; max-height: 380px;
+	width: 760px; max-height: 400px;
 	background: #14161c; border: 1px solid #2a2e38; border-radius: 10px;
 	padding: 14px 20px;
 	display: grid;
-	grid-template-rows: auto 1fr 1fr 1fr 1fr auto;
+	grid-template-rows: auto 1fr 1fr 1fr 1fr auto auto;
 	gap: 6px;
 	overflow-y: auto;
 }
+.settings-derived {
+	display: flex; justify-content: space-between; align-items: center;
+	background: #0c0d10; border: 1px solid #6cc5ff;
+	border-radius: 6px; padding: 8px 14px;
+	margin-top: 4px;
+}
+.derived-label { font-size: 14px; font-weight: 600; color: #ffffff; }
+.derived-value { font-size: 18px; font-weight: 700; color: #6cc5ff; font-variant-numeric: tabular-nums; }
 .settings-title { font-size: 18px; font-weight: 700; color: #ffffff; padding-bottom: 4px; border-bottom: 1px solid #2a2e38; }
 .settings-row {
 	display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px;

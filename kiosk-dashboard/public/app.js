@@ -1,6 +1,6 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
-const KIOSK_VERSION = "1.4.0";
+const KIOSK_VERSION = "1.5.0";
 const KIOSK_VERSION_DATE = "2026-04-29";
 
 const HOSTS = ["utilities", "cadre", "sdevs"];
@@ -268,8 +268,14 @@ async function fetchHostMetrics(host) {
 
 function ensureHostView(host) {
 	const view = document.getElementById(`${host}-view`);
-	if (view.dataset.built) return;
+	if (view.dataset.built) {
+		// Refresh window badge in case settings changed
+		const w = view.querySelector("[data-window-text]");
+		if (w) w.textContent = fmtWindow(Math.round(settings.metricsMs * settings.historyPoints / 1000));
+		return;
+	}
 	view.innerHTML = `
+		<div class="metrics-window">window: <span data-window-text>—</span></div>
 		<div class="metric" data-metric="cpu">
 			<div class="metric-head"><span class="metric-label">cpu</span><span class="metric-value">–</span></div>
 			<div class="metric-chart"></div>
@@ -557,6 +563,19 @@ const SETTINGS_OPTIONS = {
 		[120, "120 points"], [180, "180 points"],
 	],
 };
+function fmtWindow(seconds) {
+	if (seconds < 60) return `${seconds}s`;
+	const m = Math.floor(seconds / 60);
+	const s = seconds % 60;
+	return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
+function updateWindowDisplay() {
+	const sec = Math.round(settings.metricsMs * settings.historyPoints / 1000);
+	const txt = fmtWindow(sec);
+	const derived = document.getElementById("derived-window");
+	if (derived) derived.textContent = `${txt}  (${settings.historyPoints} pts × ${settings.metricsMs / 1000}s)`;
+	document.querySelectorAll("[data-window-text]").forEach(el => { el.textContent = txt; });
+}
 function populateSettingsUI() {
 	for (const [key, opts] of Object.entries(SETTINGS_OPTIONS)) {
 		const sel = document.getElementById(`opt-${key.replace("Ms","").replace("Points","")}`);
@@ -570,8 +589,10 @@ function populateSettingsUI() {
 			saveSettings(settings);
 			HISTORY_POINTS = settings.historyPoints;
 			applyTimers();
+			updateWindowDisplay();
 		});
 	}
+	updateWindowDisplay();
 }
 populateSettingsUI();
 document.getElementById("settings-version").textContent =

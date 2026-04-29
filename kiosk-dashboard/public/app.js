@@ -1,7 +1,7 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
-const HOSTS = ["utilities", "cadre"];
-const ROTATION = ["alerts", ...HOSTS]; // view ids
+const HOSTS = ["utilities", "cadre", "sdevs"];
+const ROTATION = ["alerts", ...HOSTS, "proxmox", "wifi"];
 const VIEW_DURATION_MS = 8000;
 const ALERTS_POLL_MS = 5000;
 const METRICS_POLL_MS = 3000;
@@ -18,14 +18,19 @@ HOSTS.forEach(h => {
 let alertsState = { down: [], pending: [], total: 0 };
 let currentViewIdx = 0;
 let alarming = false;
+let paused = false;
 let metricsCharts = {};
 
 // --- view rotation ---
 function setView(id) {
 	document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === `${id}-view`));
 	const idx = ROTATION.indexOf(id);
-	document.getElementById("view-name").textContent =
-		id === "alerts" ? "Alerts" : `${id} · system`;
+	const labels = {
+		alerts: "Alerts",
+		proxmox: "Proxmox · forbin",
+		wifi: "WiFi · WLANs",
+	};
+	document.getElementById("view-name").textContent = labels[id] || `${id} · system`;
 	const dots = document.getElementById("dots");
 	if (dots.children.length !== ROTATION.length) {
 		dots.innerHTML = ROTATION.map(() => '<span></span>').join("");
@@ -34,6 +39,7 @@ function setView(id) {
 }
 
 function rotate() {
+	if (paused) return;
 	if (alarming) {
 		setView("alerts");
 		return;
@@ -43,31 +49,67 @@ function rotate() {
 }
 setView(ROTATION[0]);
 
+// Pause button — touchable hold/resume
+const pauseBtn = document.getElementById("pause-btn");
+function setPaused(p) {
+	paused = p;
+	pauseBtn.classList.toggle("paused", paused);
+	pauseBtn.textContent = paused ? "▶" : "❚❚";
+	pauseBtn.setAttribute("aria-label", paused ? "resume rotation" : "pause rotation");
+}
+pauseBtn.addEventListener("click", () => setPaused(!paused));
+// Some touchscreens deliver touchstart but click is delayed/lost
+pauseBtn.addEventListener("touchstart", e => { e.preventDefault(); setPaused(!paused); }, { passive: false });
+
 // --- alerts ---
 async function fetchAlerts() {
 	try {
 		const r = await fetch(`/api/alerts/api/status-page/heartbeat/${STATUS_PAGE_SLUG}`, { cache: "no-store" });
 		if (!r.ok) throw new Error(`HTTP ${r.status}`);
 		const data = await r.json();
-		const monitorList = data.publicGroupList ? null : data; // varies by Kuma version
-		// Kuma /api/status-page/heartbeat returns { heartbeatList: { <monitorId>: [{status, time, ping, msg}, ...] }, uptimeList: {...} }
 		const heartbeats = data.heartbeatList || {};
-		const down = [], pending = [];
-		for (const [mid, beats] of Object.entries(heartbeats)) {
-			if (!beats.length) continue;
-			const last = beats[beats.length - 1];
-			if (last.status === 0) down.push({ id: mid, msg: last.msg, time: last.time });
-			else if (last.status === 2) pending.push({ id: mid, msg: last.msg, time: last.time });
-		}
-		// also fetch monitor names for human-friendly display
+		const uptimeMap = data.uptimeList || {};  // keys like "<mid>_24" → 0..1
+
+		// Names from public status page
 		const namesResp = await fetch(`/api/alerts/api/status-page/${STATUS_PAGE_SLUG}`, { cache: "no-store" });
 		const namesData = namesResp.ok ? await namesResp.json() : {};
 		const idToName = {};
 		(namesData.publicGroupList || []).forEach(g => (g.monitorList || []).forEach(m => { idToName[m.id] = m.name; }));
+
+		const down = [], pending = [], up = [];
+		const recentOutages = [];  // monitors with downtime in the visible (~100 beat) window
+		const imperfect24h = [];   // monitors with <100% uptime over the last 24h (Kuma's longer view)
+
+		for (const [mid, beats] of Object.entries(heartbeats)) {
+			if (!beats.length) continue;
+			const last = beats[beats.length - 1];
+			const name = idToName[mid] || `monitor ${mid}`;
+			if (last.status === 0) down.push({ id: mid, name, msg: last.msg, time: last.time });
+			else if (last.status === 2) pending.push({ id: mid, name, msg: last.msg, time: last.time });
+			else up.push({ id: mid, name });
+
+			// Find most recent status=0 in the visible heartbeat window
+			for (let i = beats.length - 1; i >= 0; i--) {
+				if (beats[i].status === 0) {
+					recentOutages.push({ id: mid, name, time: beats[i].time, msg: beats[i].msg || "" });
+					break;
+				}
+			}
+
+			// 24h uptime — shows scattered outages even if they're outside the heartbeat window
+			const u24 = uptimeMap[`${mid}_24`];
+			if (u24 != null && u24 < 1) {
+				imperfect24h.push({ id: mid, name, uptime_24h: u24 });
+			}
+		}
+		recentOutages.sort((a, b) => new Date(b.time) - new Date(a.time));
+		imperfect24h.sort((a, b) => a.uptime_24h - b.uptime_24h);
+
 		alertsState = {
-			down: down.map(d => ({ ...d, name: idToName[d.id] || `monitor ${d.id}` })),
-			pending: pending.map(p => ({ ...p, name: idToName[p.id] || `monitor ${p.id}` })),
+			down, pending, up,
 			total: Object.keys(heartbeats).length,
+			recentOutages: recentOutages.slice(0, 3),
+			imperfect24h,
 		};
 		renderAlerts();
 	} catch (e) {
@@ -77,24 +119,69 @@ async function fetchAlerts() {
 
 function renderAlerts() {
 	const downCount = alertsState.down.length;
-	document.getElementById("alerts-count").textContent = downCount;
-	document.getElementById("alert-counter").textContent =
-		downCount === 0 ? `all ${alertsState.total} ok` : `${downCount} down`;
+	const upCount = alertsState.up.length;
+	const total = alertsState.total;
+	const labelEl = document.getElementById("alerts-label");
+	const countEl = document.getElementById("alerts-count");
+	const subEl = document.getElementById("alerts-sub");
 	const list = document.getElementById("alerts-list");
-	const items = [...alertsState.down.map(a => ({ ...a, klass: "down" })),
-	               ...alertsState.pending.map(a => ({ ...a, klass: "pending" }))];
-	if (!items.length) {
-		list.innerHTML = `<li class="empty">all monitors green</li>`;
+
+	if (downCount === 0) {
+		// Healthy state — show up count + 24h uptime story
+		countEl.textContent = upCount;
+		labelEl.textContent = `monitors up now`;
+		const imperfect = alertsState.imperfect24h || [];
+		if (imperfect.length === 0) {
+			subEl.innerHTML = `<span style="opacity:0.85">all ${total} at 100% / 24h</span>`;
+		} else {
+			subEl.innerHTML = `<span style="opacity:0.85">${imperfect.length} of ${total} had outages / 24h</span>`;
+		}
+		// Right pane: 24h uptime breakdown (the "scattered outages" picture)
+		if (imperfect.length === 0) {
+			const last = alertsState.recentOutages[0];
+			if (last) {
+				list.innerHTML = `<li class="empty" style="padding:8px 0;font-size:14px">most recent (window)</li>` +
+					`<li class="resolved"><span class="name">${escapeHtml(last.name)}</span><span class="meta">${timeAgo(last.time)}</span></li>`;
+			} else {
+				list.innerHTML = `<li class="empty">all ${total} monitors green / 24h</li>`;
+			}
+		} else {
+			list.innerHTML = `<li class="empty" style="padding:8px 0;font-size:14px">24h uptime — outages</li>` +
+				imperfect.slice(0, 6).map(m => {
+					const pct = (m.uptime_24h * 100).toFixed(2);
+					const klass = m.uptime_24h < 0.99 ? "down" : "resolved";
+					return `<li class="${klass}"><span class="name">${escapeHtml(m.name)}</span><span class="meta">${pct}%</span></li>`;
+				}).join("");
+		}
 	} else {
-		list.innerHTML = items.slice(0, 8).map(a =>
+		// Alarming state — show down count + list
+		countEl.textContent = downCount;
+		labelEl.textContent = `monitor${downCount === 1 ? "" : "s"} down`;
+		subEl.innerHTML = `<span style="opacity:0.85">${upCount} of ${total} up</span>`;
+		const items = [...alertsState.down.map(a => ({ ...a, klass: "down" })),
+		               ...alertsState.pending.map(a => ({ ...a, klass: "pending" }))];
+		list.innerHTML = items.slice(0, 6).map(a =>
 			`<li class="${a.klass}"><span class="name">${escapeHtml(a.name)}</span><span class="meta">${escapeHtml(a.msg || a.klass)}</span></li>`
 		).join("");
 	}
+
+	document.getElementById("alert-counter").textContent =
+		downCount === 0 ? `${total} monitors up` : `${downCount} down · ${upCount} up`;
 	const wasAlarming = alarming;
 	alarming = downCount > 0;
 	document.getElementById("alerts-view").classList.toggle("alarming", alarming);
 	document.getElementById("ftr").classList.toggle("alarming", alarming);
 	if (alarming && !wasAlarming) setView("alerts");
+}
+
+function timeAgo(timeStr) {
+	if (!timeStr) return "—";
+	const t = new Date(timeStr.replace(" ", "T") + (timeStr.endsWith("Z") ? "" : "Z"));
+	const sec = Math.floor((Date.now() - t.getTime()) / 1000);
+	if (sec < 60) return `${sec}s ago`;
+	if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+	if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+	return `${Math.floor(sec / 86400)}d ago`;
 }
 
 function escapeHtml(s) {
@@ -215,6 +302,109 @@ function tickClock() {
 	const mm = String(d.getMinutes()).padStart(2, "0");
 	document.getElementById("clock").textContent = `${hh}:${mm}`;
 	document.getElementById("last-update").textContent = `updated ${hh}:${mm}:${String(d.getSeconds()).padStart(2,"0")}`;
+	const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+	const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+	document.getElementById("date").textContent =
+		`${days[d.getDay()]} · ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+async function fetchOutsideTemp() {
+	try {
+		const r = await fetch("/api/extras/weather", { cache: "no-store" });
+		if (!r.ok) return;
+		const j = await r.json();
+		if (j.temp_f != null) {
+			document.getElementById("temp").textContent = `${Math.round(j.temp_f)}°F`;
+		}
+	} catch (e) { /* swallow */ }
+}
+
+async function fetchProxmox() {
+	try {
+		const r = await fetch("/api/extras/proxmox", { cache: "no-store" });
+		if (!r.ok) return;
+		renderProxmox(await r.json());
+	} catch (e) { /* swallow */ }
+}
+
+function renderProxmox(d) {
+	const view = document.getElementById("proxmox-view");
+	const nodes = (d.nodes || []);
+	if (!nodes.length) {
+		view.innerHTML = `<div class="extras-empty">no proxmox data</div>`;
+		return;
+	}
+	view.innerHTML = nodes.map(n => {
+		const offline = n.status !== "online";
+		const cpu = offline ? "—" : `${n.cpu_pct.toFixed(0)}%`;
+		const mem = offline ? "—" : `${n.mem_pct.toFixed(0)}%`;
+		const up = offline ? "—" : fmtUptime(n.uptime_seconds);
+		const memBar = offline ? 0 : Math.min(100, n.mem_pct);
+		const cpuBar = offline ? 0 : Math.min(100, n.cpu_pct);
+		return `
+			<div class="pve-node ${offline ? "offline" : ""}">
+				<div class="pve-name">${escapeHtml(n.name)}</div>
+				<div class="pve-status">${offline ? "OFFLINE" : "online"}</div>
+				<div class="pve-row"><span class="pve-l">cpu</span><span class="pve-v">${cpu}</span></div>
+				<div class="pve-bar"><div style="width:${cpuBar}%;background:#6cc5ff"></div></div>
+				<div class="pve-row"><span class="pve-l">mem</span><span class="pve-v">${mem}</span></div>
+				<div class="pve-bar"><div style="width:${memBar}%;background:#a78bfa"></div></div>
+				<div class="pve-row"><span class="pve-l">up</span><span class="pve-v">${up}</span></div>
+			</div>`;
+	}).join("");
+}
+
+function fmtUptime(sec) {
+	if (!sec || sec <= 0) return "—";
+	const d = Math.floor(sec / 86400);
+	const h = Math.floor((sec % 86400) / 3600);
+	if (d > 0) return `${d}d ${h}h`;
+	const m = Math.floor((sec % 3600) / 60);
+	return `${h}h ${m}m`;
+}
+
+async function fetchWifi() {
+	try {
+		const r = await fetch("/api/extras/wifi", { cache: "no-store" });
+		if (!r.ok && r.status !== 502) return;
+		renderWifi(await r.json());
+	} catch (e) { /* swallow */ }
+}
+
+function renderWifi(d) {
+	const view = document.getElementById("wifi-view");
+	const wlans = (d.wlans || []).filter(w => w.enabled !== false);
+	if (d.error || !wlans.length) {
+		view.innerHTML = `<div class="extras-empty">${d.error ? escapeHtml(d.error) : "no wifi data"}</div>`;
+		return;
+	}
+	view.innerHTML = wlans.slice(0, 4).map(w => {
+		const tx = fmtRate(w.tx_bytes_per_sec);
+		const rx = fmtRate(w.rx_bytes_per_sec);
+		const cu = w.channel_utilization_pct != null ? `${w.channel_utilization_pct}%` : "—";
+		const sat = w.satisfaction_pct != null ? `${w.satisfaction_pct}%` : "—";
+		return `
+			<div class="wifi-net">
+				<div class="wifi-ssid">${escapeHtml(w.ssid)}</div>
+				<div class="wifi-grid">
+					<div><span class="wifi-l">clients</span><span class="wifi-v">${w.num_clients}</span></div>
+					<div><span class="wifi-l">tx</span><span class="wifi-v">${tx}</span></div>
+					<div><span class="wifi-l">rx</span><span class="wifi-v">${rx}</span></div>
+					<div><span class="wifi-l">ch util</span><span class="wifi-v">${cu}</span></div>
+					<div><span class="wifi-l">sat</span><span class="wifi-v">${sat}</span></div>
+					<div><span class="wifi-l">band</span><span class="wifi-v">${escapeHtml(w.band || "—")}</span></div>
+				</div>
+			</div>`;
+	}).join("");
+}
+
+function fmtRate(bytesPerSec) {
+	if (!bytesPerSec || bytesPerSec < 0) return "0";
+	const bps = bytesPerSec * 8;
+	if (bps < 1e3) return `${bps.toFixed(0)} bps`;
+	if (bps < 1e6) return `${(bps / 1e3).toFixed(1)} Kbps`;
+	if (bps < 1e9) return `${(bps / 1e6).toFixed(1)} Mbps`;
+	return `${(bps / 1e9).toFixed(2)} Gbps`;
 }
 
 // --- boot ---
@@ -222,7 +412,13 @@ fetchAlerts();
 HOSTS.forEach(h => fetchHostMetrics(h));
 tickClock();
 
+fetchOutsideTemp();
+fetchProxmox();
+fetchWifi();
 setInterval(fetchAlerts, ALERTS_POLL_MS);
 setInterval(() => HOSTS.forEach(h => fetchHostMetrics(h)), METRICS_POLL_MS);
+setInterval(fetchProxmox, 5_000);
+setInterval(fetchWifi, 8_000);
 setInterval(tickClock, 1000);
 setInterval(rotate, VIEW_DURATION_MS);
+setInterval(fetchOutsideTemp, 60_000);

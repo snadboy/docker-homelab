@@ -9,20 +9,31 @@
 </head>
 <body>
 <header id="hdr">
-	<div id="clock">--:--</div>
+	<div id="hdr-left">
+		<div id="clock">--:--</div>
+		<div id="date">—</div>
+	</div>
 	<div id="view-name">starting…</div>
-	<div id="dots"></div>
+	<div id="hdr-right">
+		<div id="temp">—</div>
+		<div id="dots"></div>
+		<button id="pause-btn" type="button" aria-label="pause rotation">❚❚</button>
+	</div>
 </header>
 <main id="body">
 	<div id="alerts-view" class="view">
 		<div class="alerts-summary">
 			<div class="big-num" id="alerts-count">–</div>
-			<div class="alerts-label">monitors down</div>
+			<div class="alerts-label" id="alerts-label">monitors up</div>
+			<div class="alerts-sub" id="alerts-sub"></div>
 		</div>
 		<ul id="alerts-list"></ul>
 	</div>
 	<div id="utilities-view" class="view metrics-view" data-host="utilities"></div>
 	<div id="cadre-view" class="view metrics-view" data-host="cadre"></div>
+	<div id="sdevs-view" class="view metrics-view" data-host="sdevs"></div>
+	<div id="proxmox-view" class="view extras-view"></div>
+	<div id="wifi-view" class="view extras-view"></div>
 </main>
 <footer id="ftr">
 	<span id="alert-counter">0 down</span>

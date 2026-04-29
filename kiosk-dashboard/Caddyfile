@@ -9,8 +9,15 @@
 	handle_path /api/metrics/cadre/* {
 		reverse_proxy http://host-cadre.isnadboy.com:61208
 	}
+	handle_path /api/metrics/sdevs/* {
+		reverse_proxy http://host-sdevs.isnadboy.com:61208
+	}
 
 	handle_path /api/alerts/* {
 		reverse_proxy http://host-utilities.isnadboy.com:3001
+	}
+
+	handle /api/extras/* {
+		reverse_proxy http://kiosk-data:8080
 	}
 }

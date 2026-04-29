@@ -10,3 +10,16 @@ services:
       - ./public:/srv/public:ro
     labels:
       - "snadboy.revp.80.domain=kiosk.isnadboy.com"
+    depends_on:
+      - kiosk-data
+
+  kiosk-data:
+    build: ./sidecar
+    container_name: kiosk-data
+    restart: unless-stopped
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,6 +1,6 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
-const HOSTS = ["utilities", "cadre", "sdevs"];
+const HOSTS = ["utilities", "cadre"];
 const ROTATION = ["alerts", ...HOSTS]; // view ids
 const VIEW_DURATION_MS = 8000;
 const ALERTS_POLL_MS = 5000;

@@ -33,9 +33,14 @@ HASS_SERVER = os.environ.get("HASS_SERVER", "http://192.168.86.224:8123")
 HASS_TOKEN = os.environ["HASS_TOKEN"]
 HASS_WEATHER_ENTITY = os.environ.get("HASS_WEATHER_ENTITY", "")  # optional override
 
+# PBS instances are JSON-encoded list of {name, host, datastore, token}
+import json as _json
+PBS_INSTANCES = _json.loads(os.environ.get("PBS_INSTANCES_JSON", "[]"))
+
 CACHE_TTL = 5
 wifi_cache = TTLCache(maxsize=1, ttl=CACHE_TTL)
 pve_cache = TTLCache(maxsize=1, ttl=CACHE_TTL)
+pbs_cache = TTLCache(maxsize=1, ttl=15)  # PBS data changes slowly
 weather_cache = TTLCache(maxsize=1, ttl=60)
 
 unifi_session_lock = Lock()
@@ -211,6 +216,74 @@ def _build_proxmox_payload():
         "cluster": cluster_name,
         "nodes": nodes,
     }
+
+
+def _build_pbs_payload():
+    instances = []
+    for inst in PBS_INSTANCES:
+        name = inst.get("name", "?")
+        host = inst.get("host")
+        ds = inst.get("datastore")
+        token = inst.get("token")
+        base = f"https://{host}:8007"
+        headers = {"Authorization": f"PBSAPIToken={token}"}
+        entry = {
+            "name": name,
+            "host": host,
+            "datastore": ds,
+            "status": "offline",
+            "used_bytes": None,
+            "total_bytes": None,
+            "used_pct": None,
+            "groups_count": None,
+            "last_backup": None,
+        }
+        try:
+            r = requests.get(
+                f"{base}/api2/json/admin/datastore/{ds}/status",
+                headers=headers, verify=False, timeout=6,
+            )
+            r.raise_for_status()
+            data = r.json().get("data", {}) or {}
+            used = data.get("used") or 0
+            total = data.get("total") or 0
+            entry["status"] = "online"
+            entry["used_bytes"] = used
+            entry["total_bytes"] = total
+            entry["used_pct"] = round((used / total) * 100, 1) if total else None
+        except Exception as e:
+            entry["error"] = str(e)
+            instances.append(entry)
+            continue
+        try:
+            r = requests.get(
+                f"{base}/api2/json/admin/datastore/{ds}/groups",
+                headers=headers, verify=False, timeout=8,
+            )
+            if r.ok:
+                groups = r.json().get("data", []) or []
+                entry["groups_count"] = len(groups)
+                last = max((g.get("last-backup") or 0) for g in groups) if groups else 0
+                entry["last_backup"] = last or None
+        except Exception:
+            pass
+        instances.append(entry)
+    return {
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "instances": instances,
+    }
+
+
+@app.route("/api/extras/pbs")
+def pbs():
+    if "v" in pbs_cache:
+        return jsonify(pbs_cache["v"])
+    try:
+        payload = _build_pbs_payload()
+        pbs_cache["v"] = payload
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({"error": str(e), "instances": []}), 502
 
 
 @app.route("/api/extras/proxmox")

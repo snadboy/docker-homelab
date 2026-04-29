@@ -87,9 +87,22 @@ body { display: grid; grid-template-rows: 48px 1fr 48px; }
 	font-size: 18px; font-weight: 700;
 }
 
-/* extras views (proxmox / wifi) */
+/* extras views (proxmox / pbs / wifi) */
 .extras-view { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.extras-view-2col { grid-template-columns: 1fr 1fr; }
 .extras-empty { grid-column: 1 / -1; display: grid; place-items: center; color: #ffffff; font-size: 18px; opacity: 0.7; }
+
+.pbs-inst { background: #14161c; border-radius: 8px; padding: 12px 14px; border-left: 4px solid #4ade80; display: grid; grid-template-rows: auto auto auto auto auto auto; gap: 4px; }
+.pbs-inst.offline { border-left-color: #6b7280; opacity: 0.6; }
+.pbs-name { font-size: 18px; font-weight: 700; color: #ffffff; }
+.pbs-sub { font-size: 12px; font-weight: 600; color: #ffffff; opacity: 0.7; margin-bottom: 4px; }
+.pbs-row { display: flex; justify-content: space-between; align-items: baseline; }
+.pbs-l { font-size: 12px; color: #ffffff; opacity: 0.7; text-transform: uppercase; }
+.pbs-v { font-size: 16px; font-weight: 700; color: #ffffff; font-variant-numeric: tabular-nums; }
+.pbs-bar { height: 6px; background: #21242c; border-radius: 3px; overflow: hidden; }
+.pbs-bar > div { height: 100%; transition: width 250ms; background: linear-gradient(90deg, #4ade80, #fbbf24, #f87171); }
+.pbs-bar > div.warn { background: #fbbf24; }
+.pbs-bar > div.crit { background: #f87171; }
 
 .pve-node { background: #14161c; border-radius: 8px; padding: 12px 14px; border-left: 4px solid #4ade80; display: grid; grid-template-rows: auto auto auto auto auto auto auto; gap: 4px; }
 .pve-node.offline { border-left-color: #6b7280; opacity: 0.6; }

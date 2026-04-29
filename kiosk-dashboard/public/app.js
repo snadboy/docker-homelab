@@ -1,10 +1,10 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
-const KIOSK_VERSION = "1.3.0";
+const KIOSK_VERSION = "1.4.0";
 const KIOSK_VERSION_DATE = "2026-04-29";
 
 const HOSTS = ["utilities", "cadre", "sdevs"];
-const ROTATION = ["alerts", ...HOSTS, "proxmox", "wifi"];
+const ROTATION = ["alerts", ...HOSTS, "proxmox", "pbs", "wifi"];
 const STATUS_PAGE_SLUG = "homelab";
 
 // --- settings (persisted in localStorage) ---
@@ -49,6 +49,7 @@ function setView(id) {
 	const labels = {
 		alerts: "Alerts",
 		proxmox: "Proxmox · forbin",
+		pbs: "PBS · backups",
 		wifi: "WiFi · WLANs",
 	};
 	document.getElementById("view-name").textContent = labels[id] || `${id} · system`;
@@ -398,6 +399,57 @@ function fmtUptime(sec) {
 	return `${h}h ${m}m`;
 }
 
+async function fetchPbs() {
+	try {
+		const r = await fetch("/api/extras/pbs", { cache: "no-store" });
+		if (!r.ok && r.status !== 502) return;
+		renderPbs(await r.json());
+	} catch (e) { /* swallow */ }
+}
+
+function renderPbs(d) {
+	const view = document.getElementById("pbs-view");
+	const insts = d.instances || [];
+	if (d.error || !insts.length) {
+		view.innerHTML = `<div class="extras-empty">${d.error ? escapeHtml(d.error) : "no PBS instances configured"}</div>`;
+		return;
+	}
+	view.innerHTML = insts.map(p => {
+		const offline = p.status !== "online";
+		const used = offline ? "—" : fmtBytes(p.used_bytes);
+		const total = offline ? "—" : fmtBytes(p.total_bytes);
+		const pct = (p.used_pct == null) ? null : p.used_pct;
+		const pctTxt = pct == null ? "—" : `${pct.toFixed(1)}%`;
+		const barCls = pct == null ? "" : (pct > 90 ? "crit" : pct > 75 ? "warn" : "");
+		const lastBackup = p.last_backup ? timeAgoUnix(p.last_backup) : "—";
+		const groups = p.groups_count != null ? p.groups_count : "—";
+		return `
+			<div class="pbs-inst ${offline ? "offline" : ""}">
+				<div class="pbs-name">${escapeHtml(p.name)}</div>
+				<div class="pbs-sub">${escapeHtml(p.datastore || "")} · ${offline ? "OFFLINE" : "online"}</div>
+				<div class="pbs-row"><span class="pbs-l">used</span><span class="pbs-v">${used} / ${total} · ${pctTxt}</span></div>
+				<div class="pbs-bar"><div class="${barCls}" style="width:${pct == null ? 0 : Math.min(100, pct)}%"></div></div>
+				<div class="pbs-row"><span class="pbs-l">backup groups</span><span class="pbs-v">${groups}</span></div>
+				<div class="pbs-row"><span class="pbs-l">last backup</span><span class="pbs-v">${lastBackup}</span></div>
+			</div>`;
+	}).join("");
+}
+
+function fmtBytes(b) {
+	if (b == null) return "—";
+	const TiB = 1024 ** 4, GiB = 1024 ** 3;
+	if (b >= TiB) return `${(b / TiB).toFixed(2)} TiB`;
+	if (b >= GiB) return `${(b / GiB).toFixed(1)} GiB`;
+	return `${(b / 1024 / 1024).toFixed(0)} MiB`;
+}
+function timeAgoUnix(unixSec) {
+	const sec = Math.floor(Date.now() / 1000 - unixSec);
+	if (sec < 60) return `${sec}s ago`;
+	if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+	if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+	return `${Math.floor(sec / 86400)}d ago`;
+}
+
 async function fetchWifi() {
 	try {
 		const r = await fetch("/api/extras/wifi", { cache: "no-store" });
@@ -469,6 +521,7 @@ tickClock();
 
 fetchOutsideTemp();
 fetchProxmox();
+fetchPbs();
 fetchWifi();
 
 const timers = {};
@@ -477,6 +530,7 @@ function applyTimers() {
 	timers.alerts = setInterval(fetchAlerts, settings.alertsMs);
 	timers.metrics = setInterval(() => HOSTS.forEach(h => fetchHostMetrics(h)), settings.metricsMs);
 	timers.proxmox = setInterval(fetchProxmox, 5_000);
+	timers.pbs = setInterval(fetchPbs, 30_000);
 	timers.wifi = setInterval(fetchWifi, 8_000);
 	timers.clock = setInterval(tickClock, 1000);
 	timers.rotate = setInterval(rotate, settings.rotationMs);

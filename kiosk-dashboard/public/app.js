@@ -1,5 +1,8 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
+const KIOSK_VERSION = "1.2.0";
+const KIOSK_VERSION_DATE = "2026-04-29";
+
 const HOSTS = ["utilities", "cadre", "sdevs"];
 const ROTATION = ["alerts", ...HOSTS, "proxmox", "wifi"];
 const STATUS_PAGE_SLUG = "homelab";
@@ -517,6 +520,8 @@ function populateSettingsUI() {
 	}
 }
 populateSettingsUI();
+document.getElementById("settings-version").textContent =
+	`kiosk-dashboard v${KIOSK_VERSION} · ${KIOSK_VERSION_DATE}`;
 
 const settingsModal = document.getElementById("settings-modal");
 const settingsBtn = document.getElementById("settings-btn");

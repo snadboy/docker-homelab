@@ -43,7 +43,7 @@ unifi_session: requests.Session | None = None
 unifi_csrf: str | None = None
 unifi_last_login_failure = 0.0
 unifi_backoff_seconds = 60.0  # grows exponentially on repeat failures
-UNIFI_BACKOFF_MAX = 600.0
+UNIFI_BACKOFF_MAX = 1800.0  # 30 min — longer than UniFi's typical lockout window
 
 
 def _unifi_login() -> tuple[requests.Session, str]:

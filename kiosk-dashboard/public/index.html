@@ -48,23 +48,35 @@
 		<div class="settings-title">Settings</div>
 
 		<label class="settings-row">
-			<span class="settings-label">View rotation</span>
-			<select id="opt-rotation"></select>
+			<div class="settings-text">
+				<span class="settings-label">View rotation</span>
+				<span class="settings-hint">how long each view stays on screen before rotating</span>
+			</div>
+			<select id="opt-rotation" title="how long each view stays on screen before rotating"></select>
 		</label>
 
 		<label class="settings-row">
-			<span class="settings-label">Metrics poll interval</span>
-			<select id="opt-metrics"></select>
+			<div class="settings-text">
+				<span class="settings-label">Metrics poll interval</span>
+				<span class="settings-hint">how often each host's cpu / memory / network is sampled (and sparklines redraw)</span>
+			</div>
+			<select id="opt-metrics" title="how often each host's cpu / memory / network is sampled"></select>
 		</label>
 
 		<label class="settings-row">
-			<span class="settings-label">Alerts poll interval</span>
-			<select id="opt-alerts"></select>
+			<div class="settings-text">
+				<span class="settings-label">Alerts poll interval</span>
+				<span class="settings-hint">how often Uptime Kuma is queried for monitor status — lower = faster alert reaction</span>
+			</div>
+			<select id="opt-alerts" title="how often Uptime Kuma is queried for monitor status"></select>
 		</label>
 
 		<label class="settings-row">
-			<span class="settings-label">Sparkline history window</span>
-			<select id="opt-history"></select>
+			<div class="settings-text">
+				<span class="settings-label">Sparkline history window</span>
+				<span class="settings-hint">data points kept per sparkline — visible window = points × metrics interval</span>
+			</div>
+			<select id="opt-history" title="data points kept per sparkline (window = points × metrics interval)"></select>
 		</label>
 
 		<div class="settings-actions">

@@ -1,6 +1,6 @@
 // Strip kiosk dashboard — rotating alerts + per-host metrics views.
 
-const KIOSK_VERSION = "1.2.0";
+const KIOSK_VERSION = "1.3.0";
 const KIOSK_VERSION_DATE = "2026-04-29";
 
 const HOSTS = ["utilities", "cadre", "sdevs"];

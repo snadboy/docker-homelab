@@ -18,9 +18,9 @@ body { display: grid; grid-template-rows: 48px 1fr 20px; }
 	font-size: 18px;
 	gap: 16px;
 }
-#hdr-left { display: flex; align-items: baseline; gap: 12px; }
-#date { font-size: 13px; font-weight: 700; color: #ffffff; opacity: 0.85; white-space: nowrap; }
-#temp { font-size: 18px; font-weight: 700; color: #ffffff; }
+#hdr-left { display: flex; align-items: baseline; gap: 16px; }
+#date { font-size: 24px; font-weight: 700; color: #ffffff; white-space: nowrap; }
+#temp { font-size: 24px; font-weight: 700; color: #ffffff; }
 #hdr-right { display: flex; align-items: center; gap: 12px; }
 #pause-btn, .nav-btn {
 	width: 44px; height: 40px;

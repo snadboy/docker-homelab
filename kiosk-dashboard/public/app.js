@@ -2,13 +2,31 @@
 
 const HOSTS = ["utilities", "cadre", "sdevs"];
 const ROTATION = ["alerts", ...HOSTS, "proxmox", "wifi"];
-const VIEW_DURATION_MS = 8000;
-const ALERTS_POLL_MS = 5000;
-const METRICS_POLL_MS = 3000;
 const STATUS_PAGE_SLUG = "homelab";
-const HISTORY_POINTS = 60;
+
+// --- settings (persisted in localStorage) ---
+const DEFAULT_SETTINGS = {
+	rotationMs: 8000,
+	metricsMs: 3000,
+	alertsMs: 5000,
+	historyPoints: 60,
+};
+const SETTINGS_KEY = "kiosk-dashboard.settings.v1";
+function loadSettings() {
+	try {
+		const raw = localStorage.getItem(SETTINGS_KEY);
+		if (!raw) return { ...DEFAULT_SETTINGS };
+		const parsed = JSON.parse(raw);
+		return { ...DEFAULT_SETTINGS, ...parsed };
+	} catch { return { ...DEFAULT_SETTINGS }; }
+}
+function saveSettings(s) {
+	try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+}
+const settings = loadSettings();
 
 // --- state ---
+let HISTORY_POINTS = settings.historyPoints;
 const history = {};
 HOSTS.forEach(h => {
 	history[h] = {
@@ -389,11 +407,18 @@ function renderWifi(d) {
 	const view = document.getElementById("wifi-view");
 	const wlans = (d.wlans || []).filter(w => w.enabled !== false);
 	if (d.error || !wlans.length) {
-		const msg = d.error
-			? (d.error.includes("backoff") || d.error.includes("429")
-				? "UniFi controller cooling off…"
-				: "WiFi data unavailable")
-			: "no wifi data";
+		let msg;
+		if (d.error && (d.error.includes("backoff") || d.error.includes("429"))) {
+			const m = d.error.match(/(\d+)\s*s/);
+			const sec = m ? Number(m[1]) : null;
+			msg = sec != null
+				? `UniFi controller cooling off — ${fmtCooldown(sec)} until next try`
+				: "UniFi controller cooling off…";
+		} else if (d.error) {
+			msg = "WiFi data unavailable";
+		} else {
+			msg = "no wifi data";
+		}
 		view.innerHTML = `<div class="extras-empty">${escapeHtml(msg)}</div>`;
 		return;
 	}
@@ -417,6 +442,14 @@ function renderWifi(d) {
 	}).join("");
 }
 
+function fmtCooldown(sec) {
+	if (sec <= 0) return "any moment now";
+	if (sec < 60) return `~${sec}s`;
+	const m = Math.floor(sec / 60);
+	const s = sec % 60;
+	return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+}
+
 function fmtRate(bytesPerSec) {
 	if (!bytesPerSec || bytesPerSec < 0) return "0";
 	const bps = bytesPerSec * 8;
@@ -434,10 +467,70 @@ tickClock();
 fetchOutsideTemp();
 fetchProxmox();
 fetchWifi();
-setInterval(fetchAlerts, ALERTS_POLL_MS);
-setInterval(() => HOSTS.forEach(h => fetchHostMetrics(h)), METRICS_POLL_MS);
-setInterval(fetchProxmox, 5_000);
-setInterval(fetchWifi, 8_000);
-setInterval(tickClock, 1000);
-setInterval(rotate, VIEW_DURATION_MS);
-setInterval(fetchOutsideTemp, 60_000);
+
+const timers = {};
+function applyTimers() {
+	Object.values(timers).forEach(t => clearInterval(t));
+	timers.alerts = setInterval(fetchAlerts, settings.alertsMs);
+	timers.metrics = setInterval(() => HOSTS.forEach(h => fetchHostMetrics(h)), settings.metricsMs);
+	timers.proxmox = setInterval(fetchProxmox, 5_000);
+	timers.wifi = setInterval(fetchWifi, 8_000);
+	timers.clock = setInterval(tickClock, 1000);
+	timers.rotate = setInterval(rotate, settings.rotationMs);
+	timers.weather = setInterval(fetchOutsideTemp, 60_000);
+}
+applyTimers();
+
+// --- settings modal ---
+const SETTINGS_OPTIONS = {
+	rotationMs: [
+		[2000, "2 sec"], [5000, "5 sec"], [8000, "8 sec (default)"],
+		[12000, "12 sec"], [20000, "20 sec"], [30000, "30 sec"],
+	],
+	metricsMs: [
+		[2000, "2 sec"], [3000, "3 sec (default)"], [5000, "5 sec"],
+		[10000, "10 sec"], [30000, "30 sec"],
+	],
+	alertsMs: [
+		[3000, "3 sec"], [5000, "5 sec (default)"], [10000, "10 sec"],
+		[30000, "30 sec"], [60000, "60 sec"],
+	],
+	historyPoints: [
+		[30, "30 points"], [60, "60 points (default)"], [90, "90 points"],
+		[120, "120 points"], [180, "180 points"],
+	],
+};
+function populateSettingsUI() {
+	for (const [key, opts] of Object.entries(SETTINGS_OPTIONS)) {
+		const sel = document.getElementById(`opt-${key.replace("Ms","").replace("Points","")}`);
+		if (!sel) continue;
+		sel.innerHTML = opts.map(([v, label]) =>
+			`<option value="${v}">${label}</option>`
+		).join("");
+		sel.value = String(settings[key]);
+		sel.addEventListener("change", () => {
+			settings[key] = Number(sel.value);
+			saveSettings(settings);
+			HISTORY_POINTS = settings.historyPoints;
+			applyTimers();
+		});
+	}
+}
+populateSettingsUI();
+
+const settingsModal = document.getElementById("settings-modal");
+const settingsBtn = document.getElementById("settings-btn");
+function openSettings() { settingsModal.hidden = false; }
+function closeSettings() { settingsModal.hidden = true; }
+bindToggle(settingsBtn, openSettings);
+bindToggle(document.getElementById("settings-close"), closeSettings);
+bindToggle(document.getElementById("settings-reset"), () => {
+	Object.assign(settings, DEFAULT_SETTINGS);
+	saveSettings(settings);
+	HISTORY_POINTS = settings.historyPoints;
+	populateSettingsUI();
+	applyTimers();
+});
+settingsModal.addEventListener("click", e => {
+	if (e.target === settingsModal) closeSettings();
+});

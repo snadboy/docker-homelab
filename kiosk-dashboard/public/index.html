@@ -40,7 +40,39 @@
 <footer id="ftr">
 	<span id="alert-counter">0 down</span>
 	<span id="last-update">–</span>
+	<button id="settings-btn" type="button" aria-label="settings">⚙</button>
 </footer>
+
+<div id="settings-modal" hidden>
+	<div class="settings-card">
+		<div class="settings-title">Settings</div>
+
+		<label class="settings-row">
+			<span class="settings-label">View rotation</span>
+			<select id="opt-rotation"></select>
+		</label>
+
+		<label class="settings-row">
+			<span class="settings-label">Metrics poll interval</span>
+			<select id="opt-metrics"></select>
+		</label>
+
+		<label class="settings-row">
+			<span class="settings-label">Alerts poll interval</span>
+			<select id="opt-alerts"></select>
+		</label>
+
+		<label class="settings-row">
+			<span class="settings-label">Sparkline history window</span>
+			<select id="opt-history"></select>
+		</label>
+
+		<div class="settings-actions">
+			<button id="settings-reset" type="button" class="btn-secondary">Reset</button>
+			<button id="settings-close" type="button" class="btn-primary">Close</button>
+		</div>
+	</div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
 <script src="/app.js"></script>
 </body>

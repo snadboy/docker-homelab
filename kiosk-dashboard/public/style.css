@@ -128,10 +128,60 @@ body { display: grid; grid-template-rows: 48px 1fr 20px; }
 .u-axis { color: #9aa0a6 !important; }
 
 #ftr {
-	display: flex; justify-content: space-between; align-items: center;
-	padding: 0 16px;
+	display: grid; grid-template-columns: 1fr auto auto;
+	align-items: center; gap: 16px;
+	padding: 0 6px 0 16px;
 	background: #14161c;
 	border-top: 1px solid #21242c;
 	font-size: 14px; font-weight: 700; color: #ffffff;
 }
 #ftr.alarming { color: #f87171; }
+#settings-btn {
+	width: 32px; height: 18px;
+	background: transparent; color: #ffffff;
+	border: 1px solid #2a2e38; border-radius: 4px;
+	font-size: 12px; line-height: 1;
+	cursor: pointer;
+	display: grid; place-items: center;
+	-webkit-tap-highlight-color: rgba(108,197,255,0.3);
+}
+#settings-btn:active { background: #21242c; }
+
+#settings-modal[hidden] { display: none; }
+#settings-modal {
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.65);
+	display: grid; place-items: center;
+	z-index: 100;
+}
+.settings-card {
+	width: 720px; max-height: 360px;
+	background: #14161c; border: 1px solid #2a2e38; border-radius: 10px;
+	padding: 16px 20px;
+	display: grid; grid-template-rows: auto 1fr 1fr 1fr 1fr auto;
+	gap: 8px;
+	overflow-y: auto;
+}
+.settings-title { font-size: 18px; font-weight: 700; color: #ffffff; padding-bottom: 4px; border-bottom: 1px solid #2a2e38; }
+.settings-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; }
+.settings-label { font-size: 14px; font-weight: 600; color: #ffffff; }
+.settings-row select {
+	height: 36px; min-width: 220px;
+	background: #21242c; color: #ffffff;
+	border: 1px solid #2a2e38; border-radius: 6px;
+	padding: 0 10px;
+	font-size: 14px; font-weight: 600;
+	font-family: inherit;
+	cursor: pointer;
+}
+.settings-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px; }
+.btn-primary, .btn-secondary {
+	height: 40px; padding: 0 18px;
+	border-radius: 6px; border: 1px solid #2a2e38;
+	font-size: 14px; font-weight: 700;
+	cursor: pointer;
+	-webkit-tap-highlight-color: rgba(108,197,255,0.3);
+}
+.btn-primary { background: #6cc5ff; color: #0c0d10; border-color: #6cc5ff; }
+.btn-secondary { background: #21242c; color: #ffffff; }
+.btn-primary:active, .btn-secondary:active { opacity: 0.85; }

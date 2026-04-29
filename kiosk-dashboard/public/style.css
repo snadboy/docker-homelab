@@ -18,9 +18,9 @@ body { display: grid; grid-template-rows: 48px 1fr 20px; }
 	font-size: 18px;
 	gap: 16px;
 }
-#hdr-left { display: flex; align-items: baseline; gap: 16px; }
-#date { font-size: 24px; font-weight: 700; color: #ffffff; white-space: nowrap; }
-#temp { font-size: 24px; font-weight: 700; color: #ffffff; }
+#hdr-left { display: flex; align-items: baseline; gap: 12px; }
+#date { font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap; }
+#temp { font-size: 16px; font-weight: 700; color: #ffffff; }
 #hdr-right { display: flex; align-items: center; gap: 12px; }
 #pause-btn, .nav-btn {
 	width: 44px; height: 40px;
@@ -37,8 +37,8 @@ body { display: grid; grid-template-rows: 48px 1fr 20px; }
 #pause-btn.paused { background: #6cc5ff; color: #0c0d10; border-color: #6cc5ff; }
 .nav-btn { font-size: 22px; }
 .nav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-#clock { font-weight: 700; font-size: 24px; color: #ffffff; }
-#view-name { text-align: center; color: #ffffff; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 16px; }
+#clock { font-weight: 700; font-size: 16px; color: #ffffff; }
+#view-name { text-align: center; color: #ffffff; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 24px; }
 #dots { display: flex; gap: 8px; justify-content: flex-end; }
 #dots span {
 	width: 8px; height: 8px; border-radius: 50%;

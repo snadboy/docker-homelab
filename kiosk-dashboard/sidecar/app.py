@@ -42,12 +42,16 @@ unifi_session_lock = Lock()
 unifi_session: requests.Session | None = None
 unifi_csrf: str | None = None
 unifi_last_login_failure = 0.0
+unifi_backoff_seconds = 60.0  # grows exponentially on repeat failures
+UNIFI_BACKOFF_MAX = 600.0
 
 
 def _unifi_login() -> tuple[requests.Session, str]:
-    global unifi_session, unifi_csrf, unifi_last_login_failure
-    if time.time() - unifi_last_login_failure < 30:
-        raise RuntimeError("unifi: in login backoff")
+    global unifi_session, unifi_csrf, unifi_last_login_failure, unifi_backoff_seconds
+    elapsed = time.time() - unifi_last_login_failure
+    if elapsed < unifi_backoff_seconds:
+        wait = int(unifi_backoff_seconds - elapsed)
+        raise RuntimeError(f"unifi: in login backoff ({wait}s left)")
     s = requests.Session()
     s.verify = False
     r = s.post(
@@ -57,10 +61,12 @@ def _unifi_login() -> tuple[requests.Session, str]:
     )
     if r.status_code != 200:
         unifi_last_login_failure = time.time()
-        raise RuntimeError(f"unifi login HTTP {r.status_code}")
+        unifi_backoff_seconds = min(unifi_backoff_seconds * 2, UNIFI_BACKOFF_MAX)
+        raise RuntimeError(f"unifi login HTTP {r.status_code} (next retry in ~{int(unifi_backoff_seconds)}s)")
     csrf = r.headers.get("X-Csrf-Token") or r.headers.get("X-CSRF-Token") or ""
     unifi_session = s
     unifi_csrf = csrf
+    unifi_backoff_seconds = 60.0  # reset on success
     return s, csrf
 
 

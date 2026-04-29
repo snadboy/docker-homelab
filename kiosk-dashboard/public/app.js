@@ -389,7 +389,12 @@ function renderWifi(d) {
 	const view = document.getElementById("wifi-view");
 	const wlans = (d.wlans || []).filter(w => w.enabled !== false);
 	if (d.error || !wlans.length) {
-		view.innerHTML = `<div class="extras-empty">${d.error ? escapeHtml(d.error) : "no wifi data"}</div>`;
+		const msg = d.error
+			? (d.error.includes("backoff") || d.error.includes("429")
+				? "UniFi controller cooling off…"
+				: "WiFi data unavailable")
+			: "no wifi data";
+		view.innerHTML = `<div class="extras-empty">${escapeHtml(msg)}</div>`;
 		return;
 	}
 	view.innerHTML = wlans.slice(0, 4).map(w => {

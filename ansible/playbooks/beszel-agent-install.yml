@@ -1,0 +1,228 @@
+---
+# Install / update the Beszel monitoring agent across the homelab.
+#
+# Coverage:
+#   Play A: pve_nodes + ubuntu_vms + workstations + managed_locally   (SSH)
+#   Play B: lxc_containers                                            (pct exec)
+#   Play C: localhost                                                 (bulletin summary)
+#
+# pbs_servers intentionally excluded for v1 - revisit once hub/agent
+# rollout is verified.
+#
+# Required vars (Ansible Vault or Semaphore project env):
+#   beszel_agent_key   - hub SSH public key shown in "Add System"
+#   beszel_agent_token - universal token from hub Settings -> Tokens
+
+- name: Install beszel-agent (SSH hosts)
+  hosts: pve_nodes:ubuntu_vms:workstations:managed_locally
+  become: true
+  gather_facts: true
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  tasks:
+    - block:
+        - name: Apply beszel-agent role
+          ansible.builtin.include_role:
+            name: beszel-agent
+
+        - name: Confirm service is active
+          ansible.builtin.command: systemctl is-active beszel-agent
+          register: _beszel_active
+          changed_when: false
+
+        - name: Record per-host status (success)
+          ansible.builtin.set_fact:
+            beszel_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _beszel_section }}"
+              version: "{{ beszel_agent_version }}"
+              active: "{{ _beszel_active.stdout | trim }}"
+              status: "ok"
+              error: ""
+      rescue:
+        - name: Record per-host status (failure)
+          ansible.builtin.set_fact:
+            beszel_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _beszel_section }}"
+              version: "{{ beszel_agent_version | default('') }}"
+              active: ""
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('task failed'))[:160] }}"
+  vars:
+    _beszel_section: >-
+      {%- if inventory_hostname in groups['pve_nodes'] -%}pve_nodes
+      {%- elif inventory_hostname in groups['ubuntu_vms'] -%}ubuntu_vms
+      {%- elif inventory_hostname in groups['workstations'] | default([]) -%}workstations
+      {%- elif inventory_hostname in groups['managed_locally'] | default([]) -%}managed_locally
+      {%- else -%}other
+      {%- endif -%}
+
+- name: Install beszel-agent (LXC containers via pct exec)
+  hosts: lxc_containers
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  tasks:
+    - block:
+        - name: Apply beszel-agent role (lxc tasks only)
+          ansible.builtin.include_role:
+            name: beszel-agent
+            tasks_from: lxc.yml
+
+        - name: Confirm service is active inside container
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- systemctl is-active beszel-agent
+          register: _beszel_lxc_active
+          changed_when: false
+
+        - name: Record per-host status (success)
+          ansible.builtin.set_fact:
+            beszel_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              version: "{{ beszel_agent_version }}"
+              active: "{{ _beszel_lxc_active.stdout | trim }}"
+              status: "ok"
+              error: ""
+      rescue:
+        - name: Record per-host status (failure)
+          ansible.builtin.set_fact:
+            beszel_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              version: "{{ beszel_agent_version | default('') }}"
+              active: ""
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('pct exec failed'))[:160] }}"
+
+- name: Post beszel-agent rollout summary to bulletin board
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    ansible_become: false
+    run_iso: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    run_date: "{{ lookup('pipe', 'date -u +%Y-%m-%d') }}"
+    run_hm: "{{ lookup('pipe', 'date -u +%H:%M') }}"
+    bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
+    bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
+    semaphore_url: "{{ lookup('env', 'SEMAPHORE_URL') | default('https://semaphore.isnadboy.com', true) }}"
+    semaphore_project_id: "{{ lookup('env', 'SEMAPHORE_PROJECT_ID') | default('1', true) }}"
+    semaphore_link: "{{ semaphore_url }}/project/{{ semaphore_project_id }}"
+    reporting_hosts: >-
+      {{
+        (groups['pve_nodes'] | default([]))
+        + (groups['ubuntu_vms'] | default([]))
+        + (groups['workstations'] | default([]))
+        + (groups['managed_locally'] | default([]))
+        + (groups['lxc_containers'] | default([]))
+      }}
+  tasks:
+    - name: Collect per-host beszel_status facts
+      ansible.builtin.set_fact:
+        summary_items: >-
+          {{
+            reporting_hosts
+            | map('extract', hostvars, 'beszel_status')
+            | select('defined')
+            | list
+          }}
+
+    - name: Identify hosts with no beszel_status (unreachable)
+      ansible.builtin.set_fact:
+        unreachable_hosts: >-
+          {{
+            reporting_hosts
+            | reject('in', (summary_items | map(attribute='host') | list))
+            | list
+          }}
+
+    - name: Synthesise entries for unreachable hosts
+      ansible.builtin.set_fact:
+        summary_items: "{{ summary_items + [_u] }}"
+      vars:
+        _section: >-
+          {%- if item in (groups['pve_nodes'] | default([])) -%}pve_nodes
+          {%- elif item in (groups['ubuntu_vms'] | default([])) -%}ubuntu_vms
+          {%- elif item in (groups['workstations'] | default([])) -%}workstations
+          {%- elif item in (groups['managed_locally'] | default([])) -%}managed_locally
+          {%- elif item in (groups['lxc_containers'] | default([])) -%}lxc_containers
+          {%- else -%}other
+          {%- endif -%}
+        _u:
+          host: "{{ item }}"
+          section: "{{ _section }}"
+          version: ""
+          active: ""
+          status: "error"
+          error: "unreachable"
+      loop: "{{ unreachable_hosts }}"
+
+    - name: Build bulletin items payload
+      ansible.builtin.set_fact:
+        bulletin_items: "{{ bulletin_items | default([]) + [_item] }}"
+      vars:
+        h: "{{ item }}"
+        sub: >-
+          {%- if h.status == 'error' -%}error: {{ h.error }}
+          {%- else -%}v{{ h.version }} · {{ h.active }}
+          {%- endif -%}
+        _item:
+          title: "{{ h.host }}"
+          subtitle: "{{ sub }}"
+          section: "{{ h.section }}"
+          status: "{{ h.status }}"
+      loop: "{{ summary_items }}"
+
+    - name: Compute aggregate stats
+      ansible.builtin.set_fact:
+        total_hosts: "{{ summary_items | length }}"
+        ok_hosts: "{{ summary_items | selectattr('status', 'eq', 'ok') | list | length }}"
+        error_hosts: "{{ summary_items | selectattr('status', 'eq', 'error') | list | length }}"
+
+    - name: Pick embed color by severity
+      ansible.builtin.set_fact:
+        overall_color: >-
+          {%- if (error_hosts | int) > 0 -%}15158332
+          {%- else -%}3066993
+          {%- endif -%}
+
+    - name: POST beszel-agent rollout summary to bulletin
+      ansible.builtin.uri:
+        url: "{{ bulletin_api_url }}"
+        method: POST
+        headers:
+          X-API-Key: "{{ bulletin_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        status_code: [200, 201]
+        body:
+          source: ansible
+          topic: beszel-agent
+          embed:
+            title: "beszel-agent · {{ run_date }} {{ run_hm }}"
+            description: |-
+              [View in Semaphore]({{ semaphore_link }})
+
+              {{ total_hosts }} hosts · **{{ ok_hosts }}** ok · **{{ error_hosts }}** errors
+            color: "{{ overall_color | int }}"
+            footer:
+              text: "Ansible · Semaphore · beszel-agent rollout · {{ run_iso }}"
+            items: "{{ bulletin_items }}"
+      when: bulletin_api_key | length > 0
+      register: bulletin_post_result
+
+    - name: Warn if bulletin API key missing
+      ansible.builtin.debug:
+        msg: "BULLETIN_API_KEY not set — summary not posted to bulletin board"
+      when: bulletin_api_key | length == 0
+
+    - name: Display rollout outcome
+      ansible.builtin.debug:
+        msg: "Posted {{ total_hosts }} hosts to bulletin ({{ ok_hosts }} ok, {{ error_hosts }} error)"
+      when: bulletin_api_key | length > 0

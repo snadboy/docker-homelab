@@ -1,0 +1,70 @@
+---
+- name: Ensure install dir exists
+  ansible.builtin.file:
+    path: "{{ beszel_agent_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Look up docker group (for container metrics access)
+  ansible.builtin.getent:
+    database: group
+    key: docker
+  register: _beszel_docker_group
+  failed_when: false
+  changed_when: false
+
+- name: Create beszel system user
+  ansible.builtin.user:
+    name: "{{ beszel_agent_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ beszel_agent_state_dir }}"
+    create_home: false
+    groups: "{{ ['docker'] if (_beszel_docker_group.ansible_facts.getent_group | default({})).get('docker') else omit }}"
+    append: true
+
+- name: Check installed agent version
+  ansible.builtin.command: "{{ beszel_agent_install_dir }}/beszel-agent --version"
+  register: _beszel_installed_version
+  failed_when: false
+  changed_when: false
+
+- name: Download and extract beszel-agent binary
+  ansible.builtin.unarchive:
+    src: "{{ beszel_agent_release_url }}"
+    dest: "{{ beszel_agent_install_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+    extra_opts:
+      - --no-same-owner
+  when: beszel_agent_version not in (_beszel_installed_version.stdout | default(''))
+  notify: restart beszel-agent
+
+- name: Render agent EnvironmentFile
+  ansible.builtin.template:
+    src: beszel-agent.env.j2
+    dest: /etc/default/beszel-agent
+    owner: root
+    group: "{{ beszel_agent_user }}"
+    mode: "0640"
+  notify: restart beszel-agent
+
+- name: Render systemd unit
+  ansible.builtin.template:
+    src: beszel-agent.service.j2
+    dest: /etc/systemd/system/beszel-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart beszel-agent
+
+- name: Enable and start beszel-agent service
+  ansible.builtin.systemd:
+    name: beszel-agent
+    enabled: true
+    state: started
+    daemon_reload: true

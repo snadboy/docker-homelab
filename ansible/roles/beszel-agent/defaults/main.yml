@@ -1,0 +1,36 @@
+---
+# Pin deliberately. Bump after testing in single-host pilot.
+# Latest at time of role creation (2026-04-30): v0.18.7
+beszel_agent_version: "0.18.7"
+
+beszel_agent_install_dir: /opt/beszel-agent
+beszel_agent_user: beszel
+beszel_agent_state_dir: /var/lib/beszel-agent
+
+# Default agent listening port. Hub connects out to agent on this port
+# (classic SSH-style mode). Used as a fallback if HUB_URL/TOKEN not set.
+beszel_agent_port: 45876
+
+# Hub URL for agent-initiated WebSocket mode (preferred). When set together
+# with TOKEN, the agent connects out to the hub and self-registers via the
+# universal token. Leaving HUB_URL empty falls back to classic mode where the
+# hub initiates the connection on beszel_agent_port.
+beszel_agent_hub_url: "wss://beszel.isnadboy.com"
+
+# Hub public key (shown in hub UI under "Add System") and universal token
+# (Settings -> Tokens). MUST be overridden via vault or Semaphore env -
+# leaving these empty will install the agent but it cannot authenticate.
+beszel_agent_key: ""
+beszel_agent_token: ""
+
+# Map ansible_architecture -> Beszel release asset arch suffix.
+beszel_agent_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: arm
+  armv6l: arm
+
+beszel_agent_arch: "{{ beszel_agent_arch_map[ansible_architecture] | default('amd64') }}"
+
+beszel_agent_release_url: >-
+  https://github.com/henrygd/beszel/releases/download/v{{ beszel_agent_version }}/beszel-agent_linux_{{ beszel_agent_arch }}.tar.gz

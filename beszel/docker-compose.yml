@@ -1,0 +1,21 @@
+services:
+  beszel:
+    image: henrygd/beszel:latest
+    container_name: beszel
+    labels:
+      - "snadboy.revp.8090.domain=beszel.isnadboy.com"
+    environment:
+      - TZ=America/Chicago
+      - APP_URL=https://beszel.isnadboy.com
+    volumes:
+      # Use named volume for SQLite (PocketBase) - CIFS/network storage causes locking issues
+      - beszel-data:/beszel_data
+    ports:
+      - 8090:8090
+    restart: unless-stopped
+
+volumes:
+  beszel-data:
+    external: true
+    # Pre-created volume for SQLite - CIFS/network storage causes locking issues
+    # Create with: docker volume create beszel-data

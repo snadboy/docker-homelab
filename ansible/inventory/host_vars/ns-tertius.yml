@@ -1,0 +1,3 @@
+---
+# Same DNS-isolation issue as ns - see ns.yml.
+beszel_agent_hub_url: "http://192.168.86.112:8091"

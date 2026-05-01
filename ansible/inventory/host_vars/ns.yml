@@ -1,0 +1,7 @@
+---
+# ns is one of the Technitium DNS containers. Its /etc/resolv.conf points
+# at upstream resolvers (e.g. 1.1.1.1) and bypasses Tailscale MagicDNS,
+# so it can resolve neither beszel.isnadboy.com (homelab DNS) nor
+# utilities.tail65635.ts.net (Tailscale MagicDNS). Hardcode utilities's
+# LAN IP for the agent's hub connection.
+beszel_agent_hub_url: "http://192.168.86.112:8091"

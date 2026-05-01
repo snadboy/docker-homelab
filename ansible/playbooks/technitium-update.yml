@@ -1,0 +1,210 @@
+---
+# Upgrade Technitium DNS across the 3-node cluster (in-place via the
+# official install script, which doubles as an upgrader).
+#
+# Order: secondaries first, primary last — keeps at least 2 of 3 nodes
+# answering DNS queries throughout the rollout. With serial: 1 only one
+# node is down at any time.
+#
+# Required Semaphore Variable Group entries (env-style):
+#   BULLETIN_API_KEY  - bulletin board API key (for summary post)
+#   TECHNITIUM_TOKEN  - admin API token for version verification
+#
+# Run via Semaphore (preferred) or ad-hoc:
+#   ansible-playbook -i ../inventory/hosts.yml technitium-update.yml
+
+- name: Upgrade Technitium DNS (sequential, secondaries first)
+  hosts: ns-secundus,ns-tertius,ns
+  serial: 1
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  vars:
+    technitium_target_version: "15.0.1"
+    technitium_install_url: "https://download.technitium.com/dns/install.sh"
+    technitium_token: "{{ lookup('env', 'TECHNITIUM_TOKEN') }}"
+  tasks:
+    - block:
+        - name: Capture version before upgrade
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- bash -c 'curl -fsSL "http://127.0.0.1:5380/api/settings/get?token={{ technitium_token }}" | jq -r ".response.version"'
+          register: _ver_before
+          changed_when: false
+          failed_when: false
+
+        - name: Run Technitium installer (in-place upgrade)
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- bash -c 'curl -fsSL {{ technitium_install_url }} | bash'
+          args:
+            executable: /bin/bash
+          register: _install_result
+          changed_when: true
+
+        - name: Wait for dns service to be active
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- systemctl is-active dns
+          register: _dns_active
+          retries: 30
+          delay: 2
+          until: _dns_active.stdout | trim == 'active'
+          changed_when: false
+
+        - name: Verify version after upgrade (with retry while web service warms)
+          delegate_to: "{{ pve_host }}"
+          become: false
+          vars:
+            ansible_user: root
+          ansible.builtin.shell: |
+            pct exec {{ pve_vmid }} -- bash -c 'curl -fsSL "http://127.0.0.1:5380/api/settings/get?token={{ technitium_token }}" | jq -r ".response.version"'
+          register: _ver_after
+          retries: 15
+          delay: 3
+          until: _ver_after.stdout | trim | length > 0 and _ver_after.stdout | trim != "null"
+          changed_when: false
+
+        - name: Record per-host status (success)
+          ansible.builtin.set_fact:
+            technitium_status:
+              host: "{{ inventory_hostname }}"
+              version_before: "{{ (_ver_before.stdout | default('')) | trim }}"
+              version_after: "{{ _ver_after.stdout | trim }}"
+              expected: "{{ technitium_target_version }}"
+              status: "{{ 'ok' if (_ver_after.stdout | trim == technitium_target_version) else 'warn' }}"
+              error: ""
+      rescue:
+        - name: Record per-host status (failure)
+          ansible.builtin.set_fact:
+            technitium_status:
+              host: "{{ inventory_hostname }}"
+              version_before: "{{ (_ver_before.stdout | default('')) | trim }}"
+              version_after: ""
+              expected: "{{ technitium_target_version }}"
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('task failed'))[:200] }}"
+
+- name: Post technitium upgrade summary to bulletin
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    ansible_become: false
+    run_iso: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    run_date: "{{ lookup('pipe', 'date -u +%Y-%m-%d') }}"
+    run_hm: "{{ lookup('pipe', 'date -u +%H:%M') }}"
+    bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
+    bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
+    semaphore_url: "{{ lookup('env', 'SEMAPHORE_URL') | default('https://semaphore.isnadboy.com', true) }}"
+    semaphore_project_id: "{{ lookup('env', 'SEMAPHORE_PROJECT_ID') | default('1', true) }}"
+    semaphore_link: "{{ semaphore_url }}/project/{{ semaphore_project_id }}"
+    target_hosts: ['ns-secundus', 'ns-tertius', 'ns']
+  tasks:
+    - name: Collect per-host technitium_status facts
+      ansible.builtin.set_fact:
+        summary_items: >-
+          {{
+            target_hosts
+            | map('extract', hostvars, 'technitium_status')
+            | select('defined')
+            | list
+          }}
+
+    - name: Identify unreachable hosts
+      ansible.builtin.set_fact:
+        unreachable_hosts: >-
+          {{
+            target_hosts
+            | reject('in', (summary_items | map(attribute='host') | list))
+            | list
+          }}
+
+    - name: Synthesise entries for unreachable hosts
+      ansible.builtin.set_fact:
+        summary_items: "{{ summary_items + [_u] }}"
+      vars:
+        _u:
+          host: "{{ item }}"
+          version_before: ""
+          version_after: ""
+          expected: "15.0.1"
+          status: "error"
+          error: "unreachable"
+      loop: "{{ unreachable_hosts }}"
+
+    - name: Build bulletin items
+      ansible.builtin.set_fact:
+        bulletin_items: "{{ bulletin_items | default([]) + [_item] }}"
+      vars:
+        h: "{{ item }}"
+        sub: >-
+          {%- if h.status == 'error' -%}error: {{ h.error }}
+          {%- elif h.status == 'warn' -%}{{ h.version_before }} → {{ h.version_after }} (expected {{ h.expected }})
+          {%- else -%}{{ h.version_before }} → {{ h.version_after }}
+          {%- endif -%}
+        _item:
+          title: "{{ h.host }}"
+          subtitle: "{{ sub }}"
+          section: "lxc_containers"
+          status: "{{ h.status }}"
+      loop: "{{ summary_items }}"
+
+    - name: Aggregate counts
+      ansible.builtin.set_fact:
+        total_hosts: "{{ summary_items | length }}"
+        ok_hosts: "{{ summary_items | selectattr('status', 'eq', 'ok') | list | length }}"
+        warn_hosts: "{{ summary_items | selectattr('status', 'eq', 'warn') | list | length }}"
+        error_hosts: "{{ summary_items | selectattr('status', 'eq', 'error') | list | length }}"
+
+    - name: Pick severity color
+      ansible.builtin.set_fact:
+        overall_color: >-
+          {%- if (error_hosts | int) > 0 -%}15158332
+          {%- elif (warn_hosts | int) > 0 -%}15844367
+          {%- else -%}3066993
+          {%- endif -%}
+
+    - name: POST summary to bulletin
+      ansible.builtin.uri:
+        url: "{{ bulletin_api_url }}"
+        method: POST
+        headers:
+          X-API-Key: "{{ bulletin_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        status_code: [200, 201]
+        body:
+          source: ansible
+          topic: technitium-update
+          embed:
+            title: "technitium · {{ run_date }} {{ run_hm }}"
+            description: |-
+              [View in Semaphore]({{ semaphore_link }})
+
+              {{ total_hosts }} hosts · **{{ ok_hosts }}** ok · **{{ warn_hosts }}** warn · **{{ error_hosts }}** errors
+              Target: 15.0.1
+            color: "{{ overall_color | int }}"
+            footer:
+              text: "Ansible · Semaphore · technitium upgrade · {{ run_iso }}"
+            items: "{{ bulletin_items }}"
+      when: bulletin_api_key | length > 0
+      register: bulletin_post_result
+
+    - name: Warn if bulletin API key missing
+      ansible.builtin.debug:
+        msg: "BULLETIN_API_KEY not set — summary not posted to bulletin board"
+      when: bulletin_api_key | length == 0
+
+    - name: Display outcome
+      ansible.builtin.debug:
+        msg: "Technitium upgrade: {{ ok_hosts }} ok / {{ warn_hosts }} warn / {{ error_hosts }} errors"

@@ -69,7 +69,7 @@
   tasks:
     - block:
         - name: Apply beszel-agent role (lxc tasks only)
-          ansible.builtin.include_role:
+          ansible.builtin.import_role:
             name: beszel-agent
             tasks_from: lxc.yml
 

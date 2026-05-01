@@ -13,6 +13,10 @@
     ansible_user: root
     _beszel_unit_b64: "{{ lookup('template', 'beszel-agent.service.j2') | b64encode }}"
     _beszel_env_b64: "{{ lookup('template', 'beszel-agent.env.j2') | b64encode }}"
+    # Play B has gather_facts: false (no SSH into the CT), so
+    # ansible_architecture is undefined and we can't rely on the role's
+    # default beszel_agent_arch here. Detect arch inside the container at
+    # runtime (uname -m) and build the release URL there too.
   ansible.builtin.shell: |
     set -euo pipefail
     pct exec {{ pve_vmid }} -- bash -c '
@@ -25,17 +29,19 @@
         armv7l)  ARCH=arm   ;;
         *)       echo "unsupported arch $(uname -m)"; exit 2 ;;
       esac
+      VERSION="{{ beszel_agent_version }}"
+      RELEASE_URL="https://github.com/henrygd/beszel/releases/download/v${VERSION}/beszel-agent_linux_${ARCH}.tar.gz"
 
       INSTALLED=""
       if [ -x /opt/beszel-agent/beszel-agent ]; then
         INSTALLED=$(/opt/beszel-agent/beszel-agent --version 2>/dev/null || true)
       fi
 
-      if ! echo "$INSTALLED" | grep -q "{{ beszel_agent_version }}"; then
+      if ! echo "$INSTALLED" | grep -q "$VERSION"; then
         if ! command -v curl >/dev/null; then apt-get update -qq && apt-get install -y -qq curl; fi
         if ! command -v tar  >/dev/null; then apt-get install -y -qq tar; fi
         mkdir -p /opt/beszel-agent
-        curl -fsSL "{{ beszel_agent_release_url }}" \
+        curl -fsSL "$RELEASE_URL" \
           | tar -xz -C /opt/beszel-agent --no-same-owner
         chmod 0755 /opt/beszel-agent/beszel-agent
       fi

@@ -18,6 +18,8 @@ services:
       # Beszel hub credentials (consumed by ansible/roles/beszel-agent)
       - BESZEL_AGENT_KEY=${BESZEL_AGENT_KEY:-}
       - BESZEL_AGENT_TOKEN=${BESZEL_AGENT_TOKEN:-}
+      # Technitium API admin token (consumed by ansible/playbooks/technitium-update.yml)
+      - TECHNITIUM_TOKEN=${TECHNITIUM_TOKEN:-}
     volumes:
       - semaphore-data:/etc/semaphore
     ports:

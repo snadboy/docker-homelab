@@ -43,7 +43,8 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 - Container port 8090; host-side mapped to 8091 on utilities (8090 taken by kiosk-dashboard). Traefik label uses container port: `snadboy.revp.8090.domain=beszel.isnadboy.com`
 - External named volume `beszel-data` (SQLite/PocketBase — pre-create with `docker volume create beszel-data` before first deploy)
 - `APP_URL=https://beszel.isnadboy.com` baked into compose; admin user is created via web UI on first launch
-- Agents installed by `ansible/playbooks/beszel-agent-install.yml` using the `beszel-agent` role; auth via universal token (hub Settings → Tokens) + hub SSH public key, set as `BESZEL_AGENT_KEY` / `BESZEL_AGENT_TOKEN` in `semaphore/.env` (matches the `BULLETIN_API_KEY` pattern; role reads via `lookup('env', ...)`)
+- Agents installed by `ansible/playbooks/beszel-agent-install.yml` using the `beszel-agent` role; auth via universal token (hub Settings → Tokens) + hub SSH public key, exposed to the playbook as `BESZEL_AGENT_KEY` / `BESZEL_AGENT_TOKEN` (role reads via `lookup('env', ...)`)
+- **Canonical home for those vars is the Semaphore Variable Group** (project "homelab" → Variable Groups → default → Variables tab → Environment variables). Semaphore's task runner builds the `ansible-playbook` env explicitly and does NOT inherit the container's process env, so values in `semaphore/.env` (or passed through `semaphore/docker-compose.yml`) do NOT reach the playbook subprocess. Keep a copy in `semaphore/.env` only as a non-essential secondary record / for `docker exec` debugging. See `~/.claude/projects/-home-snadboy-projects-git-docker-homelab/memory/feedback_semaphore-env-vars.md` for the full reasoning.
 
 ---
 
@@ -56,7 +57,7 @@ Located in `ansible/` subdirectory, used by Semaphore.
 - **Roles:** `ansible/roles/beszel-agent/` (Linux SSH + LXC pct-exec install paths in one role)
 - **Config:** `ansible/ansible.cfg` (ServerAliveInterval=30, pipelining on)
 - **Schedule:** Biweekly `0 4 */14 * *` (Semaphore project "homelab")
-- **Bulletin summary:** `apt-update.yml` final play POSTs a single summary to `ansible/apt-update` on the bulletin board (requires `BULLETIN_API_KEY` in Semaphore env — see `semaphore/.env.example`). Per-host rows use `status=error|warn|ok` to colour-accent errors red and reboot-required orange. `beszel-agent-install.yml` posts to topic `ansible/beszel-agent` with the same shape.
+- **Bulletin summary:** `apt-update.yml` final play POSTs a single summary to `ansible/apt-update` on the bulletin board (requires `BULLETIN_API_KEY` set in the project's default Variable Group — same caveat as `BESZEL_AGENT_*` above; `semaphore/.env` is NOT sufficient on its own). The play is guarded by `when: bulletin_api_key | length > 0`, so historical runs likely silently no-op'd whenever the var was only present in `semaphore/.env`. Per-host rows use `status=error|warn|ok` to colour-accent errors red and reboot-required orange. `beszel-agent-install.yml` posts to topic `ansible/beszel-agent` with the same shape.
 
 - `iot` removed from inventory (VM 113 destroyed)
 - `fetch` added to `ubuntu_vms` group

@@ -229,3 +229,9 @@
       ansible.builtin.debug:
         msg: "Posted {{ total_hosts }} hosts to bulletin ({{ ok_hosts }} ok, {{ error_hosts }} error)"
       when: bulletin_api_key | length > 0
+
+    - name: DEBUG marker - playbook reached the end
+      ansible.builtin.copy:
+        dest: /tmp/beszel-playbook-completed
+        content: "reached end at {{ run_iso }}\n"
+        mode: "0644"

@@ -28,6 +28,9 @@
         - name: Confirm service is active
           ansible.builtin.command: systemctl is-active beszel-agent
           register: _beszel_active
+          retries: 6
+          delay: 2
+          until: _beszel_active.stdout | trim == 'active'
           changed_when: false
 
         - name: Record per-host status (success)

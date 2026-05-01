@@ -40,7 +40,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 - Earlier GPU-passthrough attempt on multivac VM was reverted because VFIO caused hard host lockups; the LXC bind-mount path is fundamentally different and stable.
 
 **beszel** (`beszel/docker-compose.yml`) — system-metrics monitoring (complements Uptime Kuma)
-- Port 8090 on utilities. Traefik label: `snadboy.revp.8090.domain=beszel.isnadboy.com`
+- Container port 8090; host-side mapped to 8091 on utilities (8090 taken by kiosk-dashboard). Traefik label uses container port: `snadboy.revp.8090.domain=beszel.isnadboy.com`
 - External named volume `beszel-data` (SQLite/PocketBase — pre-create with `docker volume create beszel-data` before first deploy)
 - `APP_URL=https://beszel.isnadboy.com` baked into compose; admin user is created via web UI on first launch
 - Agents installed by `ansible/playbooks/beszel-agent-install.yml` using the `beszel-agent` role; auth via universal token (hub Settings → Tokens) + hub SSH public key, stored as `beszel_agent_key` / `beszel_agent_token` (Vault or Semaphore env)

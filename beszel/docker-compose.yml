@@ -11,7 +11,8 @@ services:
       # Use named volume for SQLite (PocketBase) - CIFS/network storage causes locking issues
       - beszel-data:/beszel_data
     ports:
-      - 8090:8090
+      # Host 8091 -> container 8090. Host 8090 already taken by kiosk-dashboard.
+      - 8091:8090
     restart: unless-stopped
 
 volumes:

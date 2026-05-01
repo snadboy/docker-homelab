@@ -15,6 +15,7 @@ beszel_agent_port: 45876
 # with TOKEN, the agent connects out to the hub and self-registers via the
 # universal token. Leaving HUB_URL empty falls back to classic mode where the
 # hub initiates the connection on beszel_agent_port.
+# To bypass Traefik for any reason, set: ws://utilities.tail65635.ts.net:8091
 beszel_agent_hub_url: "wss://beszel.isnadboy.com"
 
 # Hub public key (shown in hub UI under "Add System") and universal token

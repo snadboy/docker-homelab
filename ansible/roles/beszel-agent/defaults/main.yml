@@ -19,10 +19,12 @@ beszel_agent_port: 45876
 beszel_agent_hub_url: "wss://beszel.isnadboy.com"
 
 # Hub public key (shown in hub UI under "Add System") and universal token
-# (Settings -> Tokens). MUST be overridden via vault or Semaphore env -
-# leaving these empty will install the agent but it cannot authenticate.
-beszel_agent_key: ""
-beszel_agent_token: ""
+# (Settings -> Tokens). Sourced from the controller's environment - in
+# Semaphore that means semaphore/.env on utilities, matching the pattern
+# used by BULLETIN_API_KEY. Leaving these unset will install the agent
+# but it cannot authenticate.
+beszel_agent_key: "{{ lookup('env', 'BESZEL_AGENT_KEY') | default('', true) }}"
+beszel_agent_token: "{{ lookup('env', 'BESZEL_AGENT_TOKEN') | default('', true) }}"
 
 # Map ansible_architecture -> Beszel release asset arch suffix.
 beszel_agent_arch_map:

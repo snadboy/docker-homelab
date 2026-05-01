@@ -2,7 +2,7 @@
 # Install / update the Beszel monitoring agent across the homelab.
 #
 # Coverage:
-#   Play A: pve_nodes + ubuntu_vms + workstations + managed_locally   (SSH)
+#   Play A: pve_nodes + ubuntu_vms + workstations                     (SSH)
 #   Play B: lxc_containers                                            (pct exec)
 #   Play C: localhost                                                 (bulletin summary)
 #
@@ -14,7 +14,11 @@
 #   beszel_agent_token - universal token from hub Settings -> Tokens
 
 - name: Install beszel-agent (SSH hosts)
-  hosts: pve_nodes:ubuntu_vms:workstations:managed_locally
+  # managed_locally (utilities) excluded: the Semaphore container can't
+  # reliably SSH back to its own host, so utilities is always reported
+  # unreachable and ansible-playbook exits non-zero. The agent on
+  # utilities was installed manually and runs independently of this play.
+  hosts: pve_nodes:ubuntu_vms:workstations
   become: true
   gather_facts: true
   any_errors_fatal: false
@@ -122,7 +126,6 @@
         (groups['pve_nodes'] | default([]))
         + (groups['ubuntu_vms'] | default([]))
         + (groups['workstations'] | default([]))
-        + (groups['managed_locally'] | default([]))
         + (groups['lxc_containers'] | default([]))
       }}
   tasks:
@@ -229,9 +232,3 @@
       ansible.builtin.debug:
         msg: "Posted {{ total_hosts }} hosts to bulletin ({{ ok_hosts }} ok, {{ error_hosts }} error)"
       when: bulletin_api_key | length > 0
-
-    - name: DEBUG marker - playbook reached the end
-      ansible.builtin.copy:
-        dest: /tmp/beszel-playbook-completed
-        content: "reached end at {{ run_iso }}\n"
-        mode: "0644"

@@ -22,7 +22,7 @@
   tasks:
     - block:
         - name: Apply beszel-agent role
-          ansible.builtin.include_role:
+          ansible.builtin.import_role:
             name: beszel-agent
 
         - name: Confirm service is active

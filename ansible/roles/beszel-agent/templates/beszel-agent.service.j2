@@ -11,9 +11,14 @@ Restart=on-failure
 RestartSec=5
 StateDirectory=beszel-agent
 
-# Sandboxing (matches upstream install-agent.sh)
+# Sandboxing (close to upstream install-agent.sh, plus PrivateTmp)
+# PrivateTmp gives the unit its own /tmp namespace - required when /tmp is
+# part of the root filesystem (no separate /tmp mount), since
+# ProtectSystem=strict otherwise renders /tmp read-only and the agent
+# fails on `/tmp/beszel_health` cleanup.
 KeyringMode=private
 LockPersonality=yes
+PrivateTmp=true
 ProtectClock=yes
 ProtectHome=read-only
 ProtectHostname=yes

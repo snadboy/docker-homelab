@@ -51,8 +51,6 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 
 | Stack | Host | Description |
 |-------|------|-------------|
-| `otbr-garage/` | utilities | OpenThread Border Router (garage SLZB radio) |
-| `otbr-house/` | utilities | OpenThread Border Router (house SLZB radio) |
 | `zigbee2mqtt/` | cadre, utilities | Zigbee bridge (template — set Z2M_NAME/Z2M_PORT in .env) |
 
 ### Cloudflare Tunnels
@@ -86,4 +84,3 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 |------|-------------|
 | `ansible/` | Ansible inventory and playbooks (biweekly apt updates via Semaphore) |
 | `home-assistant/` | HA blueprints (Blackshome + custom) |
-| `otbr-common/` | Shared OTBR s6-overlay init scripts |

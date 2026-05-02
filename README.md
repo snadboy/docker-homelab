@@ -6,7 +6,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 
 | Host | Stacks |
 |------|--------|
-| **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, rustdesk, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
+| **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
 | **arr** | agregarr, autopulse, overseerr, prowlarr, radarr, slabels, sonarr, tautulli, tracearr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
@@ -77,7 +77,6 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `actual-budget/` | utilities | Budgeting tool |
 | `firefly-iii/` | utilities | Financial management |
 | `pulse/` | bedrock | Proxmox cluster monitoring (requires agents on PVE/PBS nodes) |
-| `rustdesk/` | utilities | Remote desktop |
 | `termix/` | utilities | Web terminal |
 | `unifi-toolkit/` | utilities | UniFi network tools |
 

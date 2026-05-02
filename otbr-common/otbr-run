@@ -29,6 +29,11 @@ case "${otbr_log_level}" in
     *)       otbr_log_level_int="6" ;;
 esac
 
+# Required for Thread<->LAN IPv6 packet routing (otherwise OTBR forwards but
+# the host kernel drops outbound v6 frames). Idempotent; safe to re-set on
+# every container start.
+echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+
 # ipsets always needed (otbr-agent reads them at runtime)
 ipset create -exist otbr-ingress-deny-src hash:net family inet6
 ipset create -exist otbr-ingress-deny-src-swap hash:net family inet6

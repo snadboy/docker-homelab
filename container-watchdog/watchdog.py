@@ -6,7 +6,7 @@ and every host as ok / disconnected. Reports a single aggregate heartbeat to
 the Uptime Kuma push URL: status=up when everything is healthy, status=down
 with msg listing the offenders otherwise.
 
-Per-container/per-host transitions (e.g., kiosk-data went unhealthy, host arr
+Per-container/per-host transitions (e.g., sonarr went unhealthy, host arr
 disconnected) are logged on stdout for the journal/docker logs.
 """
 

@@ -6,8 +6,8 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 
 | Host | Stacks |
 |------|--------|
-| **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, rustdesk, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
-| **arr** | agregarr, autopulse, overseerr, prowlarr, radarr, slabels, sonarr, tautulli, tracearr |
+| **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
+| **arr** | agregarr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
@@ -20,12 +20,10 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | Stack | Host | Description |
 |-------|------|-------------|
 | `agregarr/` | arr | Plex collection manager |
-| `autopulse/` | arr | Media automation trigger |
 | `overseerr/` | arr | Media request management |
 | `prowlarr/` | arr | Indexer manager |
 | `radarr/` | arr | Movie management |
 | `sabnzbd/` | fetch | Usenet downloader |
-| `slabels/` | arr | Label generation |
 | `sonarr/` | arr | TV series management |
 | `tautulli/` | arr | Plex statistics and monitoring |
 | `tracearr/` | arr | Media tracking |
@@ -51,8 +49,6 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 
 | Stack | Host | Description |
 |-------|------|-------------|
-| `otbr-garage/` | utilities | OpenThread Border Router (garage SLZB radio) |
-| `otbr-house/` | utilities | OpenThread Border Router (house SLZB radio) |
 | `zigbee2mqtt/` | cadre, utilities | Zigbee bridge (template — set Z2M_NAME/Z2M_PORT in .env) |
 
 ### Cloudflare Tunnels
@@ -77,7 +73,6 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `actual-budget/` | utilities | Budgeting tool |
 | `firefly-iii/` | utilities | Financial management |
 | `pulse/` | bedrock | Proxmox cluster monitoring (requires agents on PVE/PBS nodes) |
-| `rustdesk/` | utilities | Remote desktop |
 | `termix/` | utilities | Web terminal |
 | `unifi-toolkit/` | utilities | UniFi network tools |
 
@@ -87,4 +82,3 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 |------|-------------|
 | `ansible/` | Ansible inventory and playbooks (biweekly apt updates via Semaphore) |
 | `home-assistant/` | HA blueprints (Blackshome + custom) |
-| `otbr-common/` | Shared OTBR s6-overlay init scripts |

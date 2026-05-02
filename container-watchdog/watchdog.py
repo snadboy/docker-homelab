@@ -88,43 +88,34 @@ def push(status: str, msg: str) -> None:
         LOG.error("push failed: %s", exc)
 
 
-def collect(prev_seen: set[str]) -> tuple[list[Issue], set[str]]:
-    """Returns (issues, current_seen_running_keys).
+def collect() -> list[Issue]:
+    """Returns the current set of issues across all containers and hosts.
 
-    revp's /api/containers only lists *running* containers, so a stopped or
-    removed container vanishes from the response. We track the set of keys
-    we've seen in any prior poll and flag anything that has disappeared.
+    Uses revp's /api/containers/all which returns the raw `docker ps -a`
+    inventory — every container Docker knows about, running or not. This
+    means a stopped container is visible (State="exited") rather than
+    vanishing from the response, so the classifier sees the bad state
+    directly without needing to track a baseline.
     """
     issues: list[Issue] = []
-    seen: set[str] = set()
     try:
-        data = fetch("/api/containers")
+        data = fetch("/api/containers/all")
     except Exception as exc:
-        # On revp fetch failure, can't tell what's missing — return only
-        # the fetch error, leave prev_seen unchanged so we don't false-clear.
-        return [Issue("revp", "containers", f"fetch failed: {exc}")], prev_seen
+        return [Issue("revp", "containers", f"fetch failed: {exc}")]
     containers = data.get("containers") if isinstance(data, dict) else data
     for c in containers or []:
-        name = c.get("Name") or "?"
-        host = c.get("host") or "?"
-        if name in IGNORE_CONTAINERS:
-            continue
-        seen.add(f"{name}@{host}")
         if (i := classify_container(c)):
             issues.append(i)
-    # Anything that was running last time but isn't now → missing
-    for missing in sorted(prev_seen - seen):
-        issues.append(Issue("container", missing, "missing from revp inventory"))
     try:
         data = fetch("/api/hosts")
     except Exception as exc:
         issues.insert(0, Issue("revp", "hosts", f"fetch failed: {exc}"))
-        return issues, prev_seen | seen
+        return issues
     hosts = data.get("hosts") if isinstance(data, dict) and "hosts" in data else data
     for _, h in (hosts or {}).items():
         if (i := classify_host(h)):
             issues.append(i)
-    return issues, prev_seen | seen
+    return issues
 
 
 def diff(prev: set[str], curr: set[str]) -> tuple[list[str], list[str]]:
@@ -138,10 +129,9 @@ def main() -> None:
     )
     LOG.info("starting; revp=%s interval=%ss ignore=%s", REVP_URL, POLL_INTERVAL, sorted(IGNORE_CONTAINERS) or "[]")
     prev: dict[str, str] = {}  # key -> detail
-    seen_running: set[str] = set()  # accumulated set of name@host ever seen running
     bootstrap = True
     while True:
-        issues, seen_running = collect(seen_running)
+        issues = collect()
         curr = {f"{i.kind}:{i.target}": str(i) for i in issues}
         added, cleared = diff(set(prev), set(curr))
         if bootstrap:
@@ -149,7 +139,6 @@ def main() -> None:
                 LOG.warning("baseline (already-bad): %s", ", ".join(curr.values()))
             else:
                 LOG.info("baseline clean")
-            LOG.info("tracking %d running containers", len(seen_running))
             bootstrap = False
         else:
             for k in added:

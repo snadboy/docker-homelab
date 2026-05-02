@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/snadboy/docker-homelab (main)
 **Local:** `/home/snadboy/projects/docker-homelab`
-**Last Updated:** 2026-04-30
+**Last Updated:** 2026-05-02
 
 ---
 
@@ -10,14 +10,17 @@
 
 Stacks are managed by **Dockhand** (hawser agents on each host). Push to git → Dockhand detects → deploys automatically.
 
-| Host | Dockhand Env ID | Key Stacks |
-|------|-----------------|------------|
-| utilities | 9 (was ansible-controller before migration) | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel |
-| arr | — | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr |
-| fetch | — | sabnzbd |
-| bedrock | — | pulse, pwa-appserver, windmill |
-| cadre | — | traefik + traefik-http-provider, zigbee2mqtt (×3) |
-| plex | — | plex |
+| Host | Dockhand Env ID | Connection | Key Stacks |
+|------|-----------------|------------|------------|
+| utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
+| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr |
+| cadre | 7 | hawser-edge agent | traefik + traefik-http-provider, zigbee2mqtt (×3) |
+| plex | 8 | hawser-edge agent | plex |
+| bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
+| fetch | 12 | hawser-edge agent | sabnzbd |
+
+(Env 9 "ansible-controller" was deleted 2026-05-02 — it was a leftover from the
+pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 
 ---
 
@@ -52,7 +55,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 Located in `ansible/` subdirectory, used by Semaphore.
 
 - **Inventory:** `ansible/inventory/hosts.yml`
-- **Playbooks:** `ansible/playbooks/apt-update.yml`, `ansible/playbooks/beszel-agent-install.yml`
+- **Playbooks:** `ansible/playbooks/apt-update.yml`, `ansible/playbooks/beszel-agent-install.yml`, `ansible/playbooks/technitium-update.yml`
 - **Roles:** `ansible/roles/beszel-agent/` (Linux SSH + LXC pct-exec install paths in one role)
 - **Config:** `ansible/ansible.cfg` (ServerAliveInterval=30, pipelining on)
 - **Schedule:** Biweekly `0 4 */14 * *` (Semaphore project "homelab")
@@ -64,8 +67,8 @@ Located in `ansible/` subdirectory, used by Semaphore.
 - `host-plex` removed from `ubuntu_vms` (VM retired 2026-04-10)
 - `plex-lxc` (CT 107 on colossus) added to `lxc_containers`
 - `sdevs` added to `managed_locally` (unattended-upgrades; excluded from apt_hosts)
-- `pve-multivac` dormant indefinitely — playbook fails on multivac and ns-tertius (CT 112) until restored
+- `pve-multivac` was dormant; restored 2026-05-01. ns-tertius (CT 112) DHCP IP drifted from .51→.53, fixed via UniFi reservation.
 
 ---
 
-## Last Updated: 2026-04-30
+## Last Updated: 2026-05-02

@@ -1,3 +1,7 @@
+# requirements:
+# httpx>=0.27.0
+# wmill>=1.0.0
+
 """
 Plex <-> Sonarr tag mirror.
 
@@ -37,70 +41,93 @@ def main(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     if wmill is not None:
-        sonarr_url = sonarr_url or wmill.get_variable("u/admin/SONARR_URL")
-        sonarr_api_key = sonarr_api_key or wmill.get_variable("u/admin/SONARR_API_KEY")
-        plex_url = plex_url or wmill.get_variable("u/admin/PLEX_URL")
-        plex_token = plex_token or wmill.get_variable("u/admin/PLEX_TOKEN")
+        sonarr_url = sonarr_url or wmill.get_variable("u/dschless/sonarr_url")
+        sonarr_api_key = sonarr_api_key or wmill.get_variable("u/dschless/sonarr_api_key")
+        plex_url = plex_url or wmill.get_variable("u/dschless/plex_url")
+        plex_token = plex_token or wmill.get_variable("u/dschless/plex_token")
     if not all([sonarr_url, sonarr_api_key, plex_url, plex_token]):
         raise RuntimeError("Missing one of: sonarr_url, sonarr_api_key, plex_url, plex_token")
 
     sonarr = SonarrClient(sonarr_url.rstrip("/"), sonarr_api_key)
     plex = PlexClient(plex_url.rstrip("/"), plex_token)
 
-    sync_tags = {t["id"]: t["label"] for t in sonarr.tags() if t["label"].startswith(prefix)}
-    tag_id_by_label = {v: k for k, v in sync_tags.items()}
+    # Case-insensitive matching: Plex auto-capitalizes the first letter of
+    # labels on write (e.g. "sync:foo" becomes "Sync:foo"), so we key the
+    # union by lower-cased label and treat differing cases as the same tag.
+    prefix_lc = prefix.lower()
+
     series_list = sonarr.series()
     series_by_tvdb = {s["tvdbId"]: s for s in series_list if s.get("tvdbId")}
+
+    # sonarr_index[key_lc] = {"tag_id": int, "label": str (original case)}
+    sonarr_index: dict[str, dict] = {}
+    for t in sonarr.tags():
+        if t["label"].lower().startswith(prefix_lc):
+            sonarr_index[t["label"].lower()] = {"tag_id": t["id"], "label": t["label"]}
 
     sonarr_state: dict[str, set[int]] = {}
     for s in series_list:
         for tid in s.get("tags", []):
-            if tid in sync_tags:
-                sonarr_state.setdefault(sync_tags[tid], set()).add(s["tvdbId"])
+            for key_lc, info in sonarr_index.items():
+                if info["tag_id"] == tid:
+                    sonarr_state.setdefault(key_lc, set()).add(s["tvdbId"])
+                    break
 
     section_key = plex.find_tv_section_key()
-    plex_shows = plex.shows_with_labels(section_key)
+    plex_shows = plex.all_shows(section_key)
     plex_by_tvdb = {s["tvdbId"]: s for s in plex_shows}
+    tvdb_by_rk = {s["ratingKey"]: s["tvdbId"] for s in plex_shows}
 
+    # plex_index[key_lc] = "label" (original case from Plex's label registry)
+    plex_index: dict[str, str] = {}
     plex_state: dict[str, set[int]] = {}
-    for show in plex_shows:
-        for label in show["labels"]:
-            if label.startswith(prefix):
-                plex_state.setdefault(label, set()).add(show["tvdbId"])
+    for label_info in plex.labels_in_section(section_key, prefix_lc):
+        key_lc = label_info["title"].lower()
+        plex_index[key_lc] = label_info["title"]
+        rks = plex.shows_for_label(section_key, label_info["key"])
+        for rk in rks:
+            tvdb = tvdb_by_rk.get(rk)
+            if tvdb is not None:
+                plex_state.setdefault(key_lc, set()).add(tvdb)
 
     sonarr_changes: dict[int, set[int]] = {}
     plex_changes: dict[str, set[str]] = {}
     actions: list[str] = []
     errors: list[str] = []
 
-    for label in sorted(set(sonarr_state) | set(plex_state)):
-        s_set = sonarr_state.get(label, set())
-        p_set = plex_state.get(label, set())
+    for key_lc in sorted(set(sonarr_state) | set(plex_state)):
+        s_set = sonarr_state.get(key_lc, set())
+        p_set = plex_state.get(key_lc, set())
         union = s_set | p_set
+        # Display label: prefer Plex's casing if it has one, else Sonarr's, else lowercase.
+        display = plex_index.get(key_lc) or (sonarr_index.get(key_lc, {}).get("label")) or key_lc
 
         for tvdb_id in sorted(union - s_set):
             series = series_by_tvdb.get(tvdb_id)
             if series is None:
-                errors.append(f"sonarr: tvdb:{tvdb_id} (label '{label}') not in Sonarr library")
+                errors.append(f"sonarr: tvdb:{tvdb_id} (label '{display}') not in Sonarr library")
                 continue
-            if label not in tag_id_by_label:
+            if key_lc not in sonarr_index:
                 if dry_run:
-                    actions.append(f"[dry] +sonarr tag '{label}' (would create)")
-                    tag_id_by_label[label] = -1
+                    actions.append(f"[dry] +sonarr tag '{display}' (would create)")
+                    sonarr_index[key_lc] = {"tag_id": -1, "label": display}
                 else:
-                    new_tag = sonarr.create_tag(label)
-                    tag_id_by_label[label] = new_tag["id"]
-                    actions.append(f"+sonarr tag '{label}' created (id={new_tag['id']})")
-            sonarr_changes.setdefault(series["id"], set()).add(tag_id_by_label[label])
-            actions.append(f"+sonarr {label} -> {series['title']} (tvdb:{tvdb_id})")
+                    new_tag = sonarr.create_tag(display)
+                    sonarr_index[key_lc] = {"tag_id": new_tag["id"], "label": new_tag["label"]}
+                    actions.append(f"+sonarr tag '{new_tag['label']}' created (id={new_tag['id']})")
+            sonarr_changes.setdefault(series["id"], set()).add(sonarr_index[key_lc]["tag_id"])
+            actions.append(f"+sonarr {display} -> {series['title']} (tvdb:{tvdb_id})")
 
+        # When propagating to Plex, use Plex's stored casing if it exists for this
+        # key. Otherwise use the source label (Plex will likely capitalize anyway).
+        plex_label_to_write = plex_index.get(key_lc) or display
         for tvdb_id in sorted(union - p_set):
             show = plex_by_tvdb.get(tvdb_id)
             if show is None:
-                errors.append(f"plex: tvdb:{tvdb_id} (label '{label}') not in Plex library")
+                errors.append(f"plex: tvdb:{tvdb_id} (label '{display}') not in Plex library")
                 continue
-            plex_changes.setdefault(show["ratingKey"], set()).add(label)
-            actions.append(f"+plex {label} -> {show['title']} (tvdb:{tvdb_id})")
+            plex_changes.setdefault(show["ratingKey"], set()).add(plex_label_to_write)
+            actions.append(f"+plex {plex_label_to_write} -> {show['title']} (tvdb:{tvdb_id})")
 
     for series_id, tag_ids in sonarr_changes.items():
         if -1 in tag_ids:
@@ -115,23 +142,25 @@ def main(
 
     for rating_key, labels_to_add in plex_changes.items():
         show = next(s for s in plex_shows if s["ratingKey"] == rating_key)
-        merged = sorted(set(show["labels"]) | labels_to_add)
         if not dry_run:
             try:
-                plex.set_labels(section_key, rating_key, merged)
+                plex.add_labels(section_key, rating_key, sorted(labels_to_add))
             except Exception as exc:
                 errors.append(f"plex update {show['title']}: {exc}")
 
     summary = {
         "dry_run": dry_run,
         "prefix": prefix,
-        "shared_tags_seen": sorted(set(sonarr_state) | set(plex_state)),
+        "shared_tags_seen": sorted(
+            (plex_index.get(k) or (sonarr_index.get(k, {}).get("label")) or k)
+            for k in (set(sonarr_state) | set(plex_state))
+        ),
         "actions": actions,
         "errors": errors,
         "counts": {
             "sonarr_series_updated": len(sonarr_changes),
             "plex_shows_updated": len(plex_changes),
-            "sonarr_tags_known": len(sync_tags),
+            "sonarr_tags_known": len(sonarr_index),
             "errors": len(errors),
         },
     }
@@ -190,7 +219,10 @@ class PlexClient:
                 return int(d["key"])
         raise RuntimeError("No Plex TV (show) library section found")
 
-    def shows_with_labels(self, section_key: int) -> list[dict]:
+    def all_shows(self, section_key: int) -> list[dict]:
+        """All shows in the section with TVDB IDs. Does not include labels —
+        the /all endpoint omits Label fields. Use labels_with_tvdbs() instead
+        to map labels to shows."""
         r = httpx.get(
             f"{self.base}/library/sections/{section_key}/all",
             headers=self.headers,
@@ -215,19 +247,51 @@ class PlexClient:
                 "ratingKey": str(show["ratingKey"]),
                 "tvdbId": tvdb_id,
                 "title": show.get("title", ""),
-                "labels": [l["tag"] for l in show.get("Label", [])],
             })
         return out
 
-    def set_labels(self, section_key: int, rating_key: str, labels: list[str]) -> None:
-        params = {
-            "type": 2,
-            "id": rating_key,
-            "label.locked": 1,
-            "X-Plex-Token": self.token,
-        }
-        for i, label in enumerate(labels):
-            params[f"label[{i}].tag.tag"] = label
+    def labels_in_section(self, section_key: int, prefix_lc: str) -> list[dict]:
+        """Labels in the section whose name (case-insensitive) starts with prefix_lc.
+        Returns [{key: <numeric label id>, title: <label string>}, ...]."""
+        r = httpx.get(
+            f"{self.base}/library/sections/{section_key}/label",
+            headers=self.headers,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return [
+            {"key": d["key"], "title": d["title"]}
+            for d in r.json().get("MediaContainer", {}).get("Directory", [])
+            if d.get("title", "").lower().startswith(prefix_lc)
+        ]
+
+    def shows_for_label(self, section_key: int, label_key: str) -> list[str]:
+        """Rating keys of shows tagged with the given numeric label id."""
+        r = httpx.get(
+            f"{self.base}/library/sections/{section_key}/all",
+            headers=self.headers,
+            params={"label": label_key, "type": 2},
+            timeout=60,
+        )
+        r.raise_for_status()
+        return [
+            str(s["ratingKey"])
+            for s in r.json().get("MediaContainer", {}).get("Metadata", [])
+        ]
+
+    def add_labels(self, section_key: int, rating_key: str, labels: list[str]) -> None:
+        """Append labels to a show without replacing the existing set.
+        Plex's tag.value syntax adds; tag.tag would replace."""
+        if not labels:
+            return
+        params: list[tuple[str, str]] = [
+            ("type", "2"),
+            ("id", str(rating_key)),
+            ("label.locked", "1"),
+            ("X-Plex-Token", self.token),
+        ]
+        for label in labels:
+            params.append(("label[].tag.tag.value", label))
         r = httpx.put(
             f"{self.base}/library/sections/{section_key}/all",
             params=params,

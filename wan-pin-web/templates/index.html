@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Pin</title>
+  <style>
+    :root {
+      --bg: #0f1419; --card: #1a2027; --border: #2a3441;
+      --fg: #e5e7eb; --muted: #9ca3af; --accent: #60a5fa;
+      --on: #10b981; --off: #374151;
+    }
+    * { box-sizing: border-box; }
+    body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; margin: 0; padding: 2rem; max-width: 900px; margin: 0 auto; }
+    h1 { margin-top: 0; font-weight: 600; }
+    .device { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+    .device-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.75rem; }
+    .device-name { font-size: 1.15rem; font-weight: 600; }
+    .device-mac { color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.85rem; }
+    .device-status { color: var(--muted); font-size: 0.85rem; }
+    .device-status .active { color: var(--on); font-weight: 500; }
+    .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    button.wan {
+      background: var(--off); color: var(--fg); border: 1px solid var(--border);
+      padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.95rem;
+      transition: all 0.15s; min-width: 6rem;
+    }
+    button.wan:hover { border-color: var(--accent); }
+    button.wan.active { background: var(--on); border-color: var(--on); font-weight: 600; }
+    button.wan.off { background: transparent; border-style: dashed; color: var(--muted); }
+    button.wan.off.active { background: var(--off); color: var(--fg); border-style: solid; }
+    .empty { color: var(--muted); padding: 2rem; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+    .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--card); border: 1px solid var(--border); padding: 0.75rem 1rem; border-radius: 8px; opacity: 0; transition: opacity 0.2s; }
+    .toast.show { opacity: 1; }
+    .toast.error { border-color: #ef4444; }
+    code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>WAN Pin</h1>
+  <p style="color: var(--muted)">Click a WAN button to switch a device's outbound path. <strong>Off</strong> disables all pins (UniFi default load-balance resumes).</p>
+
+  {% if devices %}
+    {% for d in devices %}
+      <div class="device" data-device="{{ d.name }}">
+        <div class="device-header">
+          <div>
+            <span class="device-name">{{ d.name }}</span>
+            <span class="device-mac">&nbsp;&nbsp;{{ d.mac }}</span>
+          </div>
+          <div class="device-status">
+            {% if d.active %}
+              currently: <span class="active">WAN{{ d.active }} ({{ wan_names[d.active] }})</span>
+            {% else %}
+              currently: <span>off / default</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="buttons">
+          {% for w in d.wans %}
+            <button class="wan {% if d.active == w.n %}active{% endif %}" data-wan="{{ w.n }}">WAN{{ w.n }} <small style="opacity:0.6">{{ w.label }}</small></button>
+          {% endfor %}
+          <button class="wan off {% if not d.active %}active{% endif %}" data-wan="off">Off</button>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">
+      No wan-pin-managed devices yet. Create routes via the CLI:
+      <br><br><code>wan-pin add &lt;device&gt;</code>
+    </div>
+  {% endif %}
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const toast = document.getElementById('toast');
+    function showToast(msg, isError) {
+      toast.textContent = msg;
+      toast.classList.toggle('error', !!isError);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    document.querySelectorAll('button.wan').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const card = btn.closest('.device');
+        const device = card.dataset.device;
+        const wan = btn.dataset.wan;
+        const buttons = card.querySelectorAll('button.wan');
+        buttons.forEach(b => b.disabled = true);
+        try {
+          const fd = new FormData();
+          fd.append('device', device);
+          fd.append('wan', wan);
+          const resp = await fetch('/api/switch', { method: 'POST', body: fd });
+          if (!resp.ok) throw new Error(await resp.text());
+          const data = await resp.json();
+          showToast(`${device}: ${wan === 'off' ? 'off' : 'WAN' + wan}`);
+          setTimeout(() => location.reload(), 600);
+        } catch (e) {
+          showToast('failed: ' + e.message, true);
+          buttons.forEach(b => b.disabled = false);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  wan-pin-web:
+    image: snadboy/wan-pin-web:latest
+    build: .
+    container_name: wan-pin-web
+    restart: unless-stopped
+    environment:
+      - UNIFI_URL=${UNIFI_URL:-https://192.168.86.1}
+      - UNIFI_USER=${UNIFI_USER}
+      - UNIFI_PASSWORD=${UNIFI_PASSWORD}
+      - WAN1_NAME=${WAN1_NAME:-Internet 1}
+      - WAN2_NAME=${WAN2_NAME:-Internet 2}
+      - WAN3_NAME=${WAN3_NAME:-UniFi 5G A}
+    ports:
+      - "8093:8000"
+    labels:
+      - "snadboy.revp.8000.domain=wan-pin.isnadboy.com"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

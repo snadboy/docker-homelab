@@ -1,0 +1,122 @@
+---
+# SSH variant: recreate the hawser-agent container in place, preserving
+# the per-host TOKEN env var and the /data/stacks named volume.
+#
+# Pattern (matches the manual procedure that worked on 6 hosts on
+# 2026-05-22):
+#   1. Inspect existing container -> capture TOKEN and stacks volume name
+#   2. Pull latest image
+#   3. Stop + remove old container (named volume survives — docker rm
+#      does not delete volumes without -v)
+#   4. Create new container with same TOKEN and volume mount
+#   5. Wait for "Connected to Dockhand server" in logs
+
+- name: Locate existing hawser container (try canonical name first)
+  community.docker.docker_container_info:
+    name: "{{ hawser_container_name }}"
+  register: _hawser_info
+  failed_when: false
+
+- name: Fall back to legacy 'hawser-agent' name if canonical missing
+  community.docker.docker_container_info:
+    name: hawser-agent
+  register: _hawser_info_legacy
+  when: not (_hawser_info.exists | default(false))
+  failed_when: false
+
+- name: Pick whichever container exists
+  ansible.builtin.set_fact:
+    _hawser_existing: >-
+      {{
+        _hawser_info if (_hawser_info.exists | default(false))
+        else (_hawser_info_legacy | default({'exists': false}))
+      }}
+    _hawser_existing_name: >-
+      {{
+        hawser_container_name if (_hawser_info.exists | default(false))
+        else 'hawser-agent'
+      }}
+
+- name: Fail clearly if no hawser container is present
+  ansible.builtin.fail:
+    msg: |
+      No hawser container found on {{ inventory_hostname }} (looked for
+      '{{ hawser_container_name }}' and 'hawser-agent'). This role only
+      updates existing agents; initial enrollment happens via the
+      Dockhand UI (which generates the TOKEN).
+  when: not (_hawser_existing.exists | default(false))
+
+- name: Extract TOKEN env from existing container
+  ansible.builtin.set_fact:
+    _hawser_token: >-
+      {{
+        _hawser_existing.container.Config.Env
+        | select('match', '^TOKEN=')
+        | first
+        | regex_replace('^TOKEN=', '')
+      }}
+
+- name: Extract stacks volume name from existing container
+  ansible.builtin.set_fact:
+    _hawser_stacks_volume: >-
+      {{
+        _hawser_existing.container.Mounts
+        | selectattr('Destination', 'equalto', hawser_stacks_dir)
+        | map(attribute='Name')
+        | first
+      }}
+
+- name: Sanity-check captured config
+  ansible.builtin.assert:
+    that:
+      - _hawser_token | length > 0
+      - _hawser_stacks_volume | length > 0
+    fail_msg: "Failed to capture TOKEN or stacks volume from existing container"
+
+- name: Pull latest hawser image
+  community.docker.docker_image_pull:
+    name: "{{ hawser_image }}"
+  register: _hawser_pull
+
+- name: Recreate hawser container with new image (canonical name)
+  community.docker.docker_container:
+    name: "{{ hawser_container_name }}"
+    image: "{{ hawser_image }}"
+    state: started
+    recreate: true
+    restart_policy: unless-stopped
+    pull: false   # we already pulled above
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "{{ _hawser_stacks_volume }}:{{ hawser_stacks_dir }}"
+    env:
+      TOKEN: "{{ _hawser_token }}"
+      DOCKHAND_SERVER_URL: "{{ hawser_dockhand_server_url }}"
+      PORT: "{{ hawser_port | string }}"
+      DOCKER_SOCKET: "{{ hawser_docker_socket }}"
+      STACKS_DIR: "{{ hawser_stacks_dir }}"
+      HEARTBEAT_INTERVAL: "{{ hawser_heartbeat_interval | string }}"
+      REQUEST_TIMEOUT: "{{ hawser_request_timeout | string }}"
+      RECONNECT_DELAY: "{{ hawser_reconnect_delay | string }}"
+      MAX_RECONNECT_DELAY: "{{ hawser_max_reconnect_delay | string }}"
+
+- name: Remove legacy container name if it was used pre-rename
+  community.docker.docker_container:
+    name: hawser-agent
+    state: absent
+  when: _hawser_existing_name == 'hawser-agent'
+
+- name: Wait for hawser to authenticate with dockhand
+  ansible.builtin.shell: |
+    docker logs --tail 50 {{ hawser_container_name }} 2>&1 | grep -F 'Connected to Dockhand server' | tail -1
+  register: _hawser_connected
+  retries: "{{ hawser_reconnect_retries }}"
+  delay: 2
+  until: _hawser_connected.stdout | length > 0
+  changed_when: false
+
+- name: Capture installed version label (for reporting)
+  ansible.builtin.shell: |
+    docker image inspect {{ hawser_image }} --format '{{ "{{" }} index .Config.Labels "org.opencontainers.image.version" {{ "}}" }}'
+  register: _hawser_version
+  changed_when: false

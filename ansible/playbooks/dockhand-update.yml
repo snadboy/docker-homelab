@@ -1,0 +1,260 @@
+---
+# Update the Dockhand control stack: hawser agents on each docker host,
+# then the dockhand server container itself on utilities.
+#
+# Why this playbook exists:
+#   On 2026-05-22 a Dockhand-UI-initiated hawser update on host-arr left
+#   it stuck stopped — when dockhand pulls + recreates hawser itself,
+#   the stop step kills the websocket that would carry the "start new
+#   container" command back, so the new container never starts. This
+#   playbook does the same operation via SSH (or pct exec for LXC),
+#   sidestepping the bootstrap problem.
+#
+# Coverage:
+#   Play A: dockhand_agents ∩ (ubuntu_vms + pve_nodes)   (SSH)
+#   Play B: dockhand_agents ∩ lxc_containers             (pct exec)
+#   Play C: dockhand_server                              (compose v2)
+#   Play D: localhost                                    (bulletin summary)
+#
+# Per-host TOKEN and the /data/stacks named volume are preserved across
+# recreates — see roles/hawser for details.
+#
+# Run via Semaphore (preferred) or ad-hoc:
+#   ansible-playbook -i ../inventory/hosts.yml dockhand-update.yml
+#
+# Required Semaphore Variable Group entries (env-style):
+#   BULLETIN_API_KEY  - bulletin board API key (optional; summary skipped if absent)
+
+- name: Update hawser agents (SSH hosts)
+  hosts: dockhand_agents:!lxc_containers
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  tasks:
+    - block:
+        - name: Apply hawser role (SSH path)
+          ansible.builtin.import_role:
+            name: hawser
+
+        - name: Record per-host status (success)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _hawser_section }}"
+              version: "{{ _hawser_version.stdout | trim | default('') }}"
+              status: "ok"
+              error: ""
+      rescue:
+        - name: Record per-host status (failure)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "{{ _hawser_section }}"
+              version: ""
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('task failed'))[:200] }}"
+  vars:
+    _hawser_section: >-
+      {%- if inventory_hostname in groups['pve_nodes'] -%}pve_nodes
+      {%- elif inventory_hostname in groups['ubuntu_vms'] -%}ubuntu_vms
+      {%- else -%}other
+      {%- endif -%}
+
+- name: Update hawser agents (LXC via pct exec)
+  hosts: dockhand_agents:&lxc_containers
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  tasks:
+    - block:
+        - name: Apply hawser role (LXC path)
+          ansible.builtin.import_role:
+            name: hawser
+            tasks_from: lxc.yml
+
+        - name: Record per-host status (success)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              version: "{{ _hawser_version.stdout | trim | default('') }}"
+              status: "ok"
+              error: ""
+      rescue:
+        - name: Record per-host status (failure)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "lxc_containers"
+              version: ""
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('pct exec failed'))[:200] }}"
+
+- name: Update Dockhand server (compose pull + recreate)
+  hosts: dockhand_server
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  vars:
+    dockhand_compose_dir: /home/snadboy/docker-homelab/dockhand
+  tasks:
+    - block:
+        - name: Pull + recreate dockhand via docker compose
+          community.docker.docker_compose_v2:
+            project_src: "{{ dockhand_compose_dir }}"
+            services:
+              - dockhand
+            pull: always
+            state: present
+            recreate: always
+          register: _dockhand_compose
+
+        - name: Wait for dockhand to be healthy
+          community.docker.docker_container_info:
+            name: dockhand
+          register: _dockhand_info
+          retries: 20
+          delay: 3
+          until: >-
+            _dockhand_info.exists
+            and (_dockhand_info.container.State.Health.Status | default('healthy')) == 'healthy'
+          changed_when: false
+
+        - name: Record dockhand server status (success)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "dockhand_server"
+              version: "{{ _dockhand_info.container.Image | regex_replace('^.*@', '') }}"
+              status: "ok"
+              error: ""
+      rescue:
+        - name: Record dockhand server status (failure)
+          ansible.builtin.set_fact:
+            hawser_status:
+              host: "{{ inventory_hostname }}"
+              section: "dockhand_server"
+              version: ""
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('compose update failed'))[:200] }}"
+
+- name: Post dockhand stack update summary to bulletin
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    ansible_become: false
+    run_iso: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    run_date: "{{ lookup('pipe', 'date -u +%Y-%m-%d') }}"
+    run_hm: "{{ lookup('pipe', 'date -u +%H:%M') }}"
+    bulletin_api_url: "{{ lookup('env', 'BULLETIN_API_URL') | default('https://bulletin.isnadboy.com/api/post', true) }}"
+    bulletin_api_key: "{{ lookup('env', 'BULLETIN_API_KEY') | default('', true) }}"
+    semaphore_url: "{{ lookup('env', 'SEMAPHORE_URL') | default('https://semaphore.isnadboy.com', true) }}"
+    semaphore_project_id: "{{ lookup('env', 'SEMAPHORE_PROJECT_ID') | default('1', true) }}"
+    semaphore_link: "{{ semaphore_url }}/project/{{ semaphore_project_id }}"
+    reporting_hosts: >-
+      {{
+        (groups['dockhand_agents'] | default([]))
+        + (groups['dockhand_server'] | default([]))
+      }}
+  tasks:
+    - name: Collect per-host hawser_status facts
+      ansible.builtin.set_fact:
+        summary_items: >-
+          {{
+            reporting_hosts
+            | map('extract', hostvars, 'hawser_status')
+            | select('defined')
+            | list
+          }}
+
+    - name: Identify hosts with no hawser_status (unreachable)
+      ansible.builtin.set_fact:
+        unreachable_hosts: >-
+          {{
+            reporting_hosts
+            | reject('in', (summary_items | map(attribute='host') | list))
+            | list
+          }}
+
+    - name: Synthesise entries for unreachable hosts
+      ansible.builtin.set_fact:
+        summary_items: "{{ summary_items + [_u] }}"
+      vars:
+        _section: >-
+          {%- if item in (groups['pve_nodes'] | default([])) -%}pve_nodes
+          {%- elif item in (groups['ubuntu_vms'] | default([])) -%}ubuntu_vms
+          {%- elif item in (groups['lxc_containers'] | default([])) -%}lxc_containers
+          {%- elif item in (groups['dockhand_server'] | default([])) -%}dockhand_server
+          {%- else -%}other
+          {%- endif -%}
+        _u:
+          host: "{{ item }}"
+          section: "{{ _section }}"
+          version: ""
+          status: "error"
+          error: "unreachable"
+      loop: "{{ unreachable_hosts }}"
+
+    - name: Build bulletin items payload
+      ansible.builtin.set_fact:
+        bulletin_items: "{{ bulletin_items | default([]) + [_item] }}"
+      vars:
+        h: "{{ item }}"
+        sub: >-
+          {%- if h.status == 'error' -%}error: {{ h.error }}
+          {%- else -%}v{{ h.version }}
+          {%- endif -%}
+        _item:
+          title: "{{ h.host }}"
+          subtitle: "{{ sub }}"
+          section: "{{ h.section }}"
+          status: "{{ h.status }}"
+      loop: "{{ summary_items }}"
+
+    - name: Compute aggregate stats
+      ansible.builtin.set_fact:
+        total_hosts: "{{ summary_items | length }}"
+        ok_hosts: "{{ summary_items | selectattr('status', 'eq', 'ok') | list | length }}"
+        error_hosts: "{{ summary_items | selectattr('status', 'eq', 'error') | list | length }}"
+
+    - name: Pick embed color by severity
+      ansible.builtin.set_fact:
+        overall_color: >-
+          {%- if (error_hosts | int) > 0 -%}15158332
+          {%- else -%}3066993
+          {%- endif -%}
+
+    - name: POST dockhand stack summary to bulletin
+      ansible.builtin.uri:
+        url: "{{ bulletin_api_url }}"
+        method: POST
+        headers:
+          X-API-Key: "{{ bulletin_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        status_code: [200, 201]
+        body:
+          source: ansible
+          topic: dockhand-update
+          embed:
+            title: "dockhand · {{ run_date }} {{ run_hm }}"
+            description: |-
+              [View in Semaphore]({{ semaphore_link }})
+
+              {{ total_hosts }} hosts · **{{ ok_hosts }}** ok · **{{ error_hosts }}** errors
+            color: "{{ overall_color | int }}"
+            footer:
+              text: "Ansible · Semaphore · dockhand stack update · {{ run_iso }}"
+            items: "{{ bulletin_items }}"
+      when: bulletin_api_key | length > 0
+      register: bulletin_post_result
+
+    - name: Warn if bulletin API key missing
+      ansible.builtin.debug:
+        msg: "BULLETIN_API_KEY not set — summary not posted to bulletin board"
+      when: bulletin_api_key | length == 0
+
+    - name: Display rollout outcome
+      ansible.builtin.debug:
+        msg: "Dockhand stack update: {{ ok_hosts }} ok / {{ error_hosts }} errors of {{ total_hosts }} targets"

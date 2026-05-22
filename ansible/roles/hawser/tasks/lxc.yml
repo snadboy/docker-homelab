@@ -1,0 +1,103 @@
+---
+# LXC variant: recreate hawser inside an LXC container via `pct exec`
+# delegated to the parent PVE node. Mirrors the SSH path above but
+# wraps every docker command in `pct exec {{ pve_vmid }} --`.
+
+- name: Inspect existing hawser container inside the LXC
+  delegate_to: "{{ pve_host }}"
+  become: false
+  vars:
+    ansible_user: root
+  ansible.builtin.shell: |
+    pct exec {{ pve_vmid }} -- docker inspect {{ hawser_container_name }}
+  register: _hawser_lxc_inspect
+  changed_when: false
+  failed_when: false
+
+- name: Fail if no hawser container exists in the LXC
+  ansible.builtin.fail:
+    msg: "No hawser container in LXC {{ pve_vmid }} on {{ pve_host }} — initial enrollment must happen via Dockhand UI first."
+  when: _hawser_lxc_inspect.rc != 0
+
+- name: Parse TOKEN + stacks volume from inspect JSON
+  ansible.builtin.set_fact:
+    _hawser_lxc: "{{ (_hawser_lxc_inspect.stdout | from_json)[0] }}"
+
+- name: Extract TOKEN
+  ansible.builtin.set_fact:
+    _hawser_lxc_token: >-
+      {{
+        _hawser_lxc.Config.Env
+        | select('match', '^TOKEN=')
+        | first
+        | regex_replace('^TOKEN=', '')
+      }}
+
+- name: Extract stacks volume name
+  ansible.builtin.set_fact:
+    _hawser_lxc_volume: >-
+      {{
+        _hawser_lxc.Mounts
+        | selectattr('Destination', 'equalto', hawser_stacks_dir)
+        | map(attribute='Name')
+        | first
+      }}
+
+- name: Sanity-check captured config
+  ansible.builtin.assert:
+    that:
+      - _hawser_lxc_token | length > 0
+      - _hawser_lxc_volume | length > 0
+    fail_msg: "Failed to capture TOKEN or stacks volume from LXC container"
+
+- name: Pull + recreate hawser inside LXC
+  delegate_to: "{{ pve_host }}"
+  become: false
+  vars:
+    ansible_user: root
+  ansible.builtin.shell: |
+    pct exec {{ pve_vmid }} -- bash -c '
+      set -euo pipefail
+      docker pull {{ hawser_image }}
+      docker stop {{ hawser_container_name }} || true
+      docker rm {{ hawser_container_name }} || true
+      docker run -d --name {{ hawser_container_name }} \
+        --restart unless-stopped \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v {{ _hawser_lxc_volume }}:{{ hawser_stacks_dir }} \
+        -e TOKEN={{ _hawser_lxc_token | quote }} \
+        -e DOCKHAND_SERVER_URL={{ hawser_dockhand_server_url | quote }} \
+        -e PORT={{ hawser_port }} \
+        -e DOCKER_SOCKET={{ hawser_docker_socket }} \
+        -e STACKS_DIR={{ hawser_stacks_dir }} \
+        -e HEARTBEAT_INTERVAL={{ hawser_heartbeat_interval }} \
+        -e REQUEST_TIMEOUT={{ hawser_request_timeout }} \
+        -e RECONNECT_DELAY={{ hawser_reconnect_delay }} \
+        -e MAX_RECONNECT_DELAY={{ hawser_max_reconnect_delay }} \
+        {{ hawser_image }}
+    '
+  register: _hawser_lxc_recreate
+  changed_when: true
+
+- name: Wait for LXC hawser to authenticate with dockhand
+  delegate_to: "{{ pve_host }}"
+  become: false
+  vars:
+    ansible_user: root
+  ansible.builtin.shell: |
+    pct exec {{ pve_vmid }} -- bash -c "docker logs --tail 50 {{ hawser_container_name }} 2>&1 | grep -F 'Connected to Dockhand server' | tail -1"
+  register: _hawser_lxc_connected
+  retries: "{{ hawser_reconnect_retries }}"
+  delay: 2
+  until: _hawser_lxc_connected.stdout | length > 0
+  changed_when: false
+
+- name: Capture version label (LXC)
+  delegate_to: "{{ pve_host }}"
+  become: false
+  vars:
+    ansible_user: root
+  ansible.builtin.shell: |
+    pct exec {{ pve_vmid }} -- docker image inspect {{ hawser_image }} --format '{{ "{{" }} index .Config.Labels "org.opencontainers.image.version" {{ "}}" }}'
+  register: _hawser_version
+  changed_when: false

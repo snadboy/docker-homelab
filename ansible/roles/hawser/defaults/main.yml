@@ -1,0 +1,32 @@
+---
+# Hawser is the Docker socket proxy each Dockhand-managed host runs.
+# Image and server URL pinned via env vars (or defaults).
+#
+# Why we don't update hawser via Dockhand UI:
+#   When dockhand sends "pull + recreate" to a hawser-agent, the stop
+#   step kills the very websocket that would carry the "start new
+#   container" command back. Result: container stopped, never restarted.
+#   See incident 2026-05-22 (host-arr was orphaned for ~1 hour after
+#   exactly this scenario).
+# Therefore: this role updates hawser via SSH (or pct exec for LXC),
+# bypassing dockhand entirely.
+
+hawser_image: ghcr.io/finsys/hawser:latest
+
+# Per-container settings. The TOKEN env var is per-host and must be
+# preserved across recreates (it's how dockhand identifies the
+# environment). We extract it from the running container rather than
+# storing it in Ansible vars.
+hawser_container_name: hawser
+hawser_dockhand_server_url: wss://dockhand.isnadboy.com/api/hawser/connect
+hawser_port: 2376
+hawser_docker_socket: /var/run/docker.sock
+hawser_stacks_dir: /data/stacks
+hawser_heartbeat_interval: 30
+hawser_request_timeout: 30
+hawser_reconnect_delay: 1
+hawser_max_reconnect_delay: 60
+
+# How long to wait for the new container to reconnect to dockhand
+# before declaring failure. Each retry is 2s.
+hawser_reconnect_retries: 15

@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""
+wan-pin: switch a device between WANs via UniFi traffic routes.
+
+A "wan-pin"-managed device has three UniFi traffic routes, one per WAN,
+all with kill_switch=true. Exactly one is enabled at a time (or none).
+Switching = toggle the enabled flag on each. Routes live in the UniFi
+controller; the script just calls the API.
+
+Usage:
+  wan-pin add <device>           Create wan1/wan2/wan3 routes (all disabled)
+  wan-pin <device> <1|2|3|off>   Enable that WAN, disable the others
+  wan-pin status <device>        Show current state for a device
+  wan-pin list                   Show all wan-pin-managed routes
+  wan-pin remove <device>        Delete all wan-pin routes for a device
+
+<device> may be a MAC (xx:xx:xx:xx:xx:xx) or the UniFi client name/hostname.
+
+Required env (read from $SHAREABLES_ROOT/.claude/.env if not in env):
+  UNIFI_URL (default https://192.168.86.1), UNIFI_USER, UNIFI_PASSWORD.
+
+WAN number → UniFi WAN-network name map is hardcoded near the top of
+this file. Edit if your WAN labels differ.
+"""
+import argparse
+import json
+import os
+import re
+import ssl
+import sys
+import urllib.parse
+import urllib.request
+from http.cookiejar import CookieJar
+
+WAN_NAMES = {
+    "1": "Internet 1",
+    "2": "Internet 2",
+    "3": "UniFi 5G A",
+}
+ROUTE_PREFIX = "wan-pin:"
+
+
+def load_env():
+    env_file = os.path.expanduser(
+        os.environ.get("UNIFI_ENV_FILE") or os.environ.get("SHAREABLES_ROOT", "/mnt/shareables") + "/.claude/.env"
+    )
+    cfg = {
+        "URL": os.environ.get("UNIFI_URL", "https://192.168.86.1"),
+        "USER": os.environ.get("UNIFI_USER"),
+        "PASS": os.environ.get("UNIFI_PASSWORD"),
+    }
+    if os.path.isfile(env_file):
+        for line in open(env_file):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k == "UNIFI_URL" and not cfg["URL"].startswith("https://192."):
+                continue
+            if k == "UNIFI_URL":
+                cfg["URL"] = v
+            elif k == "UNIFI_USER" and not cfg["USER"]:
+                cfg["USER"] = v
+            elif k == "UNIFI_PASSWORD" and not cfg["PASS"]:
+                cfg["PASS"] = v
+    if not cfg["USER"] or not cfg["PASS"]:
+        sys.exit("ERROR: UNIFI_USER / UNIFI_PASSWORD not set (env or shareables .env)")
+    return cfg
+
+
+class UniFi:
+    def __init__(self, cfg):
+        self.url = cfg["URL"].rstrip("/")
+        self.user = cfg["USER"]
+        self.password = cfg["PASS"]
+        self.ctx = ssl.create_default_context()
+        self.ctx.check_hostname = False
+        self.ctx.verify_mode = ssl.CERT_NONE
+        self.jar = CookieJar()
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=self.ctx),
+            urllib.request.HTTPCookieProcessor(self.jar),
+        )
+        self.csrf = None
+        self._login()
+
+    def _login(self):
+        body = json.dumps({"username": self.user, "password": self.password}).encode()
+        req = urllib.request.Request(
+            f"{self.url}/api/auth/login", data=body,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with self.opener.open(req) as r:
+            self.csrf = r.headers.get("X-CSRF-Token") or r.headers.get("x-csrf-token")
+            r.read()
+        # Some UDM builds give CSRF only after a follow-up GET.
+        if not self.csrf:
+            with self.opener.open(f"{self.url}/proxy/network/api/s/default/self") as r:
+                self.csrf = r.headers.get("X-CSRF-Token") or r.headers.get("x-csrf-token")
+                r.read()
+
+    def _req(self, method, path, body=None):
+        headers = {"Accept": "application/json"}
+        if self.csrf:
+            headers["X-CSRF-Token"] = self.csrf
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(self.url + path, data=data, headers=headers, method=method)
+        try:
+            with self.opener.open(req) as r:
+                self.csrf = r.headers.get("X-CSRF-Token") or self.csrf
+                txt = r.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            txt = e.read().decode("utf-8", errors="replace")
+            sys.exit(f"HTTP {e.code} on {method} {path}: {txt[:300]}")
+        try:
+            return json.loads(txt)
+        except json.JSONDecodeError:
+            return txt
+
+    def get(self, path):  return self._req("GET", path)
+    def post(self, path, body):  return self._req("POST", path, body)
+    def put(self, path, body):  return self._req("PUT", path, body)
+    def delete(self, path):  return self._req("DELETE", path)
+
+    # --- domain helpers ---
+    def list_wan_networks(self):
+        d = self.get("/proxy/network/api/s/default/rest/networkconf").get("data", [])
+        return [n for n in d if (n.get("purpose") or "").lower() == "wan"]
+
+    def wan_id_for(self, n):
+        if n not in WAN_NAMES:
+            sys.exit(f"ERROR: unknown WAN '{n}' (known: {sorted(WAN_NAMES)})")
+        target = WAN_NAMES[n]
+        for net in self.list_wan_networks():
+            if net.get("name") == target:
+                return net["_id"]
+        sys.exit(f"ERROR: no UniFi WAN network named '{target}'; edit WAN_NAMES in {sys.argv[0]}")
+
+    def list_routes(self):
+        return self.get("/proxy/network/v2/api/site/default/trafficroutes")
+
+    def resolve_device(self, ident):
+        ident_lc = ident.lower()
+        if re.fullmatch(r"[0-9a-f:]{17}", ident_lc):
+            return ident_lc, None
+        users = self.get("/proxy/network/api/s/default/rest/user").get("data", [])
+        for u in users:
+            if (u.get("name") or "").lower() == ident_lc or (u.get("hostname") or "").lower() == ident_lc:
+                return u["mac"].lower(), (u.get("name") or u.get("hostname") or u["mac"]).lower().replace(":", "")
+        actives = self.get("/proxy/network/api/s/default/stat/sta").get("data", [])
+        for c in actives:
+            if (c.get("name") or "").lower() == ident_lc or (c.get("hostname") or "").lower() == ident_lc:
+                return c["mac"].lower(), ident_lc
+        sys.exit(f"ERROR: can't resolve device '{ident}' (try its MAC)")
+
+    def routes_for(self, friendly):
+        prefix = f"{ROUTE_PREFIX}{friendly}:"
+        return [r for r in self.list_routes() if (r.get("description") or "").startswith(prefix)]
+
+
+def cmd_list(unifi, args):
+    for r in unifi.list_routes():
+        desc = r.get("description") or ""
+        if not desc.startswith(ROUTE_PREFIX):
+            continue
+        flag = "ON " if r.get("enabled") else "off"
+        net = r.get("network_id", "")
+        wan_name = next((WAN_NAMES[k] for k in WAN_NAMES if desc.endswith(f":wan{k}")), "?")
+        print(f"  [{flag}] {desc:40s}  ->  {wan_name}  (route {r['_id'][:8]})")
+
+
+def cmd_add(unifi, args):
+    mac, friendly = unifi.resolve_device(args.device)
+    friendly = friendly or args.device.lower()
+    existing = unifi.routes_for(friendly)
+    if existing:
+        print(f"already have {len(existing)} routes for '{friendly}'; use 'status' or 'remove'")
+        return
+    for n in WAN_NAMES:
+        body = {
+            "description": f"{ROUTE_PREFIX}{friendly}:wan{n}",
+            "enabled": False,
+            "kill_switch_enabled": True,
+            "matching_target": "INTERNET",
+            "network_id": unifi.wan_id_for(n),
+            "target_devices": [{"client_mac": mac, "type": "CLIENT"}],
+            "ip_addresses": [],
+            "ip_ranges": [],
+            "domains": [],
+            "regions": [],
+        }
+        r = unifi.post("/proxy/network/v2/api/site/default/trafficroutes", body)
+        print(f"  created {body['description']} (id {r.get('_id','?')[:8]})")
+    print(f"3 routes added for {friendly} (mac {mac}); all disabled. Use 'wan-pin {friendly} <1|2|3>' to activate one.")
+
+
+def cmd_switch(unifi, args):
+    mac, friendly = unifi.resolve_device(args.device)
+    friendly = friendly or args.device.lower()
+    routes = unifi.routes_for(friendly)
+    if not routes:
+        sys.exit(f"ERROR: no wan-pin routes for '{friendly}'. Run 'wan-pin add {friendly}' first.")
+    target = args.wan
+    for r in routes:
+        wan_n = r["description"].rsplit(":wan", 1)[-1]
+        want = (target == wan_n)
+        if r.get("enabled") != want:
+            body = {**r, "enabled": want}
+            unifi.put(f"/proxy/network/v2/api/site/default/trafficroutes/{r['_id']}", body)
+            print(f"  {'enabled ' if want else 'disabled'} {r['description']}")
+        else:
+            print(f"  unchanged ({'on' if want else 'off'}) {r['description']}")
+    if target == "off":
+        print(f"all WANs disabled for {friendly} (will use UniFi default load-balance)")
+    else:
+        print(f"{friendly} is now pinned via WAN{target} ({WAN_NAMES[target]})")
+
+
+def cmd_status(unifi, args):
+    mac, friendly = unifi.resolve_device(args.device)
+    friendly = friendly or args.device.lower()
+    routes = unifi.routes_for(friendly)
+    if not routes:
+        print(f"no wan-pin routes for {friendly}")
+        return
+    for r in routes:
+        flag = "ON " if r.get("enabled") else "off"
+        print(f"  [{flag}] {r['description']}")
+
+
+def cmd_remove(unifi, args):
+    mac, friendly = unifi.resolve_device(args.device)
+    friendly = friendly or args.device.lower()
+    routes = unifi.routes_for(friendly)
+    if not routes:
+        print(f"no wan-pin routes for {friendly}")
+        return
+    for r in routes:
+        unifi.delete(f"/proxy/network/v2/api/site/default/trafficroutes/{r['_id']}")
+        print(f"  deleted {r['description']}")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="wan-pin", description="Switch a UniFi-managed client between WANs.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("add", help="create wan-pin routes (all disabled) for a device")
+    sp.add_argument("device")
+    sp.set_defaults(func=cmd_add)
+
+    sp = sub.add_parser("status", help="show current pin state for a device")
+    sp.add_argument("device")
+    sp.set_defaults(func=cmd_status)
+
+    sp = sub.add_parser("list", help="list all wan-pin-managed routes across all devices")
+    sp.set_defaults(func=cmd_list)
+
+    sp = sub.add_parser("remove", help="delete all wan-pin routes for a device")
+    sp.add_argument("device")
+    sp.set_defaults(func=cmd_remove)
+
+    sp = sub.add_parser("switch", help="(internal) enable one WAN, disable others")
+    sp.add_argument("device")
+    sp.add_argument("wan", choices=list(WAN_NAMES) + ["off"])
+    sp.set_defaults(func=cmd_switch)
+
+    # If invoked as `wan-pin <device> <wan>` (no subcommand), rewrite to `switch`.
+    argv = sys.argv[1:]
+    if argv and argv[0] not in ("add", "status", "list", "remove", "switch", "-h", "--help"):
+        if len(argv) == 2 and (argv[1] in WAN_NAMES or argv[1] == "off"):
+            argv = ["switch"] + argv
+
+    args = p.parse_args(argv)
+    cfg = load_env()
+    unifi = UniFi(cfg)
+    args.func(unifi, args)
+
+
+if __name__ == "__main__":
+    main()

@@ -8,67 +8,90 @@
     :root {
       --bg: #0f1419; --card: #1a2027; --border: #2a3441;
       --fg: #e5e7eb; --muted: #9ca3af; --accent: #60a5fa;
-      --on: #10b981; --off: #374151;
+      --on: #10b981; --off: #374151; --row: #131820;
     }
     * { box-sizing: border-box; }
-    body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; margin: 0; padding: 2rem; max-width: 900px; margin: 0 auto; }
-    h1 { margin-top: 0; font-weight: 600; }
-    .device { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
-    .device-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.75rem; }
-    .device-name { font-size: 1.15rem; font-weight: 600; }
-    .device-mac { color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.85rem; }
-    .device-status { color: var(--muted); font-size: 0.85rem; }
-    .device-status .active { color: var(--on); font-weight: 500; }
-    .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; margin: 0 auto; padding: 1.5rem 2rem; max-width: 1400px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.75rem; gap: 1rem; flex-wrap: wrap; }
+    h1 { margin: 0; font-weight: 600; }
+    .controls { display: flex; gap: 1rem; align-items: center; }
+    .controls input[type="search"] { background: var(--card); border: 1px solid var(--border); color: var(--fg); padding: 0.45rem 0.8rem; border-radius: 6px; min-width: 18rem; }
+    .controls label { color: var(--muted); display: flex; gap: 0.4rem; align-items: center; cursor: pointer; user-select: none; }
+    .hint { color: var(--muted); margin: 0 0 1rem 0; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 0.65rem 0.85rem; text-align: left; font-size: 0.93rem; }
+    thead { background: rgba(255,255,255,0.025); }
+    th { font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
+    tbody tr { border-top: 1px solid var(--border); }
+    tbody tr:hover { background: var(--row); }
+    .mac { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.82rem; color: var(--muted); }
+    .name strong { display: block; }
+    .name .meta { color: var(--muted); font-size: 0.78rem; }
+    .pin-cell { white-space: nowrap; }
     button.wan {
       background: var(--off); color: var(--fg); border: 1px solid var(--border);
-      padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.95rem;
-      transition: all 0.15s; min-width: 6rem;
+      padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+      margin-right: 0.25rem; transition: all 0.15s;
     }
-    button.wan:hover { border-color: var(--accent); }
+    button.wan:hover:not(:disabled) { border-color: var(--accent); }
     button.wan.active { background: var(--on); border-color: var(--on); font-weight: 600; }
-    button.wan.off { background: transparent; border-style: dashed; color: var(--muted); }
-    button.wan.off.active { background: var(--off); color: var(--fg); border-style: solid; }
-    .empty { color: var(--muted); padding: 2rem; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
-    .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--card); border: 1px solid var(--border); padding: 0.75rem 1rem; border-radius: 8px; opacity: 0; transition: opacity 0.2s; }
+    button.wan.default { background: transparent; border-style: dashed; color: var(--muted); }
+    button.wan.default.active { background: var(--off); color: var(--fg); border-style: solid; }
+    button.wan:disabled { opacity: 0.5; cursor: wait; }
+    .row-managed td { background: rgba(16, 185, 129, 0.04); }
+    .empty { color: var(--muted); text-align: center; padding: 3rem; }
+    tr.hidden { display: none; }
+    .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--card); border: 1px solid var(--border); padding: 0.6rem 0.9rem; border-radius: 8px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
     .toast.show { opacity: 1; }
     .toast.error { border-color: #ef4444; }
-    code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
   </style>
 </head>
 <body>
-  <h1>WAN Pin</h1>
-  <p style="color: var(--muted)">Click a WAN button to switch a device's outbound path. <strong>Off</strong> disables all pins (UniFi default load-balance resumes).</p>
-
-  {% if devices %}
-    {% for d in devices %}
-      <div class="device" data-device="{{ d.name }}">
-        <div class="device-header">
-          <div>
-            <span class="device-name">{{ d.name }}</span>
-            <span class="device-mac">&nbsp;&nbsp;{{ d.mac }}</span>
-          </div>
-          <div class="device-status">
-            {% if d.active %}
-              currently: <span class="active">WAN{{ d.active }} ({{ wan_names[d.active] }})</span>
-            {% else %}
-              currently: <span>off / default</span>
-            {% endif %}
-          </div>
-        </div>
-        <div class="buttons">
-          {% for w in d.wans %}
-            <button class="wan {% if d.active == w.n %}active{% endif %}" data-wan="{{ w.n }}">WAN{{ w.n }} <small style="opacity:0.6">{{ w.label }}</small></button>
-          {% endfor %}
-          <button class="wan off {% if not d.active %}active{% endif %}" data-wan="off">Off</button>
-        </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <div class="empty">
-      No wan-pin-managed devices yet. Create routes via the CLI:
-      <br><br><code>wan-pin add &lt;device&gt;</code>
+  <header>
+    <h1>WAN Pin</h1>
+    <div class="controls">
+      <input type="search" id="filter" placeholder="Filter by name, IP, or MAC…">
+      <label><input type="checkbox" id="show-all" {% if show_all %}checked{% endif %}> show all (incl. WiFi)</label>
     </div>
+  </header>
+  <p class="hint">Click a WAN to pin a client through that uplink (kill-switch on — no failover). <strong>Default</strong> removes the pin and lets UniFi use its normal load-balance. Managed clients are highlighted in green.</p>
+
+  {% if clients %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>IP</th>
+        <th>MAC</th>
+        {% for n, label in wan_names.items() %}
+          <th>WAN{{ n }} <span style="color:var(--muted);font-weight:400;font-size:0.8em">{{ label }}</span></th>
+        {% endfor %}
+        <th>Default</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clients %}
+        <tr data-mac="{{ c.mac }}" data-name="{{ c.display_name|lower }}" data-ip="{{ c.ip or '' }}" class="{% if c.managed %}row-managed{% endif %}">
+          <td class="name">
+            <strong>{{ c.display_name }}</strong>
+            {% if c.oui %}<span class="meta">{{ c.oui }}{% if not c.is_active %} · offline{% endif %}</span>{% endif %}
+          </td>
+          <td>{{ c.ip or '—' }}</td>
+          <td><span class="mac">{{ c.mac }}</span></td>
+          {% for n in wan_names %}
+            <td class="pin-cell">
+              <button class="wan {% if c.pin_active == n %}active{% endif %}" data-wan="{{ n }}">WAN{{ n }}</button>
+            </td>
+          {% endfor %}
+          <td class="pin-cell">
+            <button class="wan default {% if c.managed and not c.pin_active %}active{% elif not c.managed %}active{% endif %}" data-wan="default">Default</button>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty">No UniFi clients found.</div>
   {% endif %}
 
   <div class="toast" id="toast"></div>
@@ -82,21 +105,40 @@
       setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
+    const filter = document.getElementById('filter');
+    filter.addEventListener('input', () => {
+      const q = filter.value.toLowerCase().trim();
+      document.querySelectorAll('tbody tr').forEach(tr => {
+        const hit = !q
+          || (tr.dataset.name || '').includes(q)
+          || (tr.dataset.ip || '').includes(q)
+          || (tr.dataset.mac || '').includes(q);
+        tr.classList.toggle('hidden', !hit);
+      });
+    });
+
+    document.getElementById('show-all').addEventListener('change', e => {
+      const url = new URL(window.location.href);
+      if (e.target.checked) url.searchParams.set('show_all', '1');
+      else url.searchParams.delete('show_all');
+      window.location.href = url.toString();
+    });
+
     document.querySelectorAll('button.wan').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const card = btn.closest('.device');
-        const device = card.dataset.device;
+        const tr = btn.closest('tr');
+        const mac = tr.dataset.mac;
         const wan = btn.dataset.wan;
-        const buttons = card.querySelectorAll('button.wan');
+        const buttons = tr.querySelectorAll('button.wan');
         buttons.forEach(b => b.disabled = true);
         try {
           const fd = new FormData();
-          fd.append('device', device);
+          fd.append('mac', mac);
           fd.append('wan', wan);
           const resp = await fetch('/api/switch', { method: 'POST', body: fd });
           if (!resp.ok) throw new Error(await resp.text());
-          const data = await resp.json();
-          showToast(`${device}: ${wan === 'off' ? 'off' : 'WAN' + wan}`);
+          await resp.json();
+          showToast(`${tr.dataset.name}: ${wan === 'default' ? 'default' : 'WAN' + wan}`);
           setTimeout(() => location.reload(), 600);
         } catch (e) {
           showToast('failed: ' + e.message, true);

@@ -22,6 +22,11 @@
     th, td { padding: 0.65rem 0.85rem; text-align: left; font-size: 0.93rem; }
     thead { background: rgba(255,255,255,0.025); }
     th { font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--fg); }
+    th.sortable .arrow { display: inline-block; width: 0.9em; color: var(--muted); }
+    th.sortable.sort-asc .arrow::after { content: '▲'; color: var(--accent); }
+    th.sortable.sort-desc .arrow::after { content: '▼'; color: var(--accent); }
     tbody tr { border-top: 1px solid var(--border); }
     tbody tr:hover { background: var(--row); }
     .mac { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.82rem; color: var(--muted); }
@@ -60,9 +65,9 @@
   <table>
     <thead>
       <tr>
-        <th>Name</th>
-        <th>IP</th>
-        <th>MAC</th>
+        <th class="sortable" data-sort="name">Name <span class="arrow"></span></th>
+        <th class="sortable" data-sort="ip">IP <span class="arrow"></span></th>
+        <th class="sortable" data-sort="mac">MAC <span class="arrow"></span></th>
         {% for n, label in wan_names.items() %}
           <th>WAN{{ n }} <span style="color:var(--muted);font-weight:400;font-size:0.8em">{{ label }}</span></th>
         {% endfor %}
@@ -122,6 +127,33 @@
       if (e.target.checked) url.searchParams.set('show_all', '1');
       else url.searchParams.delete('show_all');
       window.location.href = url.toString();
+    });
+
+    // Column sorting
+    const tbody = document.querySelector('tbody');
+    const ipToNum = ip => (ip || '').split('.').map(n => parseInt(n, 10) || 0);
+    const ipCmp = (a, b) => {
+      const aa = ipToNum(a), bb = ipToNum(b);
+      for (let i = 0; i < 4; i++) if (aa[i] !== bb[i]) return aa[i] - bb[i];
+      return 0;
+    };
+    let sortState = { col: null, dir: 1 };
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.sort;
+        if (sortState.col === col) { sortState.dir = -sortState.dir; }
+        else { sortState.col = col; sortState.dir = 1; }
+        document.querySelectorAll('th.sortable').forEach(x => x.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.add(sortState.dir > 0 ? 'sort-asc' : 'sort-desc');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+          const av = (a.dataset[col] || '');
+          const bv = (b.dataset[col] || '');
+          const cmp = col === 'ip' ? ipCmp(av, bv) : av.localeCompare(bv);
+          return cmp * sortState.dir;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+      });
     });
 
     document.querySelectorAll('button.wan').forEach(btn => {

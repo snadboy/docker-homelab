@@ -205,6 +205,8 @@ def index(request: Request, show_all: bool = False):
         c["managed"] = friendly is not None
         c["display_name"] = c.get("name") or c.get("hostname") or "(unnamed)"
 
+    # Always require: active + has an IP. Wired-only unless show_all.
+    clients = [c for c in clients if c.get("is_active") and c.get("ip")]
     if not show_all:
         clients = [c for c in clients if c.get("is_wired")]
 
@@ -227,6 +229,8 @@ def api_clients(show_all: bool = False):
     pin_by_mac = routes_by_mac(u.list_routes())
     out = []
     for c in clients:
+        if not (c.get("is_active") and c.get("ip")):
+            continue
         if not show_all and not c.get("is_wired"):
             continue
         friendly, by_wan = pin_by_mac.get(c["mac"], (None, {}))

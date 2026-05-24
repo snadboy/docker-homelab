@@ -5,7 +5,7 @@ services:
     labels:
       - "snadboy.revp.3002.domain=semaphore.isnadboy.com"
     environment:
-      - SEMAPHORE_DB_DIALECT=sqlite
+      - SEMAPHORE_DB_DIALECT=bolt
       - SEMAPHORE_ADMIN=admin
       - SEMAPHORE_ADMIN_PASSWORD=${SEMAPHORE_ADMIN_PASSWORD:-changeme}
       - SEMAPHORE_ADMIN_NAME=Admin

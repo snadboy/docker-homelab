@@ -1,0 +1,25 @@
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    labels:
+      - "snadboy.revp.8096.domain=jellyfin.isnadboy.com"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - /mnt/media/Movies:/data/movies:ro
+      - "/mnt/media/TV Shows:/data/tvshows:ro"
+    ports:
+      - 8096:8096
+    mem_limit: 2g
+    restart: unless-stopped
+
+volumes:
+  jellyfin-config:
+    external: true
+  jellyfin-cache:
+    external: true

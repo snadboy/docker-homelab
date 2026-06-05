@@ -1,0 +1,19 @@
+services:
+  kuma-feed:
+    build: .
+    image: kuma-feed:local
+    container_name: kuma-feed
+    environment:
+      - TZ=America/Chicago
+      - PORT=3099
+    volumes:
+      # Mounted rw so SQLite can attach to the live WAL shared-memory index.
+      # app.py sets PRAGMA query_only=1 — it never writes data.
+      - uptime-kuma-data:/data
+    ports:
+      - 3099:3099
+    restart: unless-stopped
+
+volumes:
+  uptime-kuma-data:
+    external: true

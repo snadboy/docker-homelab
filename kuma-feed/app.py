@@ -29,7 +29,7 @@ def query_monitors():
         # Active, non-group monitors
         cur.execute("SELECT id, name, type FROM monitor WHERE active=1 AND type != 'group'")
         mons = {
-            r[0]: {"id": r[0], "name": r[1], "type": r[2], "status": None, "tags": []}
+            r[0]: {"id": r[0], "name": r[1], "type": r[2], "status": None, "msg": "", "tags": []}
             for r in cur.fetchall()
         }
 
@@ -42,7 +42,7 @@ def query_monitors():
             if mid in mons:
                 mons[mid]["tags"].append({"name": tname, "value": tval})
 
-        # Latest heartbeat status per monitor
+        # Latest heartbeat STATUS per monitor (absolute latest)
         cur.execute(
             "SELECT h.monitor_id, h.status FROM heartbeat h "
             "JOIN (SELECT monitor_id, MAX(time) mt FROM heartbeat GROUP BY monitor_id) l "
@@ -51,6 +51,19 @@ def query_monitors():
         for mid, status in cur.fetchall():
             if mid in mons:
                 mons[mid]["status"] = status
+
+        # Latest MEANINGFUL message — ignore Kuma's push "No heartbeat" filler so the
+        # bar shows the real reason (e.g. the pushed device list), not the noise beat.
+        cur.execute(
+            "SELECT h.monitor_id, h.msg FROM heartbeat h "
+            "JOIN (SELECT monitor_id, MAX(time) mt FROM heartbeat "
+            "      WHERE msg != '' AND msg != 'No heartbeat in the time window' "
+            "      GROUP BY monitor_id) l "
+            "ON h.monitor_id = l.monitor_id AND h.time = l.mt"
+        )
+        for mid, msg in cur.fetchall():
+            if mid in mons:
+                mons[mid]["msg"] = msg or ""
 
         return list(mons.values())
     finally:

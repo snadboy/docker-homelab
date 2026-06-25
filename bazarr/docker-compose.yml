@@ -15,7 +15,17 @@ services:
     ports:
       - 6767:6767
     restart: unless-stopped
+    networks:
+      - default
+      - sonarr_default
+      - radarr_default
 
 volumes:
   bazarr-data:
+    external: true
+
+networks:
+  sonarr_default:
+    external: true
+  radarr_default:
     external: true

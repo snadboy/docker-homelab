@@ -1,0 +1,21 @@
+services:
+  hearts-tutor:
+    image: ghcr.io/snadboy/hearts-tutor:latest
+    container_name: hearts-tutor
+    ports:
+      - 8001:8000
+    labels:
+      - "snadboy.revp.8000.domain=hearts.isnadboy.com"
+      - "snadboy.revp.8000.health=/healthz"
+    environment:
+      - TZ=America/Chicago
+      - PORT=8000
+      - LOG_DIR=/data/logs
+      - LOG_LEVEL=INFO
+    volumes:
+      - hearts-tutor-data:/data/logs
+    restart: unless-stopped
+
+volumes:
+  hearts-tutor-data:
+    external: true

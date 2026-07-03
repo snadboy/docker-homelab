@@ -3,7 +3,7 @@ services:
     image: ghcr.io/snadboy/hearts-tutor:latest
     container_name: hearts-tutor
     ports:
-      - 8001:8000
+      - 8003:8000
     labels:
       - "snadboy.revp.8000.domain=hearts.isnadboy.com"
       - "snadboy.revp.8000.health=/healthz"

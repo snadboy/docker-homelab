@@ -6,7 +6,7 @@ services:
       - "snadboy.revp.3002.domain=semaphore.isnadboy.com"
       - "docktail.service.enable=true"
       - "docktail.service.name=semaphore"
-      - "docktail.service.port=3002"
+      - "docktail.service.port=3000"
       - "docktail.service.service-port=443"
     environment:
       - SEMAPHORE_DB_DIALECT=sqlite

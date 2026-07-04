@@ -1,0 +1,17 @@
+services:
+  zigbee2mqtt-house:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt-house
+    ports:
+      - 8082:8080
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-house/app-data:/app/data
+    labels:
+      - "snadboy.revp.8080.domain=zigbee2mqtt-house.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=zigbee2mqtt-house"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
+    environment:
+      - TZ=America/Chicago
+    restart: unless-stopped

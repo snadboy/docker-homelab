@@ -1,0 +1,12 @@
+services:
+  docktail:
+    image: ghcr.io/marvinvr/docktail:latest
+    container_name: docktail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/tailscale:/var/run/tailscale
+    environment:
+      - TAILSCALE_OAUTH_CLIENT_ID=${TAILSCALE_OAUTH_CLIENT_ID}
+      - TAILSCALE_OAUTH_CLIENT_SECRET=${TAILSCALE_OAUTH_CLIENT_SECRET}
+      - DEFAULT_SERVICE_TAGS=tag:ts-service

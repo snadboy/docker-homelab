@@ -4,6 +4,10 @@ services:
     container_name: tautulli
     labels:
       - "snadboy.revp.8181.domain=tautulli.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=tautulli"
+      - "docktail.service.port=8181"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

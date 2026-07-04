@@ -5,6 +5,10 @@ services:
     container_name: overseerr
     labels:
       - "snadboy.revp.5055.domain=overseerr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=overseerr"
+      - "docktail.service.port=5055"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
       - PORT=5055

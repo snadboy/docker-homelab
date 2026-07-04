@@ -4,6 +4,10 @@ services:
     container_name: uptime-kuma
     labels:
       - "snadboy.revp.3001.domain=uptime-kuma.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=uptime-kuma"
+      - "docktail.service.port=3001"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
     volumes:

@@ -4,6 +4,10 @@ services:
     container_name: agregarr
     labels:
       - "snadboy.revp.7171.domain=agregarr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=agregarr"
+      - "docktail.service.port=7171"
+      - "docktail.service.service-port=443"
     volumes:
       - agregarr-data:/app/config
       - /mnt/media/TV Shows:/tv:rw

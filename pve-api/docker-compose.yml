@@ -4,6 +4,10 @@ services:
     container_name: pve-api
     labels:
       - "snadboy.revp.8585.domain=pve-api.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=pve-api"
+      - "docktail.service.port=8585"
+      - "docktail.service.service-port=443"
       - "snadboy.revp.8585.health=/health"
     environment:
       - TZ=America/Chicago

@@ -10,6 +10,10 @@ services:
         hard: 65536
     labels:
       - "snadboy.revp.3000.domain=tracearr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=tracearr"
+      - "docktail.service.port=3000"
+      - "docktail.service.service-port=443"
     ports:
       - "3000:3000"
     environment:

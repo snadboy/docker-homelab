@@ -5,6 +5,10 @@ services:
     labels:
       # revp uses container's internal port (always 8080), Z2M_PORT is only for host mapping
       - "snadboy.revp.8080.domain=${Z2M_NAME:-zigbee2mqtt}.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=${Z2M_NAME:-zigbee2mqtt}"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
     image: koenkk/zigbee2mqtt
     restart: unless-stopped
     volumes:

@@ -4,6 +4,10 @@ services:
     container_name: sonarr
     labels:
       - "snadboy.revp.8989.domain=sonarr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sonarr"
+      - "docktail.service.port=8989"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

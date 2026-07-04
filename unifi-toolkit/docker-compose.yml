@@ -11,6 +11,10 @@ services:
       - "8000:8000"
     labels:
       - "snadboy.revp.8000.domain=unifi-toolkit.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=unifi-toolkit"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
       interval: 30s

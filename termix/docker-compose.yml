@@ -4,6 +4,10 @@ services:
     container_name: termix
     labels:
       - "snadboy.revp.8080.domain=termix.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=termix"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

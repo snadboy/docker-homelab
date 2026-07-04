@@ -4,6 +4,10 @@ services:
     container_name: prowlarr
     labels:
       - "snadboy.revp.9696.domain=prowlarr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=prowlarr"
+      - "docktail.service.port=9696"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

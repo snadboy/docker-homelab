@@ -7,6 +7,10 @@ services:
       - firefly-db
     labels:
       - "snadboy.revp.8080.domain=firefly.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=firefly"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
     ports:
       - "5010:8080"
     environment:
@@ -63,6 +67,10 @@ services:
       - firefly-iii
     labels:
       - "snadboy.revp.8080.domain=firefly-import.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=firefly-import"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
     ports:
       - "5011:8080"
     environment:

@@ -4,6 +4,10 @@ services:
     container_name: bazarr
     labels:
       - "snadboy.revp.6767.domain=bazarr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=bazarr"
+      - "docktail.service.port=6767"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

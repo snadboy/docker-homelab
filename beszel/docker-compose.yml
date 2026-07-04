@@ -4,6 +4,10 @@ services:
     container_name: beszel
     labels:
       - "snadboy.revp.8090.domain=beszel.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=beszel"
+      - "docktail.service.port=8090"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
       - APP_URL=https://beszel.isnadboy.com

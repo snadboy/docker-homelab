@@ -4,6 +4,10 @@ services:
     container_name: radarr
     labels:
       - "snadboy.revp.7878.domain=radarr.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=radarr"
+      - "docktail.service.port=7878"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

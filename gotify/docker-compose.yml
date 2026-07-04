@@ -6,6 +6,10 @@ services:
       - 8084:80
     labels:
       - "snadboy.revp.80.domain=gotify.isnadboy.com,gotify.snadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=gotify"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
       - GOTIFY_DEFAULTUSER_PASS=${GOTIFY_DEFAULTUSER_PASS:-appleButter}

@@ -8,6 +8,10 @@ services:
       - pulse_data:/data
     labels:
       - "snadboy.revp.7655.domain=pulse.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=pulse"
+      - "docktail.service.port=7655"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
       - PULSE_PUBLIC_URL=https://pulse.isnadboy.com

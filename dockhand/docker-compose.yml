@@ -4,6 +4,10 @@ services:
     container_name: dockhand
     labels:
       - "snadboy.revp.3000.domain=dockhand.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=dockhand"
+      - "docktail.service.port=3000"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

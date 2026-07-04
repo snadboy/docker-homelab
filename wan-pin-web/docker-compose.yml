@@ -15,6 +15,10 @@ services:
       - "8093:8000"
     labels:
       - "snadboy.revp.8000.domain=wan-pin.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=wan-pin"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 30s

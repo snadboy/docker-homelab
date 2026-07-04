@@ -4,6 +4,10 @@ services:
     container_name: jellyfin
     labels:
       - "snadboy.revp.8096.domain=jellyfin.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=jellyfin"
+      - "docktail.service.port=8096"
+      - "docktail.service.service-port=443"
     environment:
       - PUID=1000
       - PGID=1000

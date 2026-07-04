@@ -4,6 +4,10 @@ services:
     container_name: actual-budget
     labels:
       - "snadboy.revp.5006.domain=actual.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=actual"
+      - "docktail.service.port=5006"
+      - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
     volumes:

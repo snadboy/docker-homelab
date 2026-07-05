@@ -1,0 +1,21 @@
+---
+- name: Deploy serve reconcile script
+  copy:
+    src: reconcile.py
+    dest: /usr/local/bin/ts-static-serves-reconcile
+    mode: '0755'
+
+- name: Render desired service list
+  template:
+    src: services.txt.j2
+    dest: /etc/ts-static-serves.txt
+    mode: '0644'
+
+- name: Reconcile Tailscale static serves
+  command: /usr/local/bin/ts-static-serves-reconcile
+  register: reconcile
+  changed_when: "'SET ' in reconcile.stdout or 'CLEAR ' in reconcile.stdout"
+
+- name: Reconcile result
+  debug:
+    var: reconcile.stdout_lines

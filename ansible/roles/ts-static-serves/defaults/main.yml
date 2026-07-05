@@ -1,0 +1,22 @@
+---
+# Static Tailscale Services advertised (for HA) by every host in ts_advertisers.
+# Each host runs `tailscale serve --service=svc:<name> --https=443 --bg <target>`.
+# Tailscale routes to any available advertiser and fails over automatically.
+#
+# Service DEFINITIONS (with tag:ts-service) are created out-of-band via the
+# Tailscale API — see scratchpad/static-services.txt / the migration doc. This
+# role only manages the per-host serve config (the drift-prone part).
+#
+# proto note: PVE/PBS/UniFi backends are HTTPS with self-signed certs -> https+insecure.
+ts_static_services:
+  - { name: euler,         target: "https+insecure://192.168.86.107:8006" }  # pve-euler UI
+  - { name: gauss,         target: "https+insecure://192.168.86.109:8006" }  # pve-gauss UI
+  - { name: maxwell,       target: "https+insecure://192.168.86.105:8006" }  # pve-maxwell UI
+  - { name: alexandria,    target: "https+insecure://192.168.86.144:8007" }  # PBS
+  - { name: svalbard,      target: "https+insecure://192.168.86.87:8007" }   # PBS
+  - { name: unifi,         target: "https+insecure://192.168.86.1:443" }     # UniFi network app
+  - { name: ha,            target: "http://192.168.86.224:8123" }            # Home Assistant
+  - { name: technitium,    target: "http://192.168.86.76:5380" }             # DNS (svc:ns collides w/ device ns)
+  - { name: pkdb,          target: "http://192.168.86.220:8484" }            # sdevs
+  - { name: plex,          target: "http://192.168.86.40:32400" }            # web UI only
+  - { name: homelab-bar,   target: "http://192.168.86.164:3000" }

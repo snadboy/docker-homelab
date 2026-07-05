@@ -1,0 +1,4 @@
+# Managed by Ansible role ts-static-serves — do not edit by hand.
+{% for s in ts_static_services %}
+{{ s.name }} {{ s.target }}
+{% endfor %}

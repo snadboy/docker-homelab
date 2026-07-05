@@ -1,0 +1,6 @@
+---
+- name: Configure static Tailscale Services on advertiser VMs (HA)
+  hosts: ts_advertisers
+  become: true
+  roles:
+    - ts-static-serves

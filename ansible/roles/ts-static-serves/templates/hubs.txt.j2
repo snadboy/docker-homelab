@@ -1,0 +1,4 @@
+# Managed by Ansible role ts-static-serves — hub name -> static HTML path.
+{% for h in ts_hubs %}
+{{ h }} /var/lib/ts-hubs/{{ h }}.html
+{% endfor %}

@@ -5,16 +5,48 @@
     dest: /usr/local/bin/ts-static-serves-reconcile
     mode: '0755'
 
-- name: Render desired service list
+- name: Deploy hub generator
+  copy:
+    src: gen-hubs.py
+    dest: /usr/local/bin/ts-gen-hubs
+    mode: '0755'
+
+- name: Install hub refresh service + timer
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: '0644'
+  loop:
+    - ts-hubs.service
+    - ts-hubs.timer
+
+- name: Enable hub refresh timer
+  systemd:
+    name: ts-hubs.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Generate hub pages now
+  command: /usr/local/bin/ts-gen-hubs
+  changed_when: false
+
+- name: Render desired proxy-service list
   template:
     src: services.txt.j2
     dest: /etc/ts-static-serves.txt
     mode: '0644'
 
-- name: Reconcile Tailscale static serves
+- name: Render desired hub list
+  template:
+    src: hubs.txt.j2
+    dest: /etc/ts-static-serves-hubs.txt
+    mode: '0644'
+
+- name: Reconcile Tailscale serves (proxies + hubs)
   command: /usr/local/bin/ts-static-serves-reconcile
   register: reconcile
-  changed_when: "'SET ' in reconcile.stdout or 'CLEAR ' in reconcile.stdout"
+  changed_when: "'SET ' in reconcile.stdout or 'SET-HUB ' in reconcile.stdout or 'CLEAR ' in reconcile.stdout"
 
 - name: Reconcile result
   debug:

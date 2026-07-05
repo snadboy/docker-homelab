@@ -1,0 +1,6 @@
+[Unit]
+Description=Regenerate Tailscale hub (mini-homepage) HTML
+After=tailscaled.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ts-gen-hubs

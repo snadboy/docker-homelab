@@ -1,8 +1,11 @@
 services:
   overseerr:
     image: ghcr.io/seerr-team/seerr:latest
-    init: true
     container_name: overseerr
+    ports:
+      - 5055:5055
+    volumes:
+      - overseerr-data:/app/config
     labels:
       - "snadboy.revp.5055.domain=overseerr.isnadboy.com"
       - "docktail.service.enable=true"
@@ -11,11 +14,6 @@ services:
       - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
-      - PORT=5055
-    volumes:
-      - overseerr-data:/app/config
-    ports:
-      - 5055:5055
     restart: unless-stopped
 
 volumes:

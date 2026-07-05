@@ -3,9 +3,10 @@
 Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 (advertiser has tag:ssh). Writes self-contained HTML to OUTDIR.
 Hubs: pve (guest map), pbs (datastore usage), servarr (icons), containers."""
-import subprocess, html, os, datetime, json, urllib.request
+import subprocess, html, os, datetime, json, urllib.request, urllib.parse
 
 TS = "swallow-spectrum.ts.net"
+DOCKHAND = f"https://dockhand.{TS}/containers?search="  # + urlencoded container name
 OUTDIR = "/var/lib/ts-hubs"
 ICONDIR = os.path.join(OUTDIR, "icons")
 ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/{}.svg"
@@ -109,6 +110,12 @@ a.svc:hover{text-decoration:underline}
 .bar > span{display:block;height:100%}
 .bar-lo>span{background:var(--ok)}.bar-mid>span{background:var(--warn)}.bar-hi>span{background:var(--off)}
 .usage{font-size:.78rem;color:var(--dim)}
+.search{display:flex;align-items:center;gap:.75rem;margin:-.5rem 0 1.5rem}
+.search input{flex:0 1 360px;background:var(--card);border:1px solid var(--edge);
+border-radius:8px;color:var(--fg);padding:.55rem .8rem;font-size:.9rem;outline:none}
+.search input:focus{border-color:var(--link)}
+a.cname{flex:1;color:var(--fg);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.cname:hover{color:var(--link);text-decoration:underline}
 """
 
 def page(title, subtitle, body):
@@ -229,27 +236,55 @@ def docker_ps(access):
             rows.append((p[0], p[1], p[2] if len(p) > 2 else ""))
     return rows
 
+DOCKHAND_HOSTS = {"utilities", "arr", "fetch", "cadre", "bedrock", "plex-lxc"}
+
+SEARCH_JS = """
+<script>
+const q=document.getElementById('q'),cnt=document.getElementById('cnt');
+function flt(){
+ const t=q.value.trim().toLowerCase();let n=0;
+ document.querySelectorAll('.card[data-host]').forEach(card=>{
+  const hostMatch=!t||card.dataset.host.includes(t);let shown=0;
+  card.querySelectorAll('li[data-name]').forEach(li=>{
+   const m=!t||hostMatch||li.dataset.name.includes(t);
+   li.style.display=m?'':'none';if(m)shown++;});
+  card.style.display=(!t||shown>0)?'':'none';
+  if(t)n+=shown;});
+ cnt.textContent=t?(n+' match'+(n==1?'':'es')):'';
+}
+q.addEventListener('input',flt);
+</script>"""
+
 def render_containers():
     cards, total = [], 0
     for hostname, node, access in DOCKER_HOSTS:
         rows = docker_ps(access)
-        nb = f'<span class="node-badge">{html.escape(node)}</span>' if node else '<span class="node-badge" style="background:#2b2320;color:var(--warn)">bare-metal</span>'
+        nb = (f'<span class="node-badge">{html.escape(node)}</span>' if node
+              else '<span class="node-badge" style="background:#2b2320;color:var(--warn)">bare-metal</span>')
         if rows is None:
-            cards.append(f'<div class="card"><h2>{html.escape(hostname)}{nb}</h2>'
+            cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
                          f'<p class="meta"><span style="color:var(--off)">unreachable</span></p></div>')
             continue
         total += len(rows)
         li = ""
         for cname, state, status in sorted(rows, key=lambda r: r[0].lower()):
-            healthy = "on" if state == "running" and "unhealthy" not in status.lower() else \
-                      "idle" if state == "running" else "off"
-            li += (f'<li><span class="dot {healthy}"></span>'
-                   f'<span class="gname">{html.escape(cname)}</span></li>')
-        cards.append(f'<div class="card"><h2>{html.escape(hostname)}{nb}</h2>'
+            healthy = ("on" if state == "running" and "unhealthy" not in status.lower()
+                       else "idle" if state == "running" else "off")
+            esc = html.escape(cname)
+            if hostname in DOCKHAND_HOSTS:
+                link = DOCKHAND + urllib.parse.quote(cname)
+                name_html = f'<a class="cname" href="{link}">{esc}</a>'
+            else:
+                name_html = f'<span class="gname">{esc}</span>'
+            li += (f'<li data-name="{esc.lower()}"><span class="dot {healthy}"></span>{name_html}</li>')
+        cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
                      f'<p class="meta">Docker · {len(rows)} running</p><ul>{li}</ul></div>')
+    search = ('<div class="search"><input id="q" type="search" placeholder="Filter containers or hosts…" '
+              'autocomplete="off" autofocus><span id="cnt" class="usage"></span></div>')
     return page("Docker Containers",
-                f"All running containers across the fleet ({total}) — grouped by host, with the PVE node each host runs on.",
-                '<div class="grid">' + "".join(cards) + "</div>")
+                f"All running containers across the fleet ({total}) — grouped by host, with the PVE node each host runs on. "
+                f"Click a container to open it in Dockhand.",
+                search + '<div class="grid">' + "".join(cards) + "</div>" + SEARCH_JS)
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)

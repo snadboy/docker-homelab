@@ -98,7 +98,7 @@ ul{list-style:none;margin:.5rem 0 0;padding:0}
 li{display:flex;align-items:center;gap:.5rem;padding:.22rem 0;font-size:.9rem}
 .badge{font-size:.62rem;font-weight:700;padding:.05rem .35rem;border-radius:4px;background:var(--edge);color:var(--dim)}
 .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-.dot.on{background:var(--ok)}.dot.off{background:var(--off)}.dot.idle{background:var(--dim)}
+.dot.on{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.off{background:var(--dim)}
 .gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gid{color:var(--dim);font-size:.72rem}
 .foot{color:var(--dim);font-size:.72rem;margin-top:2rem;text-align:center}
 a.svc{color:var(--link);text-decoration:none;display:flex;align-items:center;gap:.55rem}
@@ -223,10 +223,10 @@ def render_servarr():
 def docker_ps(access):
     if access[0] == "ssh":
         _, user, host = access
-        out = ssh(host, "docker ps --format '{{.Names}}|{{.State}}|{{.Status}}' 2>/dev/null", user=user)
+        out = ssh(host, "docker ps -a --format '{{.Names}}|{{.State}}|{{.Status}}' 2>/dev/null", user=user)
     else:
         _, pvehost, vmid = access
-        out = ssh(pvehost, f"pct exec {vmid} -- docker ps --format '{{{{.Names}}}}|{{{{.State}}}}|{{{{.Status}}}}' 2>/dev/null")
+        out = ssh(pvehost, f"pct exec {vmid} -- docker ps -a --format '{{{{.Names}}}}|{{{{.State}}}}|{{{{.Status}}}}' 2>/dev/null")
     if out is None:
         return None
     rows = []
@@ -256,7 +256,7 @@ q.addEventListener('input',flt);
 </script>"""
 
 def render_containers():
-    cards, total = [], 0
+    cards, total, running_total = [], 0, 0
     for hostname, node, access in DOCKER_HOSTS:
         rows = docker_ps(access)
         nb = (f'<span class="node-badge">{html.escape(node)}</span>' if node
@@ -266,24 +266,31 @@ def render_containers():
                          f'<p class="meta"><span style="color:var(--off)">unreachable</span></p></div>')
             continue
         total += len(rows)
+        running = sum(1 for _, st, _ in rows if st == "running")
+        running_total += running
+        # running first (green/amber), then stopped (grey), each alphabetical
+        def sortkey(r):
+            return (0 if r[1] == "running" else 1, r[0].lower())
         li = ""
-        for cname, state, status in sorted(rows, key=lambda r: r[0].lower()):
-            healthy = ("on" if state == "running" and "unhealthy" not in status.lower()
-                       else "idle" if state == "running" else "off")
+        for cname, state, status in sorted(rows, key=sortkey):
+            if state == "running":
+                dot = "warn" if "unhealthy" in status.lower() else "on"
+            else:
+                dot = "off"
             esc = html.escape(cname)
             if hostname in DOCKHAND_HOSTS:
                 link = DOCKHAND + urllib.parse.quote(cname)
                 name_html = f'<a class="cname" href="{link}">{esc}</a>'
             else:
                 name_html = f'<span class="gname">{esc}</span>'
-            li += (f'<li data-name="{esc.lower()}"><span class="dot {healthy}"></span>{name_html}</li>')
+            li += f'<li data-name="{esc.lower()}"><span class="dot {dot}"></span>{name_html}</li>'
         cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
-                     f'<p class="meta">Docker · {len(rows)} running</p><ul>{li}</ul></div>')
+                     f'<p class="meta">Docker · {running}/{len(rows)} running</p><ul>{li}</ul></div>')
     search = ('<div class="search"><input id="q" type="search" placeholder="Filter containers or hosts…" '
               'autocomplete="off" autofocus><span id="cnt" class="usage"></span></div>')
     return page("Docker Containers",
-                f"All running containers across the fleet ({total}) — grouped by host, with the PVE node each host runs on. "
-                f"Click a container to open it in Dockhand.",
+                f"All containers across the fleet — {running_total} running of {total} total, grouped by host with "
+                f"its PVE node. Green = running, amber = unhealthy, grey = stopped. Click a container to open it in Dockhand.",
                 search + '<div class="grid">' + "".join(cards) + "</div>" + SEARCH_JS)
 
 def main():

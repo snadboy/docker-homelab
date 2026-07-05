@@ -28,3 +28,4 @@ ts_hubs:
   - pve       # Proxmox VE cluster — nodes + live guest map
   - pbs       # Proxmox Backup Servers — datastores
   - servarr   # media automation stack — grouped app links
+  - containers # all docker containers, grouped by host + node

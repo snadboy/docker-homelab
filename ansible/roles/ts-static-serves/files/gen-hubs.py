@@ -87,6 +87,9 @@ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padd
 .wrap{max-width:1100px;margin:0 auto}
 h1{font-size:1.5rem;margin:0 0 .25rem;letter-spacing:.5px}
 .sub{color:var(--dim);margin:0 0 1.75rem;font-size:.85rem}
+h3.section{font-size:.8rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);
+margin:1.5rem 0 .8rem;padding-bottom:.35rem;border-bottom:1px solid var(--edge)}
+h3.section:first-of-type{margin-top:0}
 .grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:1.1rem 1.25rem}
 .card h2{margin:0 0 .1rem;font-size:1.05rem}
@@ -147,7 +150,7 @@ def pve_guests(host):
             guests.append(("CT", p[0], p[2], p[1]))
     return True, guests
 
-def render_pve():
+def pve_cards():
     cards = []
     for name, host in PVE_NODES:
         ok, guests = pve_guests(host)
@@ -160,8 +163,7 @@ def render_pve():
         state = f"{len(guests)} guests" if ok else '<span style="color:var(--off)">unreachable</span>'
         cards.append(f'<div class="card"><h2><a href="{url}">{html.escape(name)}</a></h2>'
                      f'<p class="meta">Proxmox VE · {state}</p><ul>{rows}</ul></div>')
-    return page("Proxmox VE Cluster", "Nodes and the guests they host — click a node for its web UI.",
-                '<div class="grid">' + "".join(cards) + "</div>")
+    return '<div class="grid">' + "".join(cards) + "</div>"
 
 # ---------- pbs ----------
 def pbs_stores(host):
@@ -185,7 +187,7 @@ def pbs_stores(host):
         result.append((name, size, used, pct))
     return True, result
 
-def render_pbs():
+def pbs_cards():
     cards = []
     for name, host in PBS_NODES:
         ok, stores = pbs_stores(host)
@@ -204,8 +206,12 @@ def render_pbs():
         state = f"{len(stores)} datastores" if ok else '<span style="color:var(--off)">unreachable</span>'
         cards.append(f'<div class="card"><h2><a href="{url}">{html.escape(name)}</a></h2>'
                      f'<p class="meta">Proxmox Backup Server · {state}</p><ul>{rows}</ul></div>')
-    return page("Proxmox Backup Servers", "Backup servers and datastore usage — click for the web UI.",
-                '<div class="grid">' + "".join(cards) + "</div>")
+    return '<div class="grid">' + "".join(cards) + "</div>"
+
+def render_proxmox():
+    body = (f'<h3 class="section">Virtualization</h3>{pve_cards()}'
+            f'<h3 class="section">Backup</h3>{pbs_cards()}')
+    return page("Proxmox", "Virtualization cluster and backup servers — click any node for its web UI.", body)
 
 # ---------- servarr ----------
 def render_servarr():
@@ -295,7 +301,7 @@ def render_containers():
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    for name, fn in [("pve", render_pve), ("pbs", render_pbs),
+    for name, fn in [("proxmox", render_proxmox),
                      ("servarr", render_servarr), ("containers", render_containers)]:
         out = fn()
         with open(os.path.join(OUTDIR, name + ".html"), "w") as f:

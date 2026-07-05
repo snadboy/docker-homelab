@@ -18,7 +18,7 @@ hawser_image: ghcr.io/finsys/hawser:latest
 # environment). We extract it from the running container rather than
 # storing it in Ansible vars.
 hawser_container_name: hawser
-hawser_dockhand_server_url: wss://dockhand.isnadboy.com/api/hawser/connect
+hawser_dockhand_server_url: ws://host-utilities.isnadboy.com:3000/api/hawser/connect
 hawser_port: 2376
 hawser_docker_socket: /var/run/docker.sock
 hawser_stacks_dir: /data/stacks

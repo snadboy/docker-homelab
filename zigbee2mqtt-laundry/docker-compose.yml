@@ -1,0 +1,16 @@
+services:
+  zigbee2mqtt-laundry:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt-laundry
+    restart: unless-stopped
+    ports:
+      - "8083:8080"
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-laundry/app-data:/app/data
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=zigbee2mqtt-laundry"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"

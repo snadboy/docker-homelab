@@ -1,0 +1,16 @@
+services:
+  zigbee2mqtt-office:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt-office
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-office/app-data:/app/data
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=zigbee2mqtt-office"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"

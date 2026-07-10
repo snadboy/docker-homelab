@@ -11,7 +11,7 @@ OUTDIR = "/var/lib/ts-hubs"
 ICONDIR = os.path.join(OUTDIR, "icons")
 ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/{}.svg"
 
-PVE_NODES = [("euler", "pve-euler"), ("gauss", "pve-gauss"), ("maxwell", "pve-maxwell")]
+PVE_NODES_FALLBACK = [("euler", "pve-euler"), ("gauss", "pve-gauss"), ("maxwell", "pve-maxwell")]  # seed + fallback; live list discovered from the cluster
 PBS_NODES = [("alexandria", "pbs-alexandria"), ("svalbard", "pbs-svalbard")]
 
 # Servarr: (label, svc-name, icon-slug on dashboard-icons)
@@ -150,9 +150,33 @@ def pve_guests(host):
             guests.append(("CT", p[0], p[2], p[1]))
     return True, guests
 
+def discover_pve_nodes():
+    """Live [(short, pve-host)] from the cluster so new nodes appear automatically.
+    Seeds from the fallback hosts (any one reachable returns the whole cluster);
+    falls back to the static list if discovery fails, so a cluster hiccup never
+    blanks the hub."""
+    for _, seed in PVE_NODES_FALLBACK:
+        out = ssh(seed, "pvesh get /nodes --output-format json 2>/dev/null")
+        if not out:
+            continue
+        try:
+            nodes = json.loads(out)
+        except Exception:
+            continue
+        found = []
+        for n in nodes:
+            node = n.get("node")
+            if not node:
+                continue
+            short = node[4:] if node.startswith("pve-") else node
+            found.append((short, node))
+        if found:
+            return sorted(found)
+    return PVE_NODES_FALLBACK
+
 def pve_cards():
     cards = []
-    for name, host in PVE_NODES:
+    for name, host in discover_pve_nodes():
         ok, guests = pve_guests(host)
         url = f"https://{name}.{TS}"
         rows = ""

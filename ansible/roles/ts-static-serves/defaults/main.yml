@@ -12,6 +12,7 @@ ts_static_services:
   - { name: euler,         target: "https+insecure://192.168.86.107:8006" }  # pve-euler UI
   - { name: gauss,         target: "https+insecure://192.168.86.109:8006" }  # pve-gauss UI
   - { name: maxwell,       target: "https+insecure://192.168.86.105:8006" }  # pve-maxwell UI
+  - { name: faraday,       target: "https+insecure://192.168.86.111:8006" }  # pve-faraday UI
   - { name: alexandria,    target: "https+insecure://192.168.86.144:8007" }  # PBS
   - { name: svalbard,      target: "https+insecure://192.168.86.87:8007" }   # PBS
   - { name: unifi,         target: "https+insecure://192.168.86.1:443" }     # UniFi network app

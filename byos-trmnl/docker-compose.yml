@@ -22,6 +22,7 @@ services:
       - "docktail.service.enable=true"
       - "docktail.service.name=trmnl"
       - "docktail.service.port=2300"
+      - "docktail.service.service-port=443"
 
 volumes:
   byos-trmnl-data:

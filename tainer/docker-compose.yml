@@ -1,0 +1,20 @@
+services:
+  tainer:
+    image: tainersh/tainer:latest
+    container_name: tainer
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    volumes:
+      - tainer-data:/app/data
+    environment:
+      APP_URL: https://tainer.isnadboy.com
+    labels:
+      - "snadboy.revp.3000.domain=tainer.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=tainer"
+      - "docktail.service.port=3000"
+      - "docktail.service.service-port=443"
+
+volumes:
+  tainer-data:

@@ -1,0 +1,20 @@
+services:
+  sbhome:
+    image: sbhome:latest
+    container_name: sbhome
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    dns:
+      - 192.168.86.76  # Technitium primary
+    dns_search:
+      - isnadboy.com
+      - tail65635.ts.net
+    env_file:
+      - .env
+    labels:
+      - "snadboy.revp.8002.domain=sbhome.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sbhome"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"

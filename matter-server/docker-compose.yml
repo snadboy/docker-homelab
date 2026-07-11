@@ -1,0 +1,23 @@
+services:
+  matter-server:
+    image: ghcr.io/matter-js/python-matter-server:stable
+    container_name: matter-server
+    restart: unless-stopped
+    network_mode: host
+    security_opt:
+      - apparmor=unconfined
+    volumes:
+      - /mnt/docker/matter-server:/data
+      - /run/dbus:/run/dbus:ro
+    entrypoint: /bin/bash
+    command: >
+      -c "sed -i 's/NODE_SUBSCRIPTION_CEILING_BATTERY_POWERED = 600/NODE_SUBSCRIPTION_CEILING_BATTERY_POWERED = 3600/' /usr/local/lib/python3.12/site-packages/matter_server/server/device_controller.py &&
+      exec matter-server
+      --storage-path /data
+      --port 5580
+      --fabricid 2
+      --vendorid 4939
+      --primary-interface eth0
+      --paa-root-cert-dir /data/credentials
+      --log-level info
+      --log-level-sdk error"

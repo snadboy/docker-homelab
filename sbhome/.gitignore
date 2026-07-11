@@ -1,0 +1,7 @@
+# secrets
+.env
+# python bytecode
+**/__pycache__/
+*.pyc
+# runtime-generated cache (leaks internal IPs/MACs/topology)
+sbhome/public/data/*.json

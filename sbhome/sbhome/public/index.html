@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Dashboard</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --surface: #151515;
+            --surface-elevated: #1f1f1f;
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #6b6b6b;
+            --accent: #00ff41;
+            --accent-dim: #00cc34;
+            --warning: #ff9500;
+            --static-color: #00d4ff;
+            --container-color: #ff6b6b;
+            --unifi-color: #0096ff;
+            --kvm-color: #ff00ff;
+            --border: #2a2a2a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Header */
+        header {
+            position: relative;
+            padding: 4rem 0 2rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            line-height: 0.9;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--static-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            letter-spacing: 0.02em;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--surface);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            font-weight: 600;
+        }
+
+        /* Tabs */
+        .tabs-container {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg);
+            padding: 1.5rem 0 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background: var(--surface);
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-badge {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.125rem 0.5rem;
+            font-size: 0.625rem;
+            font-weight: 700;
+            border-radius: 10px;
+            background: var(--surface);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tab.active .tab-badge {
+            background: var(--accent);
+            color: var(--bg);
+        }
+
+        /* Search */
+        .search-container {
+            padding: 1.5rem 0;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 1rem 1.25rem;
+            font-size: 1rem;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 255, 65, 0.1);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Service Grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .service-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .service-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 255, 65, 0.1);
+        }
+
+        .service-card:hover::before {
+            opacity: 1;
+        }
+
+        .service-card.static::before {
+            background: var(--static-color);
+        }
+
+        .service-card.static:hover {
+            border-color: var(--static-color);
+        }
+
+        .service-card.unifi::before {
+            background: var(--unifi-color);
+        }
+
+        .service-card.unifi:hover {
+            border-color: var(--unifi-color);
+        }
+
+        .service-card.kvm::before {
+            background: var(--kvm-color);
+        }
+
+        .service-card.kvm:hover {
+            border-color: var(--kvm-color);
+        }
+
+        .service-name {
+            font-size: 0.875rem;
+            color: var(--text-tertiary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .health-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .health-indicator.healthy {
+            background: #00ff41;
+            box-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+        }
+
+        .health-indicator.unhealthy {
+            background: #ff4444;
+            box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+        }
+
+        .health-indicator.unknown {
+            background: #888;
+            box-shadow: none;
+        }
+
+        .health-indicator.checking {
+            background: #ffaa00;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .service-domain {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            word-break: break-word;
+            margin-bottom: 0.5rem;
+        }
+
+        .service-domain a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .service-domain a:hover {
+            color: var(--accent);
+        }
+
+        .service-card.static .service-domain a:hover {
+            color: var(--static-color);
+        }
+
+        .service-card.unifi .service-domain a:hover {
+            color: var(--unifi-color);
+        }
+
+        .service-card.kvm .service-domain a:hover {
+            color: var(--kvm-color);
+        }
+
+        .service-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.625rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-radius: 3px;
+            border: 1px solid;
+        }
+
+        .badge.static {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: var(--static-color);
+            color: var(--static-color);
+        }
+
+        .badge.container {
+            background: rgba(255, 107, 107, 0.1);
+            border-color: var(--container-color);
+            color: var(--container-color);
+        }
+
+        .badge.local {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .badge.insecure {
+            background: rgba(255, 149, 0, 0.1);
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        .badge.unifi {
+            background: rgba(0, 150, 255, 0.1);
+            border-color: var(--unifi-color);
+            color: var(--unifi-color);
+        }
+
+        .service-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--text-tertiary);
+            min-width: 70px;
+        }
+
+        .detail-value {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 0.8125rem;
+            word-break: break-all;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-tertiary);
+        }
+
+        .no-results-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .no-results-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 4rem;
+            padding: 2rem 0;
+            border-top: 1px solid var(--border);
+            color: var(--text-tertiary);
+            text-align: center;
+            font-size: 0.875rem;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(0, 255, 65, 0.4), 0 0 30px rgba(0, 255, 65, 0.2);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Service cards staggered entrance */
+        .service-card {
+            animation: fadeInUp 0.5s ease-out backwards;
+        }
+
+        .service-card:nth-child(1) { animation-delay: 0.05s; }
+        .service-card:nth-child(2) { animation-delay: 0.1s; }
+        .service-card:nth-child(3) { animation-delay: 0.15s; }
+        .service-card:nth-child(4) { animation-delay: 0.2s; }
+        .service-card:nth-child(5) { animation-delay: 0.25s; }
+        .service-card:nth-child(6) { animation-delay: 0.3s; }
+        .service-card:nth-child(7) { animation-delay: 0.35s; }
+        .service-card:nth-child(8) { animation-delay: 0.4s; }
+        .service-card:nth-child(9) { animation-delay: 0.45s; }
+        .service-card:nth-child(10) { animation-delay: 0.5s; }
+
+        /* Tab indicator slide */
+        .tab {
+            position: relative;
+        }
+
+        .tab::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transform: translateX(-50%);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab.active::after {
+            width: 100%;
+        }
+
+        /* Tab badge pulse on active */
+        .tab.active .tab-badge {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Search input focus glow */
+        .search-input:focus {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        /* Stat value entrance */
+        .stat-value {
+            animation: countUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+        }
+
+        .stat:nth-child(1) .stat-value { animation-delay: 0.1s; }
+        .stat:nth-child(2) .stat-value { animation-delay: 0.2s; }
+        .stat:nth-child(3) .stat-value { animation-delay: 0.3s; }
+
+        /* Badge shimmer effect */
+        .badge {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 4s infinite;
+        }
+
+        /* Header title entrance */
+        h1 {
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .subtitle {
+            animation: fadeInUp 0.6s ease-out 0.2s backwards;
+        }
+
+        .stats {
+            animation: fadeInUp 0.6s ease-out 0.4s backwards;
+        }
+
+        @media (max-width: 768px) {
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Infrastructure</h1>
+            <div class="subtitle">Complete view of routes, devices, and systems</div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="total-count">49</div>
+                    <div class="stat-label">Total Items</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="visible-count">49</div>
+                    <div class="stat-label">Visible</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="tabs-container">
+        <div class="container">
+            <div class="tabs">
+                <button class="tab active" data-tab="docker-routes">
+                    Docker Routes <span class="tab-badge">26</span>
+                </button>
+                <button class="tab" data-tab="static-routes">
+                    Static Routes <span class="tab-badge">13</span>
+                </button>
+                <button class="tab" data-tab="unifi-devices">
+                    UniFi Devices <span class="tab-badge">10</span>
+                </button>
+                <button class="tab" data-tab="kvm-devices">
+                    KVM Devices <span class="tab-badge">0</span>
+                </button>
+                <button class="tab" data-tab="network">
+                    Network <span class="tab-badge">—</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="container">
+        <div class="search-container">
+            <input
+                type="text"
+                class="search-input"
+                id="search"
+                placeholder="Search by name, IP, domain, or host..."
+                autocomplete="off"
+            >
+        </div>
+
+        <!-- Docker Routes Tab -->
+        <div class="tab-content active" id="docker-routes">
+            <div class="services-grid" id="docker-grid"></div>
+            <div class="no-results" id="docker-no-results" style="display: none;">
+                <div class="no-results-icon">🔍</div>
+                <div class="no-results-text">No Docker routes found</div>
+            </div>
+        </div>
+
+        <!-- Static Routes Tab -->
+        <div class="tab-content" id="static-routes">
+            <div class="services-grid" id="static-grid"></div>
+            <div class="no-results" id="static-no-results" style="display: none;">
+                <div class="no-results-icon">🔍</div>
+                <div class="no-results-text">No static routes found</div>
+            </div>
+        </div>
+
+        <!-- UniFi Devices Tab -->
+        <div class="tab-content" id="unifi-devices">
+            <div class="services-grid" id="unifi-grid"></div>
+            <div class="no-results" id="unifi-no-results" style="display: none;">
+                <div class="no-results-icon">🔍</div>
+                <div class="no-results-text">No UniFi devices found</div>
+            </div>
+        </div>
+
+        <!-- KVM Devices Tab -->
+        <div class="tab-content" id="kvm-devices">
+            <div class="services-grid" id="kvm-grid"></div>
+            <div class="no-results" id="kvm-no-results" style="display: none;">
+                <div class="no-results-icon">🔍</div>
+                <div class="no-results-text">No KVM devices found</div>
+            </div>
+        </div>
+
+        <!-- Network Tab -->
+        <div class="tab-content" id="network">
+            <div id="network-dashboard">
+                <!-- Top Stats Cards -->
+                <div class="services-grid" id="network-stats-grid"></div>
+
+                <!-- Access Points Section -->
+                <div style="margin-top: 2rem;">
+                    <h3 style="color: var(--text-primary); margin-bottom: 1rem; font-size: 1.25rem;">Access Points</h3>
+                    <div class="services-grid" id="network-aps-grid"></div>
+                </div>
+
+                <!-- Top Clients Section -->
+                <div style="margin-top: 2rem;">
+                    <h3 style="color: var(--text-primary); margin-bottom: 1rem; font-size: 1.25rem;">Top Clients by Bandwidth</h3>
+                    <div id="network-top-clients"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            Infrastructure Dashboard — Powered by Traefik HTTP Provider & UniFi API
+        </div>
+    </footer>
+
+    <script>
+        const TRAEFIK_DATA = {"services":[{"name":"actual-budget-5006","domain":"actual.isnadboy.com","domains":["actual.isnadboy.com"],"public_urls":[{"domain":"actual.isnadboy.com","url":"https://actual.isnadboy.com"}],"public_url":"https://actual.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:5006/","host":"host-utilities.isnadboy.com","container":"actual-budget","container_name":"actual-budget","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"agregarr-7171","domain":"agregarr.isnadboy.com","domains":["agregarr.isnadboy.com"],"public_urls":[{"domain":"agregarr.isnadboy.com","url":"https://agregarr.isnadboy.com"}],"public_url":"https://agregarr.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:7171/","host":"host-arr.isnadboy.com","container":"agregarr","container_name":"agregarr","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"autopulse-2875","domain":"autopulse.isnadboy.com","domains":["autopulse.isnadboy.com"],"public_urls":[{"domain":"autopulse.isnadboy.com","url":"https://autopulse.isnadboy.com"}],"public_url":"https://autopulse.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:2875/","host":"host-arr.isnadboy.com","container":"autopulse","container_name":"autopulse","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"dockhand-3000","domain":"dockhand.isnadboy.com","domains":["dockhand.isnadboy.com"],"public_urls":[{"domain":"dockhand.isnadboy.com","url":"https://dockhand.isnadboy.com"}],"public_url":"https://dockhand.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:3000/","host":"host-utilities.isnadboy.com","container":"dockhand","container_name":"dockhand","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"firefly-iii-8080","domain":"firefly.isnadboy.com","domains":["firefly.isnadboy.com"],"public_urls":[{"domain":"firefly.isnadboy.com","url":"https://firefly.isnadboy.com"}],"public_url":"https://firefly.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:5010/","host":"host-utilities.isnadboy.com","container":"firefly-iii","container_name":"firefly-iii","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"firefly-importer-8080","domain":"firefly-import.isnadboy.com","domains":["firefly-import.isnadboy.com"],"public_urls":[{"domain":"firefly-import.isnadboy.com","url":"https://firefly-import.isnadboy.com"}],"public_url":"https://firefly-import.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:5011/","host":"host-utilities.isnadboy.com","container":"firefly-importer","container_name":"firefly-importer","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"gotify-80","domain":"gotify.isnadboy.com","domains":["gotify.isnadboy.com","gotify.snadboy.com"],"public_urls":[{"domain":"gotify.isnadboy.com","url":"https://gotify.isnadboy.com"},{"domain":"gotify.snadboy.com","url":"https://gotify.snadboy.com"}],"public_url":"https://gotify.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:8084/","host":"host-utilities.isnadboy.com","container":"gotify","container_name":"gotify","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"homepage-3000","domain":"homepage.isnadboy.com","domains":["homepage.isnadboy.com"],"public_urls":[{"domain":"homepage.isnadboy.com","url":"https://homepage.isnadboy.com"}],"public_url":"https://homepage.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:3500/","host":"host-utilities.isnadboy.com","container":"homepage","container_name":"homepage","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"n8n-5678","domain":"n8n.isnadboy.com","domains":["n8n.isnadboy.com"],"public_urls":[{"domain":"n8n.isnadboy.com","url":"https://n8n.isnadboy.com"}],"public_url":"https://n8n.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:5678/","host":"host-utilities.isnadboy.com","container":"n8n","container_name":"n8n","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"overseerr-5055","domain":"overseerr.isnadboy.com","domains":["overseerr.isnadboy.com"],"public_urls":[{"domain":"overseerr.isnadboy.com","url":"https://overseerr.isnadboy.com"}],"public_url":"https://overseerr.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:5055/","host":"host-arr.isnadboy.com","container":"overseerr","container_name":"overseerr","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"prowlarr-9696","domain":"prowlarr.isnadboy.com","domains":["prowlarr.isnadboy.com"],"public_urls":[{"domain":"prowlarr.isnadboy.com","url":"https://prowlarr.isnadboy.com"}],"public_url":"https://prowlarr.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:9696/","host":"host-arr.isnadboy.com","container":"prowlarr","container_name":"prowlarr","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"radarr-7878","domain":"radarr.isnadboy.com","domains":["radarr.isnadboy.com"],"public_urls":[{"domain":"radarr.isnadboy.com","url":"https://radarr.isnadboy.com"}],"public_url":"https://radarr.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:7878/","host":"host-arr.isnadboy.com","container":"radarr","container_name":"radarr","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"sabnzbd-8080","domain":"sabnzbd.isnadboy.com","domains":["sabnzbd.isnadboy.com"],"public_urls":[{"domain":"sabnzbd.isnadboy.com","url":"https://sabnzbd.isnadboy.com"}],"public_url":"https://sabnzbd.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:8080/","host":"host-arr.isnadboy.com","container":"sabnzbd","container_name":"sabnzbd","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"sb-traefik-http-provider-8080","domain":"sb-traefik.isnadboy.com","domains":["sb-traefik.isnadboy.com"],"public_urls":[{"domain":"sb-traefik.isnadboy.com","url":"https://sb-traefik.isnadboy.com"}],"public_url":"https://sb-traefik.isnadboy.com","backend_url":"http://sb-traefik-http-provider:8080/","host":"sb-traefik-http-provider","container":"sb-traefik-http-provider","container_name":"sb-traefik-http-provider","is_static":false,"is_local":true,"networks":["traefik"],"insecure_skip_verify":false},{"name":"semaphore-3002","domain":"semaphore.isnadboy.com","domains":["semaphore.isnadboy.com"],"public_urls":[{"domain":"semaphore.isnadboy.com","url":"https://semaphore.isnadboy.com"}],"public_url":"https://semaphore.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:3002/","host":"host-utilities.isnadboy.com","container":"semaphore","container_name":"semaphore","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"slabels-8000","domain":"slabels.isnadboy.com","domains":["slabels.isnadboy.com"],"public_urls":[{"domain":"slabels.isnadboy.com","url":"https://slabels.isnadboy.com"}],"public_url":"https://slabels.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:8400/","host":"host-arr.isnadboy.com","container":"slabels","container_name":"slabels","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"sonarr-8989","domain":"sonarr.isnadboy.com","domains":["sonarr.isnadboy.com"],"public_urls":[{"domain":"sonarr.isnadboy.com","url":"https://sonarr.isnadboy.com"}],"public_url":"https://sonarr.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:8989/","host":"host-arr.isnadboy.com","container":"sonarr","container_name":"sonarr","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"status-dashboard-80","domain":"status.isnadboy.com","domains":["status.isnadboy.com"],"public_urls":[{"domain":"status.isnadboy.com","url":"https://status.isnadboy.com"}],"public_url":"https://status.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:3080/","host":"host-utilities.isnadboy.com","container":"status-dashboard","container_name":"status-dashboard","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"tautulli-8181","domain":"tautulli.isnadboy.com","domains":["tautulli.isnadboy.com"],"public_urls":[{"domain":"tautulli.isnadboy.com","url":"https://tautulli.isnadboy.com"}],"public_url":"https://tautulli.isnadboy.com","backend_url":"http://host-arr.isnadboy.com:8181/","host":"host-arr.isnadboy.com","container":"tautulli","container_name":"tautulli","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"termix-8080","domain":"termix.isnadboy.com","domains":["termix.isnadboy.com"],"public_urls":[{"domain":"termix.isnadboy.com","url":"https://termix.isnadboy.com"}],"public_url":"https://termix.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:8080/","host":"host-utilities.isnadboy.com","container":"termix","container_name":"termix","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"traefik-8088","domain":"traefik.isnadboy.com","domains":["traefik.isnadboy.com"],"public_urls":[{"domain":"traefik.isnadboy.com","url":"https://traefik.isnadboy.com"}],"public_url":"https://traefik.isnadboy.com","backend_url":"http://traefik:8088/","host":"traefik","container":"traefik","container_name":"traefik","is_static":false,"is_local":true,"networks":["traefik"],"insecure_skip_verify":false},{"name":"unifi-toolkit-8000","domain":"unifi-toolkit.isnadboy.com","domains":["unifi-toolkit.isnadboy.com"],"public_urls":[{"domain":"unifi-toolkit.isnadboy.com","url":"https://unifi-toolkit.isnadboy.com"}],"public_url":"https://unifi-toolkit.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:8000/","host":"host-utilities.isnadboy.com","container":"unifi-toolkit","container_name":"unifi-toolkit","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"uptime-kuma-3001","domain":"uptime-kuma.isnadboy.com","domains":["uptime-kuma.isnadboy.com"],"public_urls":[{"domain":"uptime-kuma.isnadboy.com","url":"https://uptime-kuma.isnadboy.com"}],"public_url":"https://uptime-kuma.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:3001/","host":"host-utilities.isnadboy.com","container":"uptime-kuma","container_name":"uptime-kuma","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"zigbee2mqtt-garage-8080","domain":"zigbee2mqtt-garage.isnadboy.com","domains":["zigbee2mqtt-garage.isnadboy.com"],"public_urls":[{"domain":"zigbee2mqtt-garage.isnadboy.com","url":"https://zigbee2mqtt-garage.isnadboy.com"}],"public_url":"https://zigbee2mqtt-garage.isnadboy.com","backend_url":"http://zigbee2mqtt-garage:8080/","host":"zigbee2mqtt-garage","container":"zigbee2mqtt-garage","container_name":"zigbee2mqtt-garage","is_static":false,"is_local":true,"networks":["zigbee2mqtt-garage_default"],"insecure_skip_verify":false},{"name":"zigbee2mqtt-house-8080","domain":"zigbee2mqtt-house.isnadboy.com","domains":["zigbee2mqtt-house.isnadboy.com"],"public_urls":[{"domain":"zigbee2mqtt-house.isnadboy.com","url":"https://zigbee2mqtt-house.isnadboy.com"}],"public_url":"https://zigbee2mqtt-house.isnadboy.com","backend_url":"http://host-utilities.isnadboy.com:8082/","host":"host-utilities.isnadboy.com","container":"zigbee2mqtt-house","container_name":"zigbee2mqtt-house","is_static":false,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"zigbee2mqtt-laundry-8080","domain":"zigbee2mqtt-laundry.isnadboy.com","domains":["zigbee2mqtt-laundry.isnadboy.com"],"public_urls":[{"domain":"zigbee2mqtt-laundry.isnadboy.com","url":"https://zigbee2mqtt-laundry.isnadboy.com"}],"public_url":"https://zigbee2mqtt-laundry.isnadboy.com","backend_url":"http://zigbee2mqtt-laundry:8080/","host":"zigbee2mqtt-laundry","container":"zigbee2mqtt-laundry","container_name":"zigbee2mqtt-laundry","is_static":false,"is_local":true,"networks":["zigbee2mqtt-laundry_default"],"insecure_skip_verify":false},{"name":"zigbee2mqtt-office-8080","domain":"zigbee2mqtt-office.isnadboy.com","domains":["zigbee2mqtt-office.isnadboy.com"],"public_urls":[{"domain":"zigbee2mqtt-office.isnadboy.com","url":"https://zigbee2mqtt-office.isnadboy.com"}],"public_url":"https://zigbee2mqtt-office.isnadboy.com","backend_url":"http://zigbee2mqtt-office:8080/","host":"zigbee2mqtt-office","container":"zigbee2mqtt-office","container_name":"zigbee2mqtt-office","is_static":false,"is_local":true,"networks":["zigbee2mqtt-office_default"],"insecure_skip_verify":false},{"name":"static-alexandria-isnadboy-com","domain":"alexandria.isnadboy.com","domains":["alexandria.isnadboy.com"],"public_urls":[{"domain":"alexandria.isnadboy.com","url":"https://alexandria.isnadboy.com"}],"public_url":"https://alexandria.isnadboy.com","backend_url":"https://host-alexandria.isnadboy.com:8007","host":"host-alexandria.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-cloud-pbs-isnadboy-com","domain":"cloud-pbs.isnadboy.com","domains":["cloud-pbs.isnadboy.com"],"public_urls":[{"domain":"cloud-pbs.isnadboy.com","url":"https://cloud-pbs.isnadboy.com"}],"public_url":"https://cloud-pbs.isnadboy.com","backend_url":"https://sh15-226.prod.cloud-pbs.com:8007","host":"sh15-226.prod.cloud-pbs.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-colossus-isnadboy-com","domain":"colossus.isnadboy.com","domains":["colossus.isnadboy.com"],"public_urls":[{"domain":"colossus.isnadboy.com","url":"https://colossus.isnadboy.com"}],"public_url":"https://colossus.isnadboy.com","backend_url":"https://pve-colossus.isnadboy.com:8006","host":"pve-colossus.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-guardian-isnadboy-com","domain":"guardian.isnadboy.com","domains":["guardian.isnadboy.com"],"public_urls":[{"domain":"guardian.isnadboy.com","url":"https://guardian.isnadboy.com"}],"public_url":"https://guardian.isnadboy.com","backend_url":"https://pve-guardian.isnadboy.com:8006","host":"pve-guardian.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-ha-isnadboy-com","domain":"ha.isnadboy.com","domains":["ha.isnadboy.com"],"public_urls":[{"domain":"ha.isnadboy.com","url":"https://ha.isnadboy.com"}],"public_url":"https://ha.isnadboy.com","backend_url":"http://host-ha.isnadboy.com:8123","host":"host-ha.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"static-ns-isnadboy-com","domain":"ns.isnadboy.com","domains":["ns.isnadboy.com"],"public_urls":[{"domain":"ns.isnadboy.com","url":"https://ns.isnadboy.com"}],"public_url":"https://ns.isnadboy.com","backend_url":"http://host-ns.isnadboy.com:5380","host":"host-ns.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"static-plex-isnadboy-com","domain":"plex.isnadboy.com","domains":["plex.isnadboy.com"],"public_urls":[{"domain":"plex.isnadboy.com","url":"https://plex.isnadboy.com"}],"public_url":"https://plex.isnadboy.com","backend_url":"http://host-plex.isnadboy.com:32400","host":"host-plex.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":false},{"name":"static-portainer-isnadboy-com","domain":"portainer.isnadboy.com","domains":["portainer.isnadboy.com"],"public_urls":[{"domain":"portainer.isnadboy.com","url":"https://portainer.isnadboy.com"}],"public_url":"https://portainer.isnadboy.com","backend_url":"https://host-cadre.isnadboy.com:9443","host":"host-cadre.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-svalbard-isnadboy-com","domain":"svalbard.isnadboy.com","domains":["svalbard.isnadboy.com"],"public_urls":[{"domain":"svalbard.isnadboy.com","url":"https://svalbard.isnadboy.com"}],"public_url":"https://svalbard.isnadboy.com","backend_url":"https://host-svalbard.isnadboy.com:8007","host":"host-svalbard.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-unas-able-isnadboy-com","domain":"unas-able.isnadboy.com","domains":["unas-able.isnadboy.com"],"public_urls":[{"domain":"unas-able.isnadboy.com","url":"https://unas-able.isnadboy.com"}],"public_url":"https://unas-able.isnadboy.com","backend_url":"https://host-unas-able.isnadboy.com","host":"host-unas-able.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-unifi-gateway-isnadboy-com","domain":"unifi-gateway.isnadboy.com","domains":["unifi-gateway.isnadboy.com"],"public_urls":[{"domain":"unifi-gateway.isnadboy.com","url":"https://unifi-gateway.isnadboy.com"}],"public_url":"https://unifi-gateway.isnadboy.com","backend_url":"https://192.168.86.1:8006","host":"192.168.86.1","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true},{"name":"static-unifi-isnadboy-com","domain":"unifi.isnadboy.com","domains":["unifi.isnadboy.com"],"public_urls":[{"domain":"unifi.isnadboy.com","url":"https://unifi.isnadboy.com"}],"public_url":"https://unifi.isnadboy.com","backend_url":"https://host-unifi.isnadboy.com","host":"host-unifi.isnadboy.com","container":null,"container_name":null,"is_static":true,"is_local":false,"networks":[],"insecure_skip_verify":true}],"total":39};
+
+        const UNIFI_DATA = [{"name":"USW-Lite-16-PoE","ip":"192.168.86.198","type":"usw","model":"USL16LPB","mac":"1c:6a:1b:10:73:7b"},{"name":"Cloud Gateway Max","ip":"172.87.20.189","type":"udm","model":"UCGMAX","mac":"0c:ea:14:c0:ad:68"},{"name":"U7 Pro Laundry","ip":"192.168.86.56","type":"uap","model":"U7PRO","mac":"0c:ea:14:3e:fa:6a"},{"name":"USW Pro Max 16 - Rack","ip":"192.168.86.244","type":"usw","model":"USPM16","mac":"9c:05:d6:e0:51:87"},{"name":"U7 Pro TSR","ip":"192.168.86.57","type":"uap","model":"U7PRO","mac":"28:70:4e:d1:b0:bc"},{"name":"USW Pro Max 16 PoE","ip":"192.168.86.49","type":"usw","model":"USPM16P","mac":"28:70:4e:61:64:36"},{"name":"UDB Switch","ip":"192.168.86.222","type":"udb","model":"UDBA69F","mac":"8c:ed:e1:1a:df:82"},{"name":"U7 Pro Office","ip":"192.168.86.30","type":"uap","model":"U7PRO","mac":"28:70:4e:d1:9d:30"},{"name":"U7 Pro Family Room","ip":"192.168.86.95","type":"uap","model":"U7PRO","mac":"0c:ea:14:36:a6:3d"},{"name":"USW Flex 2.5G 8","ip":"192.168.86.18","type":"usw","model":"USWED36","mac":"94:2a:6f:4e:bd:4f"}];
+
+        let KVM_DATA = [];
+        let HEALTH_STATUS = {};
+
+        const containerServices = TRAEFIK_DATA.services.filter(s => !s.is_static);
+        const staticServices = TRAEFIK_DATA.services.filter(s => s.is_static);
+
+        let currentTab = 'docker-routes';
+
+        // Type mapping for UniFi devices
+        const unifiTypeMap = {
+            'uap': 'Access Point',
+            'usw': 'Switch',
+            'udm': 'Gateway',
+            'udb': 'Bridge'
+        };
+
+        function getHealthStatus(id) {
+            const status = HEALTH_STATUS[id];
+            if (!status) return 'unknown';
+            return status.healthy ? 'healthy' : 'unhealthy';
+        }
+
+        function renderHealthIndicator(id) {
+            const healthClass = getHealthStatus(id);
+            return `<span class="health-indicator ${healthClass}"></span>`;
+        }
+
+        function renderService(service) {
+            const badges = [];
+
+            if (service.is_static) {
+                badges.push('<span class="badge static">Static</span>');
+            } else {
+                badges.push('<span class="badge container">Container</span>');
+            }
+
+            if (service.is_local) {
+                badges.push('<span class="badge local">Local</span>');
+            }
+
+            if (service.insecure_skip_verify) {
+                badges.push('<span class="badge insecure">Insecure</span>');
+            }
+
+            const serviceId = `traefik-${service.name}`;
+
+            return `
+                <div class="service-card ${service.is_static ? 'static' : 'container'}" data-search="${service.domain} ${service.host} ${service.container_name || ''} ${service.name}" data-health-id="${serviceId}">
+                    <div class="service-name">${renderHealthIndicator(serviceId)}${service.name}</div>
+                    <div class="service-domain">
+                        <a href="${service.public_url}" target="_blank">${service.domain}</a>
+                    </div>
+                    <div class="service-badges">
+                        ${badges.join('')}
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Backend:</span>
+                            <span class="detail-value">${service.backend_url}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Host:</span>
+                            <span class="detail-value">${service.host}</span>
+                        </div>
+                        ${service.container_name ? `
+                        <div class="detail-row">
+                            <span class="detail-label">Container:</span>
+                            <span class="detail-value">${service.container_name}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderUnifiDevice(device) {
+            const typeLabel = unifiTypeMap[device.type] || device.type.toUpperCase();
+
+            return `
+                <div class="service-card unifi" data-search="${device.name} ${device.ip} ${device.model} ${device.type}">
+                    <div class="service-name">${device.model}</div>
+                    <div class="service-domain">${device.name}</div>
+                    <div class="service-badges">
+                        <span class="badge unifi">${typeLabel}</span>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">IP:</span>
+                            <span class="detail-value">${device.ip}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">MAC:</span>
+                            <span class="detail-value">${device.mac}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderKvmDevice(device) {
+            const deviceId = `kvm-${device.location}`;
+
+            return `
+                <div class="service-card kvm" data-search="${device.name} ${device.ip} ${device.hostname} ${device.location}" data-health-id="${deviceId}">
+                    <div class="service-name">${renderHealthIndicator(deviceId)}KVM-over-IP</div>
+                    <div class="service-domain">
+                        <a href="${device.url}" target="_blank">${device.name}</a>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Hostname:</span>
+                            <span class="detail-value">${device.hostname}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">IP:</span>
+                            <span class="detail-value">${device.ip}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAll() {
+            document.getElementById('docker-grid').innerHTML = containerServices.map(renderService).join('');
+            document.getElementById('static-grid').innerHTML = staticServices.map(renderService).join('');
+            document.getElementById('unifi-grid').innerHTML = UNIFI_DATA.map(renderUnifiDevice).join('');
+            // KVM grid is rendered separately after API fetch
+        }
+
+        function filterServices(query) {
+            const searchTerm = query.toLowerCase();
+            const cards = document.querySelectorAll('.service-card');
+
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const searchData = card.getAttribute('data-search')?.toLowerCase() || '';
+                const isVisible = !searchTerm || searchData.includes(searchTerm);
+                card.style.display = isVisible ? 'block' : 'none';
+
+                if (isVisible) visibleCount++;
+            });
+
+            // Update no results messages
+            updateNoResults('docker', containerServices.length);
+            updateNoResults('static', staticServices.length);
+            updateNoResults('unifi', UNIFI_DATA.length);
+            updateNoResults('kvm', KVM_DATA.length);
+
+            document.getElementById('visible-count').textContent = visibleCount;
+        }
+
+        function updateNoResults(type, totalCount) {
+            const grid = document.getElementById(`${type}-grid`);
+            const noResults = document.getElementById(`${type}-no-results`);
+            const visibleCards = Array.from(grid.querySelectorAll('.service-card')).filter(c => c.style.display !== 'none');
+
+            if (visibleCards.length === 0 && totalCount > 0) {
+                grid.style.display = 'none';
+                noResults.style.display = 'block';
+            } else {
+                grid.style.display = 'grid';
+                noResults.style.display = 'none';
+            }
+        }
+
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+
+            currentTab = tabId;
+        }
+
+        // Fetch KVM devices from API
+        async function loadKvmDevices() {
+            try {
+                const response = await fetch('/api/kvm/devices');
+                if (response.ok) {
+                    const devices = await response.json();
+                    KVM_DATA = devices;
+
+                    // Update tab badge
+                    const kvmTab = document.querySelector('[data-tab="kvm-devices"]');
+                    const badge = kvmTab.querySelector('.tab-badge');
+                    badge.textContent = KVM_DATA.length;
+
+                    // Re-render KVM grid
+                    renderKvmGrid();
+
+                    // Update totals
+                    updateTotals();
+                }
+            } catch (error) {
+                console.error('Failed to load KVM devices:', error);
+            }
+        }
+
+        function renderKvmGrid() {
+            const grid = document.getElementById('kvm-grid');
+            if (KVM_DATA.length > 0) {
+                grid.innerHTML = KVM_DATA.map(renderKvmDevice).join('');
+            } else {
+                grid.innerHTML = '<div class="no-results"><div class="no-results-icon">📡</div><div class="no-results-text">No KVM devices configured</div></div>';
+            }
+        }
+
+        function updateTotals() {
+            const totalCount = containerServices.length + staticServices.length + UNIFI_DATA.length + KVM_DATA.length;
+            document.getElementById('total-count').textContent = totalCount;
+            document.getElementById('visible-count').textContent = totalCount;
+        }
+
+        // Fetch health status from API
+        async function loadHealthStatus() {
+            try {
+                const response = await fetch('/api/health/status');
+                if (response.ok) {
+                    HEALTH_STATUS = await response.json();
+                    updateHealthIndicators();
+                }
+            } catch (error) {
+                console.error('Failed to load health status:', error);
+            }
+        }
+
+        // Update health indicators in the DOM
+        function updateHealthIndicators() {
+            document.querySelectorAll('.service-card').forEach(card => {
+                const healthId = card.getAttribute('data-health-id');
+                if (!healthId) return;
+
+                const indicator = card.querySelector('.health-indicator');
+                if (!indicator) return;
+
+                const healthClass = getHealthStatus(healthId);
+                indicator.className = `health-indicator ${healthClass}`;
+            });
+        }
+
+        // Start periodic health status updates (every 60 seconds)
+        function startHealthMonitoring() {
+            // Initial load
+            loadHealthStatus();
+
+            // Refresh every 60 seconds
+            setInterval(loadHealthStatus, 60000);
+        }
+
+        // Network Dashboard Functions
+        let NETWORK_STATS = null;
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            if (days > 0) return `${days}d ${hours}h`;
+            return `${hours}h`;
+        }
+
+        async function loadNetworkStats() {
+            try {
+                const response = await fetch('/api/network/unifi/stats');
+                if (response.ok) {
+                    NETWORK_STATS = await response.json();
+                    renderNetworkDashboard();
+
+                    // Update Network tab badge with client count
+                    const networkTab = document.querySelector('[data-tab="network"]');
+                    const badge = networkTab.querySelector('.tab-badge');
+                    badge.textContent = NETWORK_STATS.total_clients || 0;
+                }
+            } catch (error) {
+                console.error('Failed to load network stats:', error);
+            }
+        }
+
+        function startNetworkMonitoring() {
+            // Initial load
+            loadNetworkStats();
+
+            // Refresh every 60 seconds
+            setInterval(loadNetworkStats, 60000);
+        }
+
+        function renderNetworkDashboard() {
+            if (!NETWORK_STATS) return;
+
+            renderNetworkStatCards();
+            renderAccessPoints();
+            renderTopClients();
+        }
+
+        function renderNetworkStatCards() {
+            const stats = NETWORK_STATS;
+            const gateway = stats.gateway || {};
+
+            const statsHTML = `
+                <div class="service-card">
+                    <div class="service-name">🖥️ Gateway</div>
+                    <div class="service-domain">${gateway.model || 'Unknown'}</div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">CPU:</span>
+                            <span class="detail-value">${gateway.cpu?.toFixed(1) || 0}%</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">RAM:</span>
+                            <span class="detail-value">${gateway.mem?.toFixed(1) || 0}%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-name">🌐 WAN Status</div>
+                    <div class="service-domain" style="color: var(--accent);">🟢 Online</div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Uptime:</span>
+                            <span class="detail-value">${formatUptime(gateway.uptime || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-name">👥 Clients</div>
+                    <div class="service-domain">${stats.total_clients || 0}</div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-value">${stats.wireless_clients || 0}W / ${stats.wired_clients || 0}E</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-name">📶 UniFi Devices</div>
+                    <div class="service-domain">${stats.total_devices || 0}</div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-value">${stats.aps || 0} APs / ${stats.switches || 0} SW</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('network-stats-grid').innerHTML = statsHTML;
+        }
+
+        function renderAccessPoints() {
+            const aps = NETWORK_STATS?.ap_details || [];
+
+            if (aps.length === 0) {
+                document.getElementById('network-aps-grid').innerHTML = '<div class="no-results"><div class="no-results-text">No access points found</div></div>';
+                return;
+            }
+
+            const apsHTML = aps.map(ap => `
+                <div class="service-card">
+                    <div class="service-name">${ap.name}</div>
+                    <div class="service-domain">${ap.num_sta || 0} clients</div>
+                    <div class="service-badges">
+                        <span class="badge unifi">${ap.model}</span>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <span class="detail-label">IP:</span>
+                            <span class="detail-value">${ap.ip}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Uptime:</span>
+                            <span class="detail-value">${formatUptime(ap.uptime || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('network-aps-grid').innerHTML = apsHTML;
+        }
+
+        function renderTopClients() {
+            const clients = NETWORK_STATS?.top_clients || [];
+
+            if (clients.length === 0) {
+                document.getElementById('network-top-clients').innerHTML = '<div class="no-results"><div class="no-results-text">No clients found</div></div>';
+                return;
+            }
+
+            const clientsHTML = `
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    ${clients.map((client, index) => `
+                        <div style="background: var(--surface); padding: 1rem; border-radius: 6px; border-left: 3px solid ${client.is_wired ? 'var(--accent)' : 'var(--unifi-color)'}; display: flex; align-items: center; gap: 1rem;">
+                            <div style="min-width: 30px; text-align: center; font-weight: 700; color: var(--text-tertiary);">${index + 1}</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: var(--text-primary);">${client.name}</div>
+                                <div style="font-size: 0.875rem; color: var(--text-secondary);">${client.ip} · ${client.network}</div>
+                            </div>
+                            <div style="font-weight: 700; color: var(--accent);">${formatBytes(client.total_bytes)}</div>
+                            <div style="font-size: 1.25rem;">${client.is_wired ? '🔌' : '📶'}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('network-top-clients').innerHTML = clientsHTML;
+        }
+
+        // Initialize
+        renderAll();
+        loadKvmDevices();
+        startNetworkMonitoring();
+        startHealthMonitoring();
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                switchTab(tab.getAttribute('data-tab'));
+            });
+        });
+
+        // Search
+        document.getElementById('search').addEventListener('input', (e) => {
+            filterServices(e.target.value);
+        });
+    </script>
+</body>
+</html>

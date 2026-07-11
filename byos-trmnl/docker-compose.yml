@@ -7,9 +7,10 @@ services:
     shm_size: "1gb"
     environment:
       # The TRMNL panel is a plain LAN WiFi client (NOT a tailnet node), so this
-      # MUST be utilities LAN IP over HTTP — the host DNS name resolves to a
-      # Tailscale IP for tailnet nodes, which the panel cannot reach.
-      BYOS_BASE_URL: "http://192.168.86.112:2300"
+      # must be LAN-reachable. host-utilities.isnadboy.com resolves via Technitium
+      # to utilities' LAN IP (the ts.net service is unreachable to the panel).
+      # Keep a DHCP reservation on utilities so that LAN IP stays stable.
+      BYOS_BASE_URL: "http://host-utilities.isnadboy.com:2300"
       BYOS_DEFAULT_REFRESH_RATE: "900"
       TZ: "America/Chicago"
     volumes:

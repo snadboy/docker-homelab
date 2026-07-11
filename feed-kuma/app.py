@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kuma-feed — read-only JSON feed of Uptime Kuma monitors, tags, and latest status.
+"""feed-kuma — read-only JSON feed of Uptime Kuma monitors, tags, and latest status.
 
 Reads the Uptime Kuma SQLite DB directly (named volume mounted at /data).
 The connection is opened normally (so SQLite can attach to the WAL shared-memory
@@ -101,5 +101,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"kuma-feed listening on :{PORT}, db={DB_PATH}", flush=True)
+    print(f"feed-kuma listening on :{PORT}, db={DB_PATH}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

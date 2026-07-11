@@ -1,8 +1,8 @@
 services:
-  kuma-feed:
+  feed-kuma:
     build: .
-    image: kuma-feed:local
-    container_name: kuma-feed
+    image: feed-kuma:local
+    container_name: feed-kuma
     environment:
       - TZ=America/Chicago
       - PORT=3099

@@ -1,0 +1,28 @@
+services:
+  byos-trmnl:
+    image: ghcr.io/snadboy/byos_trmnl:latest
+    container_name: byos-trmnl
+    restart: unless-stopped
+    # Headless Chromium needs more than the default 64MB /dev/shm for X renders.
+    shm_size: "1gb"
+    environment:
+      # The TRMNL panel is a plain LAN WiFi client (NOT a tailnet node), so this
+      # MUST be utilities LAN IP over HTTP — the host DNS name resolves to a
+      # Tailscale IP for tailnet nodes, which the panel cannot reach.
+      BYOS_BASE_URL: "http://192.168.86.112:2300"
+      BYOS_DEFAULT_REFRESH_RATE: "900"
+      TZ: "America/Chicago"
+    volumes:
+      - byos-trmnl-data:/app/data     # sqlite registry + playlists (persist)
+    ports:
+      - "2300:2300"                    # published for the LAN e-ink device
+    labels:
+      # DockTail → Tailscale Service for admin/browser access from the tailnet
+      # (trmnl.swallow-spectrum.ts.net). The device does NOT use this.
+      - "docktail.service.enable=true"
+      - "docktail.service.name=trmnl"
+      - "docktail.service.port=2300"
+
+volumes:
+  byos-trmnl-data:
+    external: true

@@ -13,6 +13,9 @@ services:
       BYOS_BASE_URL: "http://host-utilities.isnadboy.com:2300"
       BYOS_DEFAULT_REFRESH_RATE: "900"
       TZ: "America/Chicago"
+      # Proxmox API token for the pve_load plugin (values in .env, gitignored)
+      PVE_TOKEN_ID: "${PVE_TOKEN_ID}"
+      PVE_TOKEN_SECRET: "${PVE_TOKEN_SECRET}"
     volumes:
       - byos-trmnl-data:/app/data     # sqlite registry + playlists (persist)
     ports:

@@ -18,7 +18,7 @@ ts_static_services:
   - { name: unifi,         target: "https+insecure://192.168.86.1:443" }     # UniFi network app
   - { name: ha,            target: "http://192.168.86.224:8123" }            # Home Assistant
   - { name: technitium,    target: "http://192.168.86.76:5380" }             # DNS (svc:ns collides w/ device ns)
-  - { name: pkdb,          target: "http://192.168.86.220:8484" }            # sdevs
+  - { name: pkdb,          target: "http://192.168.86.160:8484" }            # pkdb VM (migrated off sdevs 2026-07-12) 
   - { name: plex,          target: "http://192.168.86.40:32400" }            # web UI only
   - { name: homelab-bar,   target: "http://192.168.86.164:3000" }
 

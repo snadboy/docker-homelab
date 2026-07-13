@@ -3,9 +3,10 @@
     {
       "name": "forbin",
       "nodes": [
-        { "name": "pve-colossus", "ip": "192.168.86.105" },
-        { "name": "pve-guardian", "ip": "192.168.86.106" },
-        { "name": "pve-multivac", "ip": "192.168.86.104" }
+        { "name": "pve-maxwell", "ip": "192.168.86.105" },
+        { "name": "pve-euler",   "ip": "192.168.86.107" },
+        { "name": "pve-gauss",   "ip": "192.168.86.109" },
+        { "name": "pve-faraday", "ip": "192.168.86.111" }
       ]
     }
   ],

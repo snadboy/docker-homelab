@@ -1,0 +1,41 @@
+# PKDB — the family document archive (pkdb VM, VMID 100 on pve-maxwell).
+#
+# This is snadboy's PROD wiring, managed by dockhand like every other stack.
+# The application lives in github.com/snadboy/pkdb (public ghcr image, private
+# repo); that repo also carries the distributable "in-a-box" compose + docs —
+# compose changes there that affect prod should be mirrored here deliberately.
+#
+# State: /srv/pkdb-data on the VM = /data in-container. THE archive lives
+# there (SQLite + documents); PBS backs up the VM nightly, db_snapshot writes
+# a consistent DB copy at 02:30 CT. The container is stateless and replaceable.
+#
+# Network: svc:pkdb is served by the ts-static-serves HA proxy pair
+# (svc-euler + svc-gauss → http://192.168.86.160:8484) — deliberately NOT
+# DockTail; the archive host advertises nothing itself.
+
+name: pkdb
+
+services:
+  pkdb:
+    # Deliberate upgrades: dockhand redeploys pull whatever this tag points at.
+    image: ghcr.io/snadboy/pkdb:${PKDB_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    volumes:
+      # THE state — everything PKDB is, minus code.
+      - /srv/pkdb-data:/data
+      # Shareables carries the ANTHROPIC_API_KEY/VOYAGE_API_KEY fallbacks the
+      # tick and tools read (SHAREABLES_ROOT convention).
+      - /mnt/shareables:/mnt/shareables:ro
+      # rclone config DIRECTORY, read-write (token refresh persistence) for
+      # the gdrive:Ingest mailbox remote.
+      - /home/snadboy/.config/rclone:/etc/pkdb
+    healthcheck:
+      # /healthz is a HEARTBEAT check (503 = stale tick) — container health
+      # only requires the server to ANSWER; plain curl (no -f) succeeds on
+      # 503 so a stale tick doesn't flap the container.
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:8484/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 4

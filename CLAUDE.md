@@ -14,10 +14,16 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 |------|-----------------|------------|------------|
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
 | arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr |
-| cadre | 7 | hawser-edge agent | traefik + traefik-http-provider, zigbee2mqtt (×3) |
+| edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex |
 | bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
 | fetch | 12 | hawser-edge agent | sabnzbd |
+
+> **Retired 2026-07:** Traefik and the **cadre** VM (106, pve-maxwell, stopped, onboot=0).
+> All ingress is Tailscale VIP services (`*.swallow-spectrum.ts.net`, managed by DockTail
+> labels / ts-static-serves). The `*.isnadboy.com` wildcard DNS record is intentionally
+> gone — do not re-add it. `snadboy.revp.*` compose labels are inert leftovers.
+> zigbee2mqtt moved off cadre: house → utilities, laundry + office → edge.
 
 (Env 9 "ansible-controller" was deleted 2026-05-02 — it was a leftover from the
 pre-migration ansible-controller VM. semaphore was reattached to env 1.)
@@ -29,9 +35,8 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 **semaphore** (`semaphore/docker-compose.yml`)
 - Port 3002 on utilities (3000 taken by Dockhand)
 - `SEMAPHORE_ADMIN_PASSWORD` and `SEMAPHORE_ENCRYPTION_KEY` in `.env`
-- Traefik label: `snadboy.revp.3002.domain=semaphore.isnadboy.com`
 
-**traefik-http-provider** (`traefik-http-provider/docker-compose.yml`)
+**traefik-http-provider** — RETIRED with Traefik (compose dir kept for history)
 - `dns_search: ["tail65635.ts.net"]` required — container can't resolve Tailscale short hostnames without it
 - Volume: `/var/lib/docker/volumes/traefik-http-provider-config/_data/` on cadre
 - `devs` disabled in `ssh-hosts.yaml`
@@ -43,9 +48,9 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 - Earlier GPU-passthrough attempt on multivac VM was reverted because VFIO caused hard host lockups; the LXC bind-mount path is fundamentally different and stable.
 
 **beszel** (`beszel/docker-compose.yml`) — system-metrics monitoring (complements Uptime Kuma)
-- Container port 8090; host-side mapped to 8091 on utilities. Traefik label uses container port: `snadboy.revp.8090.domain=beszel.isnadboy.com`
+- Container port 8090; host-side mapped to 8091 on utilities.
 - External named volume `beszel-data` (SQLite/PocketBase — pre-create with `docker volume create beszel-data` before first deploy)
-- `APP_URL=https://beszel.isnadboy.com` baked into compose; admin user is created via web UI on first launch
+- `APP_URL=https://beszel.swallow-spectrum.ts.net` baked into compose; admin user is created via web UI on first launch
 - Agents installed by `ansible/playbooks/beszel-agent-install.yml` using the `beszel-agent` role; auth via universal token (hub Settings → Tokens) + hub SSH public key, set as `BESZEL_AGENT_KEY` / `BESZEL_AGENT_TOKEN` in `semaphore/.env` (matches the `BULLETIN_API_KEY` pattern; role reads via `lookup('env', ...)`)
 
 ---

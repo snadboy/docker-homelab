@@ -1,0 +1,20 @@
+services:
+  maintainerr:
+    image: ghcr.io/jorenn92/maintainerr:latest
+    container_name: maintainerr
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=maintainerr"
+      - "docktail.service.port=6246"
+      - "docktail.service.service-port=443"
+    volumes:
+      - maintainerr-data:/opt/data
+    environment:
+      - TZ=America/Chicago
+    ports:
+      - 6246:6246
+    restart: unless-stopped
+
+volumes:
+  maintainerr-data:
+    external: true

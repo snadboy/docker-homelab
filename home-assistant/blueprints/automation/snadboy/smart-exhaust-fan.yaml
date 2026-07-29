@@ -71,12 +71,46 @@ blueprint:
     max_on_duration:
       name: Maximum On Duration
       description: Safety timeout — turn off fan if on longer than this
-      default: 60
+      default: 120
       selector:
         number:
           min: 1
-          max: 120
+          max: 240
           step: 1
+          unit_of_measurement: minutes
+    humidity_sensor:
+      name: Humidity Sensor
+      description: Absolute humidity sensor in the bathroom
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+    reference_humidity_sensor:
+      name: Reference Humidity Sensor
+      description: Humidity sensor in a nearby dry room (e.g., hallway) used as recovery baseline
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+    humidity_recovery_offset:
+      name: Humidity Recovery Offset
+      description: Fan stays on until bathroom humidity is within this many % of the reference sensor
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          step: 1
+          unit_of_measurement: "%"
+    humidity_check_interval:
+      name: Humidity Check Interval
+      description: Minutes between humidity recovery checks while waiting
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 30
+          step: 5
           unit_of_measurement: minutes
     extended_duration:
       name: Extended Duration
@@ -111,6 +145,10 @@ blueprint:
 
 variables:
   fan_name: "{{ this.entity_id | replace('automation.', '') }}"
+  humidity_sensor: !input humidity_sensor
+  reference_humidity_sensor: !input reference_humidity_sensor
+  humidity_recovery_offset: !input humidity_recovery_offset
+  humidity_check_interval: !input humidity_check_interval
   extended_duration: !input extended_duration
   stutter_pre_delay: !input stutter_pre_delay
   stutter_off_duration: !input stutter_off_duration
@@ -175,14 +213,23 @@ actions:
           - condition: state
             entity_id: !input fan_entity
             state: "off"
+          - action: stated.set
+            data:
+              name: "{{ fan_name }}_trigger_reason"
+              value: "{{ trigger.id | replace('_on', '') }}"
+              var_type: string
           - action: homeassistant.turn_on
             target:
               entity_id: !input fan_entity
 
-      - alias: "Safety timeout — force OFF"
+      - alias: "Safety timeout — force OFF (manual/unknown triggers only)"
         conditions:
           - condition: trigger
             id: safety_timeout
+          - condition: template
+            value_template: >-
+              {{ not is_state('stated.' ~ fan_name ~ '_trigger_reason', 'humidity')
+                 and not is_state('stated.' ~ fan_name ~ '_trigger_reason', 'occupancy') }}
         sequence:
           - action: homeassistant.turn_off
             target:
@@ -190,6 +237,9 @@ actions:
           - action: stated.delete
             data:
               name: "{{ fan_name }}_extended"
+          - action: stated.delete
+            data:
+              name: "{{ fan_name }}_trigger_reason"
 
       - alias: "Extended mode expired — evaluate OFF"
         conditions:
@@ -209,9 +259,27 @@ actions:
           - condition: numeric_state
             entity_id: !input humidity_rate_sensor
             below: !input humidity_rate_threshold
+          - alias: "Wait for humidity recovery"
+            repeat:
+              until:
+                - condition: or
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ (states(humidity_sensor) | float(0) -
+                            states(reference_humidity_sensor) | float(0))
+                           <= humidity_recovery_offset }}
+                    - condition: template
+                      value_template: "{{ repeat.index >= 18 }}"
+              sequence:
+                - delay:
+                    minutes: "{{ humidity_check_interval }}"
           - action: homeassistant.turn_off
             target:
               entity_id: !input fan_entity
+          - action: stated.delete
+            data:
+              name: "{{ fan_name }}_trigger_reason"
 
       - alias: "Toggle detection — activate extended mode"
         conditions:
@@ -244,17 +312,17 @@ actions:
             target:
               entity_id: !input fan_entity
 
-      - alias: "Fan turned off manually — clear extended mode"
+      - alias: "Fan turned off — clear stated vars"
         conditions:
           - condition: trigger
             id: fan_off
-          - condition: template
-            value_template: >-
-              {{ is_state('stated.' ~ fan_name ~ '_extended', 'on') }}
         sequence:
           - action: stated.delete
             data:
               name: "{{ fan_name }}_extended"
+          - action: stated.delete
+            data:
+              name: "{{ fan_name }}_trigger_reason"
 
       - alias: "Normal OFF — unoccupied, humidity stable, not extended"
         conditions:
@@ -277,8 +345,26 @@ actions:
           - condition: template
             value_template: >-
               {{ not is_state('stated.' ~ fan_name ~ '_extended', 'on') }}
+          - alias: "Wait for humidity recovery"
+            repeat:
+              until:
+                - condition: or
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ (states(humidity_sensor) | float(0) -
+                            states(reference_humidity_sensor) | float(0))
+                           <= humidity_recovery_offset }}
+                    - condition: template
+                      value_template: "{{ repeat.index >= 18 }}"
+              sequence:
+                - delay:
+                    minutes: "{{ humidity_check_interval }}"
           - action: homeassistant.turn_off
             target:
               entity_id: !input fan_entity
+          - action: stated.delete
+            data:
+              name: "{{ fan_name }}_trigger_reason"
 
 mode: restart

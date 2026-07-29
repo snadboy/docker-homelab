@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/snadboy/docker-homelab (main)
 **Local:** `/home/snadboy/projects/docker-homelab`
-**Last Updated:** 2026-07-28
+**Last Updated:** 2026-07-29
 
 ---
 
@@ -56,7 +56,20 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 **maintainerr** (`maintainerr/docker-compose.yml`) — rules-based Plex library retention/cleanup (added 2026-07)
 - `ghcr.io/maintainerr/maintainerr` (v3; migrated off deprecated `ghcr.io/jorenn92/maintainerr` v2.19 → v3.19 with a backup, 2026-07). Port 6246, external volume `maintainerr-data`. TS service `maintainerr.swallow-spectrum.ts.net` (DockTail).
 - Plex connected via web UI (host-plex:32400 + admin token). **Two live rule groups**, both ARMED (`arrAction=Delete`, `listExclusions=1`, `forceSeerr=1`, `deleteAfterDays=30`): "Leaving Soon - TV" (collection id 1, Sonarr #1, Delete entire show) and "Leaving Soon - Movies" (collection id 2, Radarr #1). 30-day grace = Leaving Soon veto window.
-- Maintainerr's "Amount of watched episodes" reads **all-user Plex-native** watch state — more accurate for "never watched" than Tautulli (whose history only starts 2025-04; Plex's own `/status/sessions/history/all` goes back to 2022, all accounts).
+- **Watched-episode properties (corrected 2026-07-29 — the earlier note here was imprecise).** Two different Plex properties exist and they disagree:
+  - `sw_viewedEpisodes` (id 15) — episodes with a **watch-history** entry (`/status/sessions/history/all`, all accounts). Still better than Tautulli (history only from 2025-04), but Plex's own history only reaches ~2022 and it counts *partial* plays.
+  - `sw_markedWatchedEpisodes` (id 45) — `viewedLeafCount`, Plex's **watched flag**. Permanent, includes manually-marked-watched. This is the watched/unwatched state the Plex UI shows.
+  - Measured divergence: Crime Story 41 marked / 39 history; The Twilight Zone 155 marked / **24** history.
+  - Use `sw_markedWatchedEpisodes < sw_episodes` for "has unwatched episodes" — using `sw_viewedEpisodes` there reads pre-2022 history gaps as unwatched and flags **fully-watched** shows as abandoned. Use `sw_viewedEpisodes == 0` for "nobody ever pressed play" (stricter, safer). `sw_lastWatched` (13) is history-based too and returns **null** with no history, so `BEFORE` fails safe.
+- **TV rule definition** (rewritten 2026-07-29 — "never watched or abandoned"), collection 1:
+  - section 0: `sw_viewedEpisodes == 0` AND `sw_lastEpisodeAddedAt` BEFORE 365d
+  - OR section 1: `sw_markedWatchedEpisodes < sw_episodes` AND `sw_lastWatched` BEFORE 365d AND `sw_lastEpisodeAddedAt` BEFORE 365d
+  - Both branches keep the `sw_lastEpisodeAddedAt` staleness guard **by choice**: it's what stops freshly-downloaded, not-yet-watched shows being queued (without it the rule matched 384 shows / ~34 TB instead of 22 / 2.26 TB). Cost: abandoned-but-still-airing shows (For All Mankind, Bridgerton, Silo) are protected and never caught.
+  - Sections: rules within a section are ANDed; each section joins the previous via the operator on that section's **first** rule (`null` for section 0, `"1"` = OR).
+  - Verify any rule change with `POST /api/rules/test` `{rulegroupId, mediaId}` — it returns a per-section, per-rule breakdown with the actual values. This is how the fully-watched-shows bug above was caught.
+- **`PUT /api/rules` is destructive if under-specified.** It replaces the whole group, and these reset silently when omitted: `deleteAfterDays` (→ null = **no grace period**), `listExclusions` (→ false), `forceSeerr` (→ false), `arrAction`, `sonarrSettingsId`. Changing `libraryId`/`dataType`/`manualCollection` **wipes all collection media and exclusions**. Back up first (`docker exec maintainerr cp /opt/data/maintainerr.sqlite /opt/data/maintainerr.sqlite.bak-<ts>`), pass those fields explicitly, verify in the DB after. Rebuild with `POST /api/rules/{id}/execute`, poll `GET /api/rules/execute/status`.
+- **Plex `addedAt` is corrupted for ~43% of the TV library** — 9,078 of 21,211 episodes are all stamped **2026-07-20** (a mass re-import). Any rule keyed on `sw_lastEpisodeAddedAt` is therefore over-protective until 2027-07-20 (e.g. The Alfred Hitchcock Hour reports "last episode added 8 days ago"). `sw_lastEpisodeAiredAt` (id 27) is immune (air-date metadata) and would match 287 shows / 22.30 TB instead of 22 / 2.26 TB — but it gives **no** protection to old shows downloaded recently, so it was deliberately not adopted.
+- An empty Leaving Soon collection means nothing is queued *right now* — **not** that the rules are off. They are armed and repopulate continuously.
 - **v3 config gotcha:** the delete flags (`listExclusions`/`forceSeerr`/`arrAction`/`deleteAfterDays`) live on the **`collection`** table, NOT `rule_group`. `GET /api/rules` reads rule_group and shows them as `None` — read the `collection` table in `maintainerr.sqlite` (`docker cp maintainerr:/opt/data/maintainerr.sqlite`) for authoritative values.
 - **One-time live purge (2026-07-28, grace bypassed just this once):** deleted **464 titles / ~9.7 TB** (316 movies via Radarr 1508→1192; 148 shows via Sonarr 993→845; TV 71→65.4 TB, Movies 20→16.0 TB). Driven **item-by-item** via `POST /api/collections/media/handle` `{collectionId, mediaId=ratingKey}` — this per-item endpoint **ignores grace** and deletes now, so the 30-day setting was never changed (no config to restore). 53 stale "ghost" rows (dead ratingKeys from a Plex rescan; content lives under new keys) returned `removed-missing` and freed nothing — expect ~10% of any tracked count to be such ghosts. Import-list exclusions written (Radarr 318 / Sonarr 393): to recover a deleted title, remove its exclusion in *arr before re-requesting or Seerr silently refuses the re-grab. Radarr/Sonarr **recycleBin is empty** → deletes are permanent unlinks, space freed immediately. After a bulk delete, run ONE full Plex section scan + emptyTrash per section (per-item Connect scans coalesce/drop).
 
@@ -88,4 +101,4 @@ Located in `ansible/` subdirectory, used by Semaphore.
 
 ---
 
-## Last Updated: 2026-07-28
+## Last Updated: 2026-07-29

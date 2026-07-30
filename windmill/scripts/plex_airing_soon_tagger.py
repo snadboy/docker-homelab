@@ -4,15 +4,15 @@
 
 # Windmill path: f/plex/airing_soon_tagger  (workspace w1)
 # Schedule: "0 20 2,8,14,20 * * *" UTC (6-hourly, rolls the 7-day window)
-# Pair: Agregarr sonarrtag config 953887 "Airing This Week" (tag 'airing-soon',
-#       Plex collection 75580, TV library). This file is the source of record.
+# Pair: Agregarr sonarrtag config 953887 "Airing In The Next 7 Days" (tag
+#       'airing-soon', Plex collection 75580, TV library). Source of record.
 
 import requests
 import wmill
 from datetime import datetime, timedelta, timezone
 
 TAG_LABEL = "airing-soon"
-COLLECTION_NAME = "Airing This Week"
+COLLECTION_NAME = "Airing In The Next 7 Days"
 PLEX_TV_SECTION = 2
 
 
@@ -22,7 +22,7 @@ def main(
     plex_url: str = "http://host-plex.isnadboy.com:32400",
     dry_run: bool = False,
 ):
-    """Maintain the 'Airing This Week' shelf: monitored shows whose next episode airs
+    """Maintain the 'Airing In The Next 7 Days' shelf: monitored shows whose next episode airs
     within `window_days`.
 
     Mechanism: sync the Sonarr tag 'airing-soon' to the qualifying set; Agregarr's

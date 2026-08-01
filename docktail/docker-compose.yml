@@ -5,6 +5,23 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # ⚠️ This bind is fragile by nature and CANNOT be made safe from compose.
+      # tailscaled.service uses `RuntimeDirectory=tailscale`, so systemd deletes
+      # /run/tailscale on stop and recreates it with a new inode on start. This
+      # mount is resolved at container-create time, so after any tailscaled
+      # restart the container holds the old orphaned inode, sees an empty
+      # directory, and fails with "tailscaled.sock: no such file or directory"
+      # while the socket is plainly present on the host.
+      #
+      # The host-side fix is `RuntimeDirectoryPreserve=yes` —
+      #   ansible/roles/tailscaled-runtime-dir  (playbook: tailscaled-runtime-dir.yml)
+      # Run that on every docktail host; it is zero-impact.
+      #
+      # If docktail is already unhealthy with that error, this playbook does NOT
+      # repair it — the container must be recreated once to re-resolve the bind.
+      # Read the DockTail trap in ~/projects/docs/infrastructure.md first:
+      # recreating docktail re-registers its services and can leave them
+      # advertised-but-unregistered (remedy: restart tailscaled on that host).
       - /var/run/tailscale:/var/run/tailscale
     environment:
       - TAILSCALE_OAUTH_CLIENT_ID=${TAILSCALE_OAUTH_CLIENT_ID}

@@ -1,0 +1,41 @@
+---
+# Keep /run/tailscale across tailscaled restarts so containers that bind-mount
+# it (docktail) don't end up holding an orphaned inode. See the drop-in file
+# for the full explanation.
+
+- name: Ensure tailscaled systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/tailscaled.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install RuntimeDirectoryPreserve drop-in
+  ansible.builtin.copy:
+    src: 10-runtime-dir-preserve.conf
+    dest: /etc/systemd/system/tailscaled.service.d/10-runtime-dir-preserve.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# Deliberately NO tailscaled restart: the setting applies from the next stop,
+# so this role is zero-impact. Restarting tailscaled here would recreate
+# /run/tailscale one more time and re-break any running docktail.
+
+- name: Flush handlers so the verification below sees the loaded unit
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify systemd has picked up the setting
+  ansible.builtin.command: systemctl show tailscaled --property=RuntimeDirectoryPreserve
+  register: _tsrd_show
+  changed_when: false
+
+- name: Assert RuntimeDirectoryPreserve is active
+  ansible.builtin.assert:
+    that: "'RuntimeDirectoryPreserve=yes' in _tsrd_show.stdout"
+    fail_msg: >-
+      Drop-in installed but systemd still reports {{ _tsrd_show.stdout }}.
+      Check for a conflicting drop-in in /etc/systemd/system/tailscaled.service.d/.
+    success_msg: "RuntimeDirectoryPreserve=yes active"

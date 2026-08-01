@@ -1,0 +1,20 @@
+---
+# Stop tailscaled restarts from orphaning the /run/tailscale bind mount that
+# docktail depends on.
+#
+#   uvx --from ansible-core ansible-playbook playbooks/tailscaled-runtime-dir.yml
+#
+# Zero-impact: installs a systemd drop-in and reloads the daemon. It does NOT
+# restart tailscaled (that would recreate the directory and re-break docktail).
+#
+# A docktail already holding a stale mount is not repaired by this -- it must be
+# recreated once (`docker compose up -d --force-recreate docktail`) to re-resolve
+# the bind. Do that AFTER this playbook, and see the DockTail trap in
+# ~/projects/docs/infrastructure.md first: recreating docktail re-registers its
+# services and can desync them, whose remedy is a tailscaled restart.
+
+- name: Preserve /run/tailscale across tailscaled restarts
+  hosts: docktail_hosts
+  gather_facts: false
+  roles:
+    - tailscaled-runtime-dir

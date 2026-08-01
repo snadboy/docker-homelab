@@ -22,6 +22,7 @@ SERVARR = [
     ("Requests",   [("Overseerr", "overseerr", "overseerr")]),
     ("Download",   [("SABnzbd", "sabnzbd", "sabnzbd")]),
     ("Monitoring", [("Tautulli", "tautulli", "tautulli"), ("Tracearr", "tracearr", None)]),
+    ("Retention",  [("Maintainerr", "maintainerr", "maintainerr")]),  # "Leaving Soon"
 ]
 
 # Docker hosts: (host, node-or-None, access) access = ("ssh",user,host) | ("pct",pvehost,vmid)
@@ -29,15 +30,19 @@ DOCKER_HOSTS = [
     ("utilities", "euler",   ("ssh", "snadboy", "utilities")),
     ("arr",       "gauss",   ("ssh", "snadboy", "arr")),
     ("fetch",     "gauss",   ("ssh", "snadboy", "fetch")),
-    ("cadre",     "maxwell", ("ssh", "snadboy", "cadre")),
     ("bedrock",   "maxwell", ("ssh", "snadboy", "bedrock")),
     ("plex-lxc",  "euler",   ("pct", "pve-euler", "107")),
-    ("sdevs",     None,      ("ssh", "snadboy", "sdevs")),
+    ("sdevs",     "faraday", ("ssh", "snadboy", "sdevs")),
 ]
 
 def ssh(host, cmd, user="root", timeout=20):
+    # Host keys are NOT pinned: the transport is the WireGuard-authenticated,
+    # ACL-gated tailnet, and homelab VMs get rebuilt (new host keys) often enough
+    # that accept-new would hard-fail with "REMOTE HOST IDENTIFICATION HAS CHANGED"
+    # and silently blank a hub. /dev/null + no-checking keeps it self-healing.
     try:
-        r = subprocess.run(["ssh", "-o", "StrictHostKeyChecking=accept-new",
+        r = subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no",
+                            "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR",
                             "-o", "ConnectTimeout=8", f"{user}@{host}", cmd],
                            capture_output=True, text=True, timeout=timeout)
         return r.stdout if r.returncode == 0 else None
@@ -104,8 +109,10 @@ li{display:flex;align-items:center;gap:.5rem;padding:.22rem 0;font-size:.9rem}
 .dot.on{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.off{background:var(--dim)}
 .gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gid{color:var(--dim);font-size:.72rem}
 .foot{color:var(--dim);font-size:.72rem;margin-top:2rem;text-align:center}
-a.svc{color:var(--link);text-decoration:none;display:flex;align-items:center;gap:.55rem}
+a.svc{color:var(--link);text-decoration:none;display:flex;align-items:center;gap:.55rem;flex:1 1 auto;min-width:0}
 a.svc:hover{text-decoration:underline}
+.stat{color:var(--dim);font-size:.75rem;white-space:nowrap;flex:0 0 auto;margin-left:auto}
+.stat.down{color:var(--off)}
 .ico{width:22px;height:22px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
 .ico svg{width:22px;height:22px}
 .badge-ico{background:var(--edge);color:var(--fg);border-radius:5px;font-size:.7rem;font-weight:700}
@@ -237,16 +244,119 @@ def render_proxmox():
             f'<h3 class="section">Backup</h3>{pbs_cards()}')
     return page("Proxmox", "Virtualization cluster and backup servers — click any node for its web UI.", body)
 
+# ---------- servarr live status ----------
+# Each app's status + one at-a-glance metric is gathered by SSHing to the host it
+# runs on and reading the API key straight out of the running container, then
+# curling localhost. Keeps secrets on the media host (where they already live) —
+# nothing is copied onto the advertiser VM or into the repo. All *arr apps live on
+# `arr`; SABnzbd on `fetch`. Icon-only apps (Prowlarr/Bazarr/Agregarr/Tracearr)
+# get an up/down dot but no metric.
+_PROBE_ARR = r'''
+gx(){ docker exec "$1" cat "$2" 2>/dev/null; }
+xk(){ gx "$1" /config/config.xml | grep -oiE '<ApiKey>[^<]+' | sed 's/<ApiKey>//i'; }
+code(){ curl -s -o /dev/null -w '%{http_code}' -m5 "http://localhost:$1/" 2>/dev/null; }
+num(){ grep -oE "\"$1\" *: *\"?[0-9]+" | head -1 | grep -oE '[0-9]+$'; }
+k=$(xk sonarr); q=$(curl -s -m6 "http://localhost:8989/api/v3/queue?apikey=$k" | num totalRecords); echo "sonarr|$(code 8989)|queue=${q}"
+k=$(xk radarr); q=$(curl -s -m6 "http://localhost:7878/api/v3/queue?apikey=$k" | num totalRecords); echo "radarr|$(code 7878)|queue=${q}"
+echo "prowlarr|$(code 9696)|"
+echo "bazarr|$(code 6767)|"
+echo "agregarr|$(code 7171)|"
+echo "tracearr|$(code 3000)|"
+k=$(gx overseerr /app/config/settings.json | grep -oE '"apiKey": *"[^"]+' | head -1 | sed -E 's/.*"apiKey": *"//')
+p=$(curl -s -m6 -H "X-Api-Key: $k" http://localhost:5055/api/v1/request/count | num pending); echo "overseerr|$(code 5055)|pending=${p}"
+k=$(gx tautulli /config/config.ini | grep -E '^api_key' | head -1 | sed 's/.*= *//')
+s=$(curl -s -m6 "http://localhost:8181/api/v2?apikey=$k&cmd=get_activity&out_type=json" | num stream_count); echo "tautulli|$(code 8181)|streams=${s}"
+l=$(curl -s -m6 http://localhost:6246/api/collections | python3 -c "import sys,json;d=json.load(sys.stdin);print(sum(c.get('mediaCount',0) for c in d if str(c.get('title','')).lower().startswith('leaving soon') and c.get('isActive')))" 2>/dev/null)
+echo "maintainerr|$(code 6246)|leaving=${l}"
+'''
+
+_PROBE_FETCH = r'''
+k=$(docker exec sabnzbd cat /config/sabnzbd.ini 2>/dev/null | grep -E '^api_key' | head -1 | sed 's/.*= *//')
+j=$(curl -s -m6 "http://localhost:8080/api?mode=queue&output=json&apikey=$k")
+st=$(printf '%s' "$j" | grep -oE '"status":"[^"]+' | head -1 | sed 's/.*"//')
+kb=$(printf '%s' "$j" | grep -oE '"kbpersec":"[^"]+' | sed 's/.*"//')
+sl=$(printf '%s' "$j" | grep -oE '"noofslots":[0-9]+' | grep -oE '[0-9]+')
+echo "sabnzbd|$(curl -s -o /dev/null -w '%{http_code}' -m5 http://localhost:8080/)|status=${st};kbps=${kb};slots=${sl}"
+'''
+
+def _rate(kbps):
+    try:
+        kb = float(kbps)
+    except Exception:
+        return ""
+    return f"{kb/1024:.1f} MB/s" if kb >= 1024 else f"{kb:.0f} KB/s"
+
+def _fmt_stat(svc, kv):
+    if svc in ("sonarr", "radarr"):
+        q = kv.get("queue")
+        return f"{q} in queue" if q not in (None, "") else ""
+    if svc == "overseerr":
+        p = kv.get("pending")
+        return f"{p} pending" if p not in (None, "") else ""
+    if svc == "tautulli":
+        s = kv.get("streams")
+        if s in (None, ""):
+            return ""
+        return f"{s} streaming" if s != "0" else "idle"
+    if svc == "maintainerr":
+        l = kv.get("leaving")
+        return f"{l} leaving soon" if l not in (None, "") else ""
+    if svc == "sabnzbd":
+        st = kv.get("status", "")
+        if st == "Downloading":
+            r = _rate(kv.get("kbps", ""))
+            sl = kv.get("slots", "0")
+            return f"↓ {r} · {sl} queued" if r else f"{sl} queued"
+        return "idle" if st in ("Idle", "", None) else st.lower()
+    return ""
+
+def _parse_probe(out):
+    res = {}
+    if not out:
+        return res
+    for ln in out.splitlines():
+        parts = ln.split("|")
+        if len(parts) < 2 or not parts[0].strip():
+            continue
+        svc, code = parts[0].strip(), parts[1].strip()
+        kv = {}
+        if len(parts) >= 3 and parts[2].strip():
+            for pair in parts[2].split(";"):
+                if "=" in pair:
+                    a, b = pair.split("=", 1)
+                    kv[a.strip()] = b.strip()
+        res[svc] = {"up": bool(code) and code != "000", "stat": _fmt_stat(svc, kv)}
+    return res
+
+def servarr_status():
+    st = {}
+    st.update(_parse_probe(ssh("arr", _PROBE_ARR, user="snadboy", timeout=50)))
+    st.update(_parse_probe(ssh("fetch", _PROBE_FETCH, user="snadboy", timeout=30)))
+    return st
+
 # ---------- servarr ----------
 def render_servarr():
+    status = servarr_status()
     cards = []
     for heading, items in SERVARR:
         links = ""
         for label, svc, slug in items:
-            links += (f'<li><a class="svc" href="https://{svc}.{TS}">'
-                      f'{icon_or_badge(label, slug)}<span>{html.escape(label)}</span></a></li>')
+            st = status.get(svc, {})
+            up = st.get("up", False)
+            stat = st.get("stat", "")
+            if not up:
+                stat_html = '<span class="stat down">down</span>'
+            elif stat:
+                stat_html = f'<span class="stat">{html.escape(stat)}</span>'
+            else:
+                stat_html = ""
+            links += (f'<li><span class="dot {"on" if up else "off"}"></span>'
+                      f'<a class="svc" href="https://{svc}.{TS}">'
+                      f'{icon_or_badge(label, slug)}<span class="gname">{html.escape(label)}</span></a>'
+                      f'{stat_html}</li>')
         cards.append(f'<div class="card"><h2>{html.escape(heading)}</h2><ul>{links}</ul></div>')
-    return page("Media Automation", "The Servarr media stack — click any service to open it.",
+    return page("Media Automation",
+                "The Servarr media stack — live status; green = up, grey = down. Click any service to open it.",
                 '<div class="grid">' + "".join(cards) + "</div>")
 
 # ---------- containers ----------

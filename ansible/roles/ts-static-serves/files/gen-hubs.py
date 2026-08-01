@@ -124,6 +124,9 @@ a.svc:hover{text-decoration:underline}
 .search input{flex:0 1 360px;background:var(--card);border:1px solid var(--edge);
 border-radius:8px;color:var(--fg);padding:.55rem .8rem;font-size:.9rem;outline:none}
 .search input:focus{border-color:var(--link)}
+.toplink{margin-left:auto;color:var(--link);text-decoration:none;font-size:.85rem;
+border:1px solid var(--edge);border-radius:8px;padding:.45rem .75rem;white-space:nowrap}
+.toplink:hover{border-color:var(--link);background:var(--card)}
 a.cname{flex:1;color:var(--fg);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 a.cname:hover{color:var(--link);text-decoration:underline}
 """
@@ -427,7 +430,8 @@ def render_containers():
         cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
                      f'<p class="meta">Docker · {running}/{len(rows)} running</p><ul>{li}</ul></div>')
     search = ('<div class="search"><input id="q" type="search" placeholder="Filter containers or hosts…" '
-              'autocomplete="off" autofocus><span id="cnt" class="usage"></span></div>')
+              'autocomplete="off" autofocus><span id="cnt" class="usage"></span>'
+              f'<a class="toplink" href="https://dockhand.{TS}">Dockhand ⬈</a></div>')
     return page("Docker Containers",
                 f"All containers across the fleet — {running_total} running of {total} total, grouped by host with "
                 f"its PVE node. Green = running, amber = unhealthy, grey = stopped. Click a container to open it in Dockhand.",

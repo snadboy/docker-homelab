@@ -5,7 +5,6 @@
 
 # Windmill path: f/plex/maintainerr_edition_pill_sync  (workspace w1)
 # Schedule: "0 30 0,8,16 * * *" UTC — 30 min after Maintainerr's rule runs
-#           (rules_handler_job_cron = "0 0-23/8 * * *" => 00:00/08:00/16:00 UTC)
 # Deployed on the Windmill instance at bedrock; this file is the source of record.
 
 import io
@@ -30,24 +29,27 @@ RED_TOP, RED_BOTTOM = (178, 7, 16), (46, 2, 5)
 
 
 def _render_poster(title, subtitle, tiles, font_bytes):
+    """Agregarr-family card: brand gradient, title in the upper zone, then a
+    small CENTERED 2x2 grid with generous margins (matches the TV Requests /
+    Coming Soon cards — tiles must never touch the canvas edge)."""
     img = Image.new("RGB", (POSTER_W, POSTER_H))
     draw = ImageDraw.Draw(img)
     for y in range(POSTER_H):                       # vertical gradient
         f = y / POSTER_H
         row = tuple(int(RED_TOP[i] + (RED_BOTTOM[i] - RED_TOP[i]) * f) for i in range(3))
         draw.line([(0, y), (POSTER_W, y)], fill=row)
-    big = ImageFont.truetype(io.BytesIO(font_bytes), 96)
-    small = ImageFont.truetype(io.BytesIO(font_bytes), 44)
+    big = ImageFont.truetype(io.BytesIO(font_bytes), 84)
+    small = ImageFont.truetype(io.BytesIO(font_bytes), 40)
     w = draw.textlength(title, font=big)
-    draw.text(((POSTER_W - w) / 2, 70), title, font=big, fill=(255, 255, 255))
+    draw.text(((POSTER_W - w) / 2, 130), title, font=big, fill=(255, 255, 255))
     w = draw.textlength(subtitle, font=small)
-    draw.text(((POSTER_W - w) / 2, 190), subtitle, font=small, fill=(255, 210, 210))
-    # 2x2 grid of member posters, rounded corners
-    tw, th, gap = 400, 600, 40
+    draw.text(((POSTER_W - w) / 2, 236), subtitle, font=small, fill=(255, 214, 214))
+    # centered 2x2 grid, poster-ratio tiles, wide margins
+    tw, th, gap = 340, 510, 36
     x0 = (POSTER_W - (tw * 2 + gap)) // 2
-    y0 = 280
+    y0 = 372
     mask = Image.new("L", (tw, th), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, tw, th], radius=28, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, tw, th], radius=24, fill=255)
     for i, tile in enumerate(tiles[:4]):
         try:
             t = Image.open(io.BytesIO(tile)).convert("RGB").resize((tw, th))
@@ -242,3 +244,4 @@ def main(
         "adopted_user_edits": adopted,
         "errors": errors,
     }
+

@@ -1,0 +1,23 @@
+services:
+  wizarr:
+    image: ghcr.io/wizarrrr/wizarr:latest
+    container_name: wizarr
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=wizarr"
+      - "docktail.service.port=5690"
+      - "docktail.service.service-port=443"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+      - APP_URL=https://wizarr.swallow-spectrum.ts.net
+    volumes:
+      - wizarr-data:/data
+    ports:
+      - 5690:5690
+    restart: unless-stopped
+
+volumes:
+  wizarr-data:
+    external: true

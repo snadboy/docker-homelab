@@ -13,7 +13,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | Host | Dockhand Env ID | Connection | Key Stacks |
 |------|-----------------|------------|------------|
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
-| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, arr-dashboard |
+| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, arr-dashboard, wizarr |
 | edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex |
 | bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
@@ -87,6 +87,11 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
   - Useful audit trail: `collection_log` in `maintainerr.sqlite` records every add/remove/handle with a timestamp — the fastest way to answer "why is this (not) in the queue".
 - **v3 config gotcha:** the delete flags (`listExclusions`/`forceSeerr`/`arrAction`/`deleteAfterDays`) live on the **`collection`** table, NOT `rule_group`. `GET /api/rules` reads rule_group and shows them as `None` — read the `collection` table in `maintainerr.sqlite` (`docker cp maintainerr:/opt/data/maintainerr.sqlite`) for authoritative values.
 - **One-time live purge (2026-07-28, grace bypassed just this once):** deleted **464 titles / ~9.7 TB** (316 movies via Radarr 1508→1192; 148 shows via Sonarr 993→845; TV 71→65.4 TB, Movies 20→16.0 TB). Driven **item-by-item** via `POST /api/collections/media/handle` `{collectionId, mediaId=ratingKey}` — this per-item endpoint **ignores grace** and deletes now, so the 30-day setting was never changed (no config to restore). 53 stale "ghost" rows (dead ratingKeys from a Plex rescan; content lives under new keys) returned `removed-missing` and freed nothing — expect ~10% of any tracked count to be such ghosts. Import-list exclusions written (Radarr 318 / Sonarr 393): to recover a deleted title, remove its exclusion in *arr before re-requesting or Seerr silently refuses the re-grab. Radarr/Sonarr **recycleBin is empty** → deletes are permanent unlinks, space freed immediately. After a bulk delete, run ONE full Plex section scan + emptyTrash per section (per-item Connect scans coalesce/drop).
+
+**wizarr** (`wizarr/docker-compose.yml`) — Plex invitation / user-onboarding portal (added 2026-08-02)
+- `ghcr.io/wizarrrr/wizarr:latest` (v2026.7.1), container port **5690** → host 5690 on arr, external volume `wizarr-data` mounted at `/data` (the entrypoint creates `/data/database`). TS service `wizarr.swallow-spectrum.ts.net` (DockTail); `APP_URL` is baked into compose so generated invite links use the tailnet name.
+- **First run is unconfigured** — visit the URL and complete `/setup/` (create admin, then connect the Plex server) before handing out invites.
+- ⚠️ Docker's default `172.17–172.31` bridge pool is **exhausted on arr**, so `wizarr_default` fell through to `192.168.0.0/20`. No conflict today (the LAN is `192.168.86.0/24`), but the next stack added to arr will keep climbing that pool — set an explicit `default-address-pools` in `/etc/docker/daemon.json` before it reaches `192.168.86.0`.
 
 **arr-dashboard** (`arr-dashboard/docker-compose.yml`) — unified Sonarr/Radarr/Prowlarr dashboard (added 2026-07)
 - `khak1s/arr-dashboard`, container port 3000 → **host 3005** (3000 taken by tracearr), external volume `arr-dashboard-data`. TS service `arr-dashboard.swallow-spectrum.ts.net`; WebAuthn pinned to that origin. First-run: create admin + add *arr instances via UI.

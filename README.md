@@ -7,7 +7,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | Host | Stacks |
 |------|--------|
 | **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
-| **arr** | agregarr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr |
+| **arr** | agregarr, arr-dashboard, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
@@ -27,6 +27,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `sonarr/` | arr | TV series management |
 | `tautulli/` | arr | Plex statistics and monitoring |
 | `tracearr/` | arr | Media tracking |
+| `wizarr/` | arr | Plex invitation / user onboarding portal |
 
 ### Infrastructure
 

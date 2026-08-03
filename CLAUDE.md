@@ -13,7 +13,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | Host | Dockhand Env ID | Connection | Key Stacks |
 |------|-----------------|------------|------------|
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
-| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, arr-dashboard, wizarr |
+| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
 | edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex |
 | bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
@@ -97,7 +97,7 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 - Listed on the **servarr hub** (`servarr.swallow-spectrum.ts.net`) under a new "Access" card — shows pending-invite count, falling back to user count. See `ansible/roles/ts-static-serves/files/gen-hubs.py`.
 - ⚠️ Docker's default `172.17–172.31` bridge pool is **exhausted on arr**, so `wizarr_default` fell through to `192.168.0.0/20`. No conflict today (the LAN is `192.168.86.0/24`), but the next stack added to arr will keep climbing that pool — set an explicit `default-address-pools` in `/etc/docker/daemon.json` before it reaches `192.168.86.0`.
 
-**arr-dashboard** (`arr-dashboard/docker-compose.yml`) — unified Sonarr/Radarr/Prowlarr dashboard (added 2026-07)
+**arr-dashboard** — **REMOVED 2026-08-01** (commit 4055ce6, superseded by live status on the servarr hub). Compose dir deleted; its `git_stacks` row (id 25, env 3) was left behind and fails the nightly deploy every night with `Compose file not found`. Same for `kiosk-dashboard` (id 19, removed 2026-05-02) and `status-dashboard` (id 13, removed 2026-05-22).
 - `khak1s/arr-dashboard`, container port 3000 → **host 3005** (3000 taken by tracearr), external volume `arr-dashboard-data`. TS service `arr-dashboard.swallow-spectrum.ts.net`; WebAuthn pinned to that origin. First-run: create admin + add *arr instances via UI.
 
 **Available / Upcoming Episodes** (Plex TV collections; 2026-07-31 redesign, replacing the day-old Episodes trio after real-world viewing found it noisy) —

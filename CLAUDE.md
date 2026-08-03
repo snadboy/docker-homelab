@@ -46,6 +46,7 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 - `mem_limit: 12g`
 - Hardware transcoding via `/dev/dri` bind-mount (LXC, not VM-level VFIO). Uses colossus's Meteor Lake Intel Arc iGPU. Verified 8 simultaneous transcodes.
 - Earlier GPU-passthrough attempt on multivac VM was reverted because VFIO caused hard host lockups; the LXC bind-mount path is fundamentally different and stable.
+- **Duplicate-record hardening (2026-08-03).** euler's kernel-update reboot (Aug 2 21:29 UTC) raced Plex's startup/Sonarr-triggered scans against the LXC's `soft` NFS mounts: missing paths → trash → `autoEmptyTrash` deleted show records → recreation scans raced → **duplicate show records** for the two actively-importing shows (Lucky (2026), Rectify). Fixed with `PUT /library/metadata/{keeper}/merge?ids={dup}`; find splits by scanning section for repeated `guid`. Hardened: `autoEmptyTrash=0` (Plex prefs — trash now needs explicit emptying after bulk deletes, see maintainerr runbook) + docker.service drop-in `wait-for-media.conf` in CT 107 (`RequiresMountsFor` both NFS mounts — no NAS, no Plex, no empty-tree scans).
 
 **beszel** (`beszel/docker-compose.yml`) — system-metrics monitoring (complements Uptime Kuma)
 - Container port 8090; host-side mapped to 8091 on utilities.
@@ -91,6 +92,9 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 **wizarr** (`wizarr/docker-compose.yml`) — Plex invitation / user-onboarding portal (added 2026-08-02)
 - `ghcr.io/wizarrrr/wizarr:latest` (v2026.7.1), container port **5690** → host 5690 on arr, external volume `wizarr-data` mounted at `/data` (the entrypoint creates `/data/database`). TS service `wizarr.swallow-spectrum.ts.net` (DockTail); `APP_URL` is baked into compose so generated invite links use the tailnet name.
 - **First run is unconfigured** — visit the URL and complete `/setup/` (create admin, then connect the Plex server) before handing out invites.
+- **API key** (see shareables .env: `WIZARR_API_KEY`, `WIZARR_URL`). Header is `X-API-Key`; `GET /api/status` → `{users, invites, pending, expired}`, plus `/api/users` and `/api/invitations`. Swagger at `/api/docs/`.
+- ⚠️ Wizarr stores only a bcrypt `key_hash` in the `api_key` table — **the plaintext key cannot be recovered from the container** (unlike every *arr app, whose key sits in a readable config). Losing it means minting a new one in the UI. A second copy lives at `~snadboy/.wizarr-api-key` on arr (mode 600) so the servarr hub probe can read it locally; recreate that file after any arr rebuild.
+- Listed on the **servarr hub** (`servarr.swallow-spectrum.ts.net`) under a new "Access" card — shows pending-invite count, falling back to user count. See `ansible/roles/ts-static-serves/files/gen-hubs.py`.
 - ⚠️ Docker's default `172.17–172.31` bridge pool is **exhausted on arr**, so `wizarr_default` fell through to `192.168.0.0/20`. No conflict today (the LAN is `192.168.86.0/24`), but the next stack added to arr will keep climbing that pool — set an explicit `default-address-pools` in `/etc/docker/daemon.json` before it reaches `192.168.86.0`.
 
 **arr-dashboard** (`arr-dashboard/docker-compose.yml`) — unified Sonarr/Radarr/Prowlarr dashboard (added 2026-07)

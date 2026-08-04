@@ -20,6 +20,7 @@ SERVARR = [
     ("Managers",   [("Sonarr", "sonarr", "sonarr"), ("Radarr", "radarr", "radarr"),
                     ("Bazarr", "bazarr", "bazarr"), ("Agregarr", "agregarr", None)]),
     ("Requests",   [("Overseerr", "overseerr", "overseerr")]),
+    ("Access",     [("Wizarr", "wizarr", "wizarr")]),  # Plex invites / user onboarding
     ("Download",   [("SABnzbd", "sabnzbd", "sabnzbd")]),
     ("Monitoring", [("Tautulli", "tautulli", "tautulli"), ("Tracearr", "tracearr", None)]),
     ("Retention",  [("Maintainerr", "maintainerr", "maintainerr")]),  # "Leaving Soon"
@@ -254,6 +255,12 @@ def render_proxmox():
 # nothing is copied onto the advertiser VM or into the repo. All *arr apps live on
 # `arr`; SABnzbd on `fetch`. Icon-only apps (Prowlarr/Bazarr/Agregarr/Tracearr)
 # get an up/down dot but no metric.
+#
+# Wizarr is the one exception to "read the key out of the container": it stores
+# only a bcrypt `key_hash`, so the plaintext key can't be recovered from /data.
+# Its key lives in `~snadboy/.wizarr-api-key` on `arr` (mode 600, also recorded in
+# shareables .env as WIZARR_API_KEY). If that file goes missing after a rebuild the
+# probe degrades to an up/down dot — it never reports Wizarr as down.
 _PROBE_ARR = r'''
 gx(){ docker exec "$1" cat "$2" 2>/dev/null; }
 xk(){ gx "$1" /config/config.xml | grep -oiE '<ApiKey>[^<]+' | sed 's/<ApiKey>//i'; }
@@ -269,6 +276,9 @@ k=$(gx overseerr /app/config/settings.json | grep -oE '"apiKey": *"[^"]+' | head
 p=$(curl -s -m6 -H "X-Api-Key: $k" http://localhost:5055/api/v1/request/count | num pending); echo "overseerr|$(code 5055)|pending=${p}"
 k=$(gx tautulli /config/config.ini | grep -E '^api_key' | head -1 | sed 's/.*= *//')
 s=$(curl -s -m6 "http://localhost:8181/api/v2?apikey=$k&cmd=get_activity&out_type=json" | num stream_count); echo "tautulli|$(code 8181)|streams=${s}"
+k=$(cat "$HOME/.wizarr-api-key" 2>/dev/null)
+w=$(curl -s -m6 -H "X-API-Key: $k" http://localhost:5690/api/status)
+echo "wizarr|$(code 5690)|users=$(printf '%s' "$w" | num users);pending=$(printf '%s' "$w" | num pending)"
 l=$(curl -s -m6 http://localhost:6246/api/collections | python3 -c "import sys,json;d=json.load(sys.stdin);print(sum(c.get('mediaCount',0) for c in d if str(c.get('title','')).lower().startswith('leaving soon') and c.get('isActive')))" 2>/dev/null)
 echo "maintainerr|$(code 6246)|leaving=${l}"
 '''
@@ -304,6 +314,11 @@ def _fmt_stat(svc, kv):
     if svc == "maintainerr":
         l = kv.get("leaving")
         return f"{l} leaving soon" if l not in (None, "") else ""
+    if svc == "wizarr":
+        p, u = kv.get("pending"), kv.get("users")
+        if p not in (None, "", "0"):
+            return f"{p} invite{'' if p == '1' else 's'} pending"
+        return f"{u} user{'' if u == '1' else 's'}" if u not in (None, "") else ""
     if svc == "sabnzbd":
         st = kv.get("status", "")
         if st == "Downloading":

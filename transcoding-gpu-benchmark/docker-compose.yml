@@ -1,0 +1,26 @@
+services:
+  transcoding-gpu-benchmark:
+    image: spaceinvaderone/transcoding-gpu-benchmark:latest
+    container_name: transcoding-gpu-benchmark
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=gpu-benchmark"   # shorter URL than the stack name (cf. wan-pin-web -> wan-pin)
+      - "docktail.service.port=8088"
+      - "docktail.service.service-port=443"
+    # NOTE: no /dev/dri passthrough. arr's only DRM node is `card1` on the **qxl**
+    # driver (QEMU's virtual display) with no renderD* node — it cannot encode.
+    # Mapping it would just make the tool advertise a GPU it can't use, so this
+    # deployment runs the CPU/software-encode baseline only. If a real GPU is ever
+    # passed through to arr, add `devices: [/dev/dri:/dev/dri]` here.
+    volumes:
+      - tgb-config:/config              # ~1.8 GB of test clips, downloaded on first run
+      - /etc/os-release:/os-release:ro  # host OS detection
+    tmpfs:
+      - /ramdisk:rw,size=512m
+    ports:
+      - 8088:8088
+    restart: unless-stopped
+
+volumes:
+  tgb-config:
+    external: true

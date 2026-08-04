@@ -7,7 +7,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | Host | Stacks |
 |------|--------|
 | **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
-| **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
+| **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, transcoding-gpu-benchmark, wizarr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
@@ -27,6 +27,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `sonarr/` | arr | TV series management |
 | `tautulli/` | arr | Plex statistics and monitoring |
 | `tracearr/` | arr | Media tracking |
+| `transcoding-gpu-benchmark/` | arr | 4K transcode benchmark (SpaceinvaderOne) — CPU-only on arr, TS service `gpu-benchmark` |
 | `wizarr/` | arr | Plex invitation / user onboarding portal |
 
 ### Infrastructure

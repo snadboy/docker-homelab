@@ -15,7 +15,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
 | arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
 | edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
-| plex | 8 | hawser-edge agent | plex |
+| plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |
 | bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
 | fetch | 12 | hawser-edge agent | sabnzbd |
 
@@ -89,10 +89,12 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 - **v3 config gotcha:** the delete flags (`listExclusions`/`forceSeerr`/`arrAction`/`deleteAfterDays`) live on the **`collection`** table, NOT `rule_group`. `GET /api/rules` reads rule_group and shows them as `None` — read the `collection` table in `maintainerr.sqlite` (`docker cp maintainerr:/opt/data/maintainerr.sqlite`) for authoritative values.
 - **One-time live purge (2026-07-28, grace bypassed just this once):** deleted **464 titles / ~9.7 TB** (316 movies via Radarr 1508→1192; 148 shows via Sonarr 993→845; TV 71→65.4 TB, Movies 20→16.0 TB). Driven **item-by-item** via `POST /api/collections/media/handle` `{collectionId, mediaId=ratingKey}` — this per-item endpoint **ignores grace** and deletes now, so the 30-day setting was never changed (no config to restore). 53 stale "ghost" rows (dead ratingKeys from a Plex rescan; content lives under new keys) returned `removed-missing` and freed nothing — expect ~10% of any tracked count to be such ghosts. Import-list exclusions written (Radarr 318 / Sonarr 393): to recover a deleted title, remove its exclusion in *arr before re-requesting or Seerr silently refuses the re-grab. Radarr/Sonarr **recycleBin is empty** → deletes are permanent unlinks, space freed immediately. After a bulk delete, run ONE full Plex section scan + emptyTrash per section (per-item Connect scans coalesce/drop).
 
-**transcoding-gpu-benchmark** (`transcoding-gpu-benchmark/docker-compose.yml`) — SpaceinvaderOne's 4K transcode benchmark (added 2026-08-04)
-- `spaceinvaderone/transcoding-gpu-benchmark:latest`, WebUI on **8088**, external volume `tgb-config` (~1.8 GB of test clips pulled on first run), `tmpfs /ramdisk` 512m. TS service is **`gpu-benchmark`**, deliberately shorter than the stack name (same precedent as `wan-pin-web` → `wan-pin`).
-- ⚠️ **CPU-only on arr — no GPU test is possible here.** arr's sole DRM node is `card1` on the **qxl** driver (QEMU's virtual display) with no `renderD*` node, so there is nothing to encode with; `/dev/dri` is deliberately NOT passed through, since mapping it would advertise a GPU the tool can't use. The container logs `detected GPUs: QEMU Virtual CPU version 2.5+` — that is the CPU, not a GPU.
-- Also note the VM's CPU model is the generic `QEMU Virtual CPU version 2.5+` on 4 vCPUs, so even the software-encode baseline reflects an emulated CPU, not the host silicon. For numbers that mean anything, run this where the Intel Arc iGPU actually lives (the `plex` LXC on euler, `/dev/dri` bind-mounted).
+**transcoding-gpu-benchmark** (`transcoding-gpu-benchmark/docker-compose.yml`) — SpaceinvaderOne's 4K transcode benchmark. **Runs on the plex LXC (CT 107 on pve-euler)** — added to arr 2026-08-04, **moved to plex 2026-08-05.**
+- `spaceinvaderone/transcoding-gpu-benchmark:latest`, WebUI on **8088**, external volume `tgb-config` (~1.8 GB of test clips pulled on first run), `tmpfs /ramdisk` 512m, `devices: /dev/dri:/dev/dri`. Dockhand env **8** (plex), git_stacks id 28.
+- **Why it moved:** arr's sole DRM node was `card1` on the **qxl** driver (QEMU's virtual display) with no `renderD*` node — nothing to encode with, so no GPU test was possible at all; it logged `detected GPUs: QEMU Virtual CPU version 2.5+` (the CPU). On the plex LXC it logs `detected GPUs: Meteor Lake-P [Intel Arc Graphics], Intel(R) Core(TM) Ultra 7 155H` — the real iGPU, via `/dev/dri/renderD128` on the **i915** driver.
+- ⚠️ **It contends with Plex for that same iGPU.** The benchmark saturates the GPU by design, so a run will degrade or stall live Plex hardware transcodes. Run it when nobody is watching.
+- ⚠️ **Exposure is the STATIC serve path, not DockTail** — plex-lxc has no Tailscale node and no docktail agent. `gpu-benchmark` lives in `ansible/roles/ts-static-serves/defaults/main.yml` targeting `http://192.168.86.40:8088`, advertised by tsvc-able / tsvc-baker (same as `plex` itself). The service name was kept across the move so the URL, the `ts-svc: gpu-benchmark` Kuma monitor and the servarr hub card all survived.
+- The servarr hub probes it with a direct LAN `http://192.168.86.40:8088/` call from the advertiser (`_http_up` in `gen-hubs.py`), not over SSH like the docker-host apps — there is no Tailscale node to SSH into.
 
 **wizarr** (`wizarr/docker-compose.yml`) — Plex invitation / user-onboarding portal (added 2026-08-02)
 - `ghcr.io/wizarrrr/wizarr:latest` (v2026.7.1), container port **5690** → host 5690 on arr, external volume `wizarr-data` mounted at `/data` (the entrypoint creates `/data/database`). TS service `wizarr.swallow-spectrum.ts.net` (DockTail); `APP_URL` is baked into compose so generated invite links use the tailnet name.
@@ -102,12 +104,15 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 - Listed on the **servarr hub** (`servarr.swallow-spectrum.ts.net`) under a new "Access" card — shows pending-invite count, falling back to user count. See `ansible/roles/ts-static-serves/files/gen-hubs.py`.
 - ⚠️ Docker's default `172.17–172.31` bridge pool is **exhausted on arr**, so `wizarr_default` fell through to `192.168.0.0/20`. **This is now 4 stacks away from breaking arr's LAN routing** — see the countdown below.
 
-> ### ⚠️ arr bridge-pool countdown — 4 stacks to a LAN collision
+> ### ⚠️ arr bridge-pool countdown — 5 stacks to a LAN collision
 > With `172.17–172.31` exhausted, every new stack on arr takes the next `192.168.x.0/20`:
-> `192.168.0.0/20` (wizarr, 2026-08-02) → `192.168.16.0/20` (transcoding-gpu-benchmark, 2026-08-04) → `.32` → `.48` → `.64` → **`192.168.80.0/20` = 192.168.80.0–192.168.95.255, which CONTAINS the LAN `192.168.86.0/24`.**
-> The 6th stack after wizarr will blackhole arr's own LAN traffic. Fix before then: set an explicit
-> `default-address-pools` (e.g. `10.201.0.0/16`, size 24) in `/etc/docker/daemon.json` on arr and
-> restart Docker — note that restarts every container on the host, so schedule it.
+> `192.168.0.0/20` (wizarr, 2026-08-02) → `.16` → `.32` → `.48` → `.64` → **`192.168.80.0/20` = 192.168.80.0–192.168.95.255, which CONTAINS the LAN `192.168.86.0/24`.**
+> The 6th stack after wizarr will blackhole arr's own LAN traffic. (transcoding-gpu-benchmark
+> briefly held `192.168.16.0/20`; removing it on 2026-08-05 returned that slot, so the count is
+> back to 5 — but the pool is *allocated on demand*, so this only buys room, it doesn't fix it.)
+> Fix before then: set an explicit `default-address-pools` (e.g. `10.201.0.0/16`, size 24) in
+> `/etc/docker/daemon.json` on arr and restart Docker — note that restarts every container on the
+> host, so schedule it.
 
 **arr-dashboard** — **REMOVED 2026-08-01** (commit 4055ce6, superseded by live status on the servarr hub). Compose dir deleted; its `git_stacks` row (id 25, env 3) was left behind and fails the nightly deploy every night with `Compose file not found`. Same for `kiosk-dashboard` (id 19, removed 2026-05-02) and `status-dashboard` (id 13, removed 2026-05-22).
 - `khak1s/arr-dashboard`, container port 3000 → **host 3005** (3000 taken by tracearr), external volume `arr-dashboard-data`. TS service `arr-dashboard.swallow-spectrum.ts.net`; WebAuthn pinned to that origin. First-run: create admin + add *arr instances via UI.

@@ -2,16 +2,19 @@ services:
   transcoding-gpu-benchmark:
     image: spaceinvaderone/transcoding-gpu-benchmark:latest
     container_name: transcoding-gpu-benchmark
-    labels:
-      - "docktail.service.enable=true"
-      - "docktail.service.name=gpu-benchmark"   # shorter URL than the stack name (cf. wan-pin-web -> wan-pin)
-      - "docktail.service.port=8088"
-      - "docktail.service.service-port=443"
-    # NOTE: no /dev/dri passthrough. arr's only DRM node is `card1` on the **qxl**
-    # driver (QEMU's virtual display) with no renderD* node — it cannot encode.
-    # Mapping it would just make the tool advertise a GPU it can't use, so this
-    # deployment runs the CPU/software-encode baseline only. If a real GPU is ever
-    # passed through to arr, add `devices: [/dev/dri:/dev/dri]` here.
+    # Runs on the plex LXC (CT 107 on pve-euler) because that is where the Intel
+    # Arc iGPU actually is: /dev/dri/renderD128 on the i915 driver, bind-mounted
+    # into the container by the LXC config. It lived on arr until 2026-08-05,
+    # where the only DRM node was a qxl virtual display with no render node, so
+    # no GPU test was possible at all.
+    #
+    # ⚠️ This CONTENDS WITH PLEX for the same iGPU. The benchmark saturates the
+    # GPU by design, so a run will degrade or stall live Plex hardware
+    # transcodes. Run it when nobody is watching.
+    devices:
+      - /dev/dri:/dev/dri
+    # renderD128 is root:kvm 660 in the LXC; the container runs as root, so no
+    # group_add is needed. If that ever changes, add the kvm gid here.
     volumes:
       - tgb-config:/config              # ~1.8 GB of test clips, downloaded on first run
       - /etc/os-release:/os-release:ro  # host OS detection
@@ -24,3 +27,8 @@ services:
 volumes:
   tgb-config:
     external: true
+
+# No DockTail labels: plex-lxc has no Tailscale node and runs no docktail agent.
+# gpu-benchmark.swallow-spectrum.ts.net is served the same way plex itself is —
+# the static-serve path, via ansible/roles/ts-static-serves proxying to
+# 192.168.86.40:8088 from the tsvc-able / tsvc-baker advertisers.

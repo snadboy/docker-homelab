@@ -3,7 +3,7 @@
 Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 (advertiser has tag:ssh). Writes self-contained HTML to OUTDIR.
 Hubs: pve (guest map), pbs (datastore usage), servarr (icons), containers."""
-import subprocess, html, os, datetime, json, urllib.request, urllib.parse
+import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
 
 TS = "swallow-spectrum.ts.net"
 DOCKHAND = f"https://dockhand.{TS}/containers?search="  # + urlencoded container name
@@ -280,7 +280,6 @@ s=$(curl -s -m6 "http://localhost:8181/api/v2?apikey=$k&cmd=get_activity&out_typ
 k=$(cat "$HOME/.wizarr-api-key" 2>/dev/null)
 w=$(curl -s -m6 -H "X-API-Key: $k" http://localhost:5690/api/status)
 echo "wizarr|$(code 5690)|users=$(printf '%s' "$w" | num users);pending=$(printf '%s' "$w" | num pending)"
-echo "gpu-benchmark|$(code 8088)|"
 l=$(curl -s -m6 http://localhost:6246/api/collections | python3 -c "import sys,json;d=json.load(sys.stdin);print(sum(c.get('mediaCount',0) for c in d if str(c.get('title','')).lower().startswith('leaving soon') and c.get('isActive')))" 2>/dev/null)
 echo "maintainerr|$(code 6246)|leaving=${l}"
 '''
@@ -348,10 +347,25 @@ def _parse_probe(out):
         res[svc] = {"up": bool(code) and code != "000", "stat": _fmt_stat(svc, kv)}
     return res
 
+# gpu-benchmark is the one servarr app not on a docker host we SSH into: it runs
+# in the plex LXC (CT 107), which has no Tailscale node. The advertiser can reach
+# it directly on the LAN, so probe it locally instead of over SSH.
+GPU_BENCH_URL = "http://192.168.86.40:8088/"
+
+def _http_up(url, timeout=6):
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout)
+        return True
+    except urllib.error.HTTPError:
+        return True   # any HTTP response means it is serving
+    except Exception:
+        return False
+
 def servarr_status():
     st = {}
     st.update(_parse_probe(ssh("arr", _PROBE_ARR, user="snadboy", timeout=50)))
     st.update(_parse_probe(ssh("fetch", _PROBE_FETCH, user="snadboy", timeout=30)))
+    st["gpu-benchmark"] = {"up": _http_up(GPU_BENCH_URL), "stat": ""}
     return st
 
 # ---------- servarr ----------

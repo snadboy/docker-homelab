@@ -7,11 +7,11 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | Host | Stacks |
 |------|--------|
 | **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
-| **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, transcoding-gpu-benchmark, wizarr |
+| **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
-| **plex** | plex |
+| **plex** | plex, transcoding-gpu-benchmark |
 
 ## Stacks
 
@@ -27,7 +27,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `sonarr/` | arr | TV series management |
 | `tautulli/` | arr | Plex statistics and monitoring |
 | `tracearr/` | arr | Media tracking |
-| `transcoding-gpu-benchmark/` | arr | 4K transcode benchmark (SpaceinvaderOne) — CPU-only on arr, TS service `gpu-benchmark` |
+| `transcoding-gpu-benchmark/` | plex | 4K transcode benchmark (SpaceinvaderOne) — uses the Arc iGPU; TS service `gpu-benchmark` via the static serve path |
 | `wizarr/` | arr | Plex invitation / user onboarding portal |
 
 ### Infrastructure

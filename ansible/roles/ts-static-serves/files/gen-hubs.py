@@ -24,6 +24,7 @@ SERVARR = [
     ("Download",   [("SABnzbd", "sabnzbd", "sabnzbd")]),
     ("Monitoring", [("Tautulli", "tautulli", "tautulli"), ("Tracearr", "tracearr", None)]),
     ("Retention",  [("Maintainerr", "maintainerr", "maintainerr")]),  # "Leaving Soon"
+    ("Tools",      [("GPU Benchmark", "gpu-benchmark", None)]),  # 4K transcode benchmark
 ]
 
 # Docker hosts: (host, node-or-None, access) access = ("ssh",user,host) | ("pct",pvehost,vmid)
@@ -279,6 +280,7 @@ s=$(curl -s -m6 "http://localhost:8181/api/v2?apikey=$k&cmd=get_activity&out_typ
 k=$(cat "$HOME/.wizarr-api-key" 2>/dev/null)
 w=$(curl -s -m6 -H "X-API-Key: $k" http://localhost:5690/api/status)
 echo "wizarr|$(code 5690)|users=$(printf '%s' "$w" | num users);pending=$(printf '%s' "$w" | num pending)"
+echo "gpu-benchmark|$(code 8088)|"
 l=$(curl -s -m6 http://localhost:6246/api/collections | python3 -c "import sys,json;d=json.load(sys.stdin);print(sum(c.get('mediaCount',0) for c in d if str(c.get('title','')).lower().startswith('leaving soon') and c.get('isActive')))" 2>/dev/null)
 echo "maintainerr|$(code 6246)|leaving=${l}"
 '''

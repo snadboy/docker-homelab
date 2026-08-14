@@ -15,6 +15,13 @@ services:
     ports:
       - 7171:7171
     restart: unless-stopped
+    # 2026-08-14: an unrotated 6.9 GB json log (with a corrupt entry) made
+    # `docker logs` silently unreadable past Aug 10 — cap and rotate
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
 volumes:
   agregarr-data:

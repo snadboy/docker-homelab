@@ -1,0 +1,23 @@
+services:
+  peanut:
+    image: brandawg93/peanut:latest
+    container_name: peanut
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - TZ=America/Chicago
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+      # tailnet-only via DockTail; skip PeaNUT's own login
+      - AUTH_DISABLED=true
+    volumes:
+      - peanut-data:/config
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=peanut"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
+
+volumes:
+  peanut-data:
+    external: true

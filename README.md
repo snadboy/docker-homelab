@@ -6,7 +6,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 
 | Host | Stacks |
 |------|--------|
-| **utilities** | actual-budget, dockhand, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
+| **utilities** | actual-budget, dockhand, peanut, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
 | **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
 | **fetch** | sabnzbd |
 | **bedrock** | pulse |
@@ -36,6 +36,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 |-------|------|-------------|
 | `dockhand/` | utilities | Deployment manager |
 | `homepage/` | utilities | Dashboard |
+| `peanut/` | utilities | PeaNUT UPS dashboard (NUT on rpi-nut) |
 | `semaphore/` | utilities | Ansible UI, port 3002 |
 | `status-dashboard/` | utilities | Nginx status page |
 | `traefik-http-provider/` | cadre | Traefik reverse proxy + config provider via container discovery |

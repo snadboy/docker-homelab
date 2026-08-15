@@ -64,6 +64,50 @@
       {%- else -%}other
       {%- endif -%}
 
+- name: Apply system updates (Pi appliances, DKMS reboot guard)
+  hosts: pi_appliances
+  become: true
+  gather_facts: false
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  tasks:
+    - block:
+        # safe-update = apt full-upgrade + verify the WiFi DKMS module exists
+        # for the next-boot kernel. Its RESULT line is the reboot verdict; this
+        # play NEVER reboots (matching the other plays) — the verdict just
+        # controls how loudly the bulletin flags the host.
+        - name: Run guarded update (safe-update)
+          ansible.builtin.command: /usr/local/bin/safe-update
+          register: safeu
+          changed_when: "'0 upgraded, 0 newly installed' not in safeu.stdout"
+          failed_when: false
+
+        - name: Record per-host apt status
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "pi_appliances"
+              upgraded_line: "{{ (safeu.stdout_lines | default([])) | select('match', '^\\d+ upgraded,') | list | first | default('No changes') }}"
+              reboot: "{{ 'SAFE TO REBOOT' in (safeu.stdout | default('')) }}"
+              security_count: 0
+              status: >-
+                {%- if 'DO NOT REBOOT' in (safeu.stdout | default('')) or (safeu.rc | default(1)) != 0 -%}error
+                {%- elif 'SAFE TO REBOOT' in (safeu.stdout | default('')) -%}warn
+                {%- else -%}ok
+                {%- endif -%}
+              error: "{{ 'DKMS guard: DO NOT REBOOT — WiFi module missing for next-boot kernel' if 'DO NOT REBOOT' in (safeu.stdout | default('')) else '' }}"
+      rescue:
+        - name: Record per-host apt status (failure)
+          set_fact:
+            apt_status:
+              host: "{{ inventory_hostname }}"
+              section: "pi_appliances"
+              upgraded_line: ""
+              reboot: false
+              security_count: 0
+              status: "error"
+              error: "{{ (ansible_failed_result.msg | default('safe-update failed'))[:160] }}"
+
 - name: Apply system updates (LXC containers via pct exec)
   hosts: lxc_containers
   gather_facts: false
@@ -123,7 +167,7 @@
     semaphore_url: "{{ lookup('env', 'SEMAPHORE_URL') | default('https://semaphore.isnadboy.com', true) }}"
     semaphore_project_id: "{{ lookup('env', 'SEMAPHORE_PROJECT_ID') | default('1', true) }}"
     semaphore_link: "{{ semaphore_url }}/project/{{ semaphore_project_id }}"
-    reporting_hosts: "{{ (groups['apt_hosts'] | default([])) + (groups['lxc_containers'] | default([])) }}"
+    reporting_hosts: "{{ (groups['apt_hosts'] | default([])) + (groups['lxc_containers'] | default([])) + (groups['pi_appliances'] | default([])) }}"
   tasks:
     - name: Collect per-host apt_status facts (where set)
       set_fact:
@@ -154,6 +198,7 @@
           {%- elif item in (groups['ubuntu_vms'] | default([])) -%}ubuntu_vms
           {%- elif item in (groups['workstations'] | default([])) -%}workstations
           {%- elif item in (groups['lxc_containers'] | default([])) -%}lxc_containers
+          {%- elif item in (groups['pi_appliances'] | default([])) -%}pi_appliances
           {%- else -%}other
           {%- endif -%}
         _u:

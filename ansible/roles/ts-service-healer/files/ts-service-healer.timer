@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodic check for dark Tailscale services
+
+[Timer]
+# Every 5 minutes. With FAIL_THRESHOLD=3 that means a genuine desync is healed
+# ~15 minutes after it happens -- against the 17-22 hour outages seen before this
+# existed -- while still requiring three independent confirmations before a restart.
+OnBootSec=6min
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

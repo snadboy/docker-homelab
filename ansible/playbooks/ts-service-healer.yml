@@ -1,0 +1,9 @@
+---
+# Self-healing for Tailscale services left dark by a lost DockTail advertisement.
+# Deliberately a SINGLE host (utilities): the check needs an outside view of the
+# hosts it judges, and two copies would race to restart the same daemon.
+- name: Install the Tailscale service healer
+  hosts: dockhand_server
+  become: true
+  roles:
+    - ts-service-healer

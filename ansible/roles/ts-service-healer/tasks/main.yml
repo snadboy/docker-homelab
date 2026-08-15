@@ -1,0 +1,51 @@
+---
+- name: Deploy healer script
+  copy:
+    src: ts-service-healer.py
+    dest: /usr/local/bin/ts-service-healer
+    mode: '0755'
+
+- name: Write healer environment file
+  copy:
+    dest: /etc/ts-service-healer.env
+    mode: '0600'
+    content: |
+      # Managed by Ansible role ts-service-healer — do not edit by hand.
+      TAILNET={{ ts_healer_tailnet }}
+      DOCKTAIL_HOSTS={{ ts_healer_docktail_hosts }}
+      SSH_USER={{ ts_healer_ssh_user }}
+      STATE_FILE=/var/lib/ts-service-healer/state.json
+      FAIL_THRESHOLD={{ ts_healer_fail_threshold }}
+      COOLDOWN_S={{ ts_healer_cooldown_s }}
+      PROBE_TIMEOUT={{ ts_healer_probe_timeout }}
+      PROBE_RETRY_DELAY={{ ts_healer_probe_retry_delay }}
+      GOTIFY_URL={{ ts_healer_gotify_url }}
+      GOTIFY_TOKEN={{ ts_healer_gotify_token }}
+  no_log: true          # contains the Gotify token
+
+- name: Install healer service + timer
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: '0644'
+  loop:
+    - ts-service-healer.service
+    - ts-service-healer.timer
+
+- name: Enable healer timer
+  systemd:
+    name: ts-service-healer.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Run once now (dry run — proves wiring without restarting anything)
+  command: /usr/local/bin/ts-service-healer --dry-run
+  environment:
+    DRY_RUN: "1"
+  register: healer_check
+  changed_when: false
+
+- name: Healer output
+  debug:
+    var: healer_check.stdout_lines

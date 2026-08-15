@@ -1,0 +1,18 @@
+[Unit]
+Description=Heal Tailscale services left dark by a lost advertisement
+Documentation=https://github.com/snadboy/docker-homelab
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/ts-service-healer.env
+ExecStart=/usr/local/bin/ts-service-healer
+User=root
+# The job only reads state and SSHes out; give it no more than it needs.
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+StateDirectory=ts-service-healer
+TimeoutStartSec=300

@@ -1,0 +1,35 @@
+---
+# Self-healing for the DockTail lost-advertisement desync. See the role's
+# ts-service-healer.py header for the full fault description and the gates.
+#
+# Runs on ONE host (utilities) rather than on each docktail host: it needs a view
+# from outside the host it is judging, and two copies would race to restart the
+# same daemon.
+
+ts_healer_tailnet: swallow-spectrum.ts.net
+
+# Hosts running a docktail agent. Static/advertiser services are deliberately NOT
+# covered — they are served by two advertisers for HA, so a URL probe stays green
+# when only one desyncs, and a probe failure means both are down (a bigger problem).
+ts_healer_docktail_hosts: "arr,fetch,bedrock,utilities"
+
+# SSH user used to reach the docktail hosts (Tailscale SSH; needs passwordless sudo
+# for the systemd-run restart).
+ts_healer_ssh_user: snadboy
+
+# Consecutive dark checks before restarting. At the 5-minute timer interval this is
+# ~15 minutes to heal. Do not drop below 2: a single slow response must never be
+# able to restart a daemon.
+ts_healer_fail_threshold: 3
+
+# Minimum seconds between restarts of the SAME host. Stops a host that stays broken
+# from becoming a restart loop; when tripped the healer escalates to Gotify instead.
+ts_healer_cooldown_s: 5400        # 90 min
+
+ts_healer_probe_timeout: 12
+ts_healer_probe_retry_delay: 3
+
+# Gotify (same app token the rest of the homelab uses). Sourced from the
+# environment at deploy time — never commit the token.
+ts_healer_gotify_url: "{{ lookup('env', 'GOTIFY_URL') }}"
+ts_healer_gotify_token: "{{ lookup('env', 'GOTIFY_TOKEN') }}"

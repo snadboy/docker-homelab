@@ -8,10 +8,19 @@
 
 ts_healer_tailnet: swallow-spectrum.ts.net
 
-# Hosts running a docktail agent. Static/advertiser services are deliberately NOT
-# covered — they are served by two advertisers for HA, so a URL probe stays green
-# when only one desyncs, and a probe failure means both are down (a bigger problem).
+# Hosts running a docktail agent.
 ts_healer_docktail_hosts: "arr,fetch,bedrock,utilities"
+
+# Static-serve advertisers (ts_advertisers). Their services come from
+# /etc/ts-static-serves.txt + /etc/ts-static-serves-hubs.txt. The pair serves every
+# static service for HA, so the VIP is probed ONCE and a remediation is attributed
+# to whichever advertiser was least recently restarted — consecutive incidents then
+# alternate rather than always hitting the same box.
+#
+# ⚠️ Limitation: only the PRIMARY route holder for a VIP is visible anywhere
+# (netmap, API, CapMap), so one advertiser desyncing while the other still serves
+# is UNDETECTABLE — the pair looks healthy until the primary fails too.
+ts_healer_advertiser_hosts: "tsvc-able,tsvc-baker"
 
 # SSH user used to reach the docktail hosts (Tailscale SSH; needs passwordless sudo
 # for the systemd-run restart).

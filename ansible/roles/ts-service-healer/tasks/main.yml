@@ -13,6 +13,7 @@
       # Managed by Ansible role ts-service-healer — do not edit by hand.
       TAILNET={{ ts_healer_tailnet }}
       DOCKTAIL_HOSTS={{ ts_healer_docktail_hosts }}
+      ADVERTISER_HOSTS={{ ts_healer_advertiser_hosts }}
       SSH_USER={{ ts_healer_ssh_user }}
       STATE_FILE=/var/lib/ts-service-healer/state.json
       FAIL_THRESHOLD={{ ts_healer_fail_threshold }}

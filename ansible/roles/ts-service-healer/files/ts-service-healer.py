@@ -28,11 +28,24 @@ is expensive. The gates, in order:
                              host that stays broken cannot become a restart loop.
   5. One host per run     -- never restart the whole fleet in a single pass.
 
-Out of scope: services on the ts_advertisers (the static serve path). Those are
-served by TWO advertisers for HA, so a URL probe stays green when only one of them
-desyncs -- this check cannot see that, and a probe failure there means both are
-down, which is a different (bigger) problem. Covering it needs per-advertiser
-probing; deliberately not attempted here.
+STATIC (ADVERTISER) SERVICES
+----------------------------
+Also covered, with one honest limitation. Static services live in
+/etc/ts-static-serves.txt (proxies) and /etc/ts-static-serves-hubs.txt (hub pages)
+on BOTH advertisers, which serve them as an HA pair.
+
+What is detected: the service is dark, i.e. BOTH advertisers have stopped serving
+it. Remediation restarts one advertiser per run; the cooldown means the second is
+tried on a later run if the first did not fix it.
+
+What is NOT detected: one advertiser of the pair desyncing while the other still
+serves. Tailscale only exposes the PRIMARY route holder for a VIP -- verified from
+two separate vantage points, every static service lists only tsvc-baker -- so a
+standby is invisible whether it is healthy or broken. There is no API, netmap or
+CapMap field that distinguishes the two ("service-host" is a tailnet-wide grant,
+not a per-host registration). A half-broken pair therefore looks perfectly healthy
+until the primary also fails. Detecting that would need a deliberate failover test,
+which is too invasive to run on a timer.
 """
 import json
 import os
@@ -45,6 +58,7 @@ import urllib.request
 
 TAILNET = os.environ.get("TAILNET", "swallow-spectrum.ts.net")
 HOSTS = [h for h in os.environ.get("DOCKTAIL_HOSTS", "arr,fetch,bedrock,utilities").split(",") if h]
+ADVERTISERS = [h for h in os.environ.get("ADVERTISER_HOSTS", "tsvc-able,tsvc-baker").split(",") if h]
 SSH_USER = os.environ.get("SSH_USER", "snadboy")
 STATE_FILE = os.environ.get("STATE_FILE", "/var/lib/ts-service-healer/state.json")
 FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
@@ -128,6 +142,32 @@ def _probe_once(url):
         return False
 
 
+def static_services(host):
+    """{svc: target} the advertiser is configured to serve.
+
+    Read from the reconciler's own managed lists rather than from tailscaled: these
+    files ARE the desired state (the reconcile script clears anything not in them),
+    so they say what should be served even when the daemon has lost it.
+    Hub entries are local HTML files; their 'target' is the path, marked with a
+    file:// scheme so backend_up knows to stat it instead of curling it."""
+    out = ssh(host, "cat /etc/ts-static-serves.txt 2>/dev/null")
+    hubs = ssh(host, "cat /etc/ts-static-serves-hubs.txt 2>/dev/null")
+    if out is None and hubs is None:
+        return None
+    svcs = {}
+    for line in (out or "").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and len(line.split(None, 1)) == 2:
+            name, target = line.split(None, 1)
+            svcs[name] = target.strip()
+    for line in (hubs or "").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and len(line.split(None, 1)) == 2:
+            name, path = line.split(None, 1)
+            svcs[name] = "file://" + path.strip()
+    return svcs
+
+
 def service_up(svc):
     """True if the VIP answers at all; only a connection failure/timeout is dark.
 
@@ -143,10 +183,26 @@ def service_up(svc):
 
 def backend_up(host, target):
     """Check the serve config's own proxy target, from the host. This is the gate
-    that separates 'tailscaled lost the advertisement' from 'the app is down'."""
+    that separates 'tailscaled lost the advertisement' from 'the app is down'.
+
+    Handles the three target shapes in play:
+      file://PATH            hub pages — a local HTML file, so stat it
+      https+insecure://...   PVE/PBS/UniFi/Synology self-signed — needs curl -k
+      http(s)://...          everything else
+    """
     if not target:
         return None                      # unknown -> caller treats as inconclusive
-    out = ssh(host, f"curl -s -o /dev/null -m 8 -w '%{{http_code}}' '{target}' 2>/dev/null")
+
+    if target.startswith("file://"):
+        out = ssh(host, f"test -s '{target[7:]}' && echo yes || echo no")
+        return None if out is None else out.strip() == "yes"
+
+    insecure = ""
+    url = target
+    if target.startswith("https+insecure://"):
+        insecure = "-k "
+        url = "https://" + target[len("https+insecure://"):]
+    out = ssh(host, f"curl -s {insecure}-o /dev/null -m 8 -w '%{{http_code}}' '{url}' 2>/dev/null")
     if out is None:
         return None
     code = out.strip()
@@ -194,13 +250,36 @@ def main():
     candidates = {}        # host -> [svc,...] dark WITH a healthy backend
     seen = set()
 
-    for host in HOSTS:
-        svcs = host_services(host)
+    # A static service is served by BOTH advertisers, so it is checked once and any
+    # remediation is attributed to whichever advertiser we pick — never both at once
+    # (the cooldown enforces that, since a restart drops all 19 static services).
+    # Ordered least-recently-restarted first: static services are attributed to the
+    # first advertiser that still has them, so consecutive incidents alternate
+    # between the pair instead of always hammering the same one. Which of the two is
+    # actually at fault is unknowable (only the primary is visible), so alternating
+    # is the fairest available strategy.
+    static_seen = {}
+    for adv in sorted(ADVERTISERS, key=lambda a: last_restart.get(a, 0)):
+        s = static_services(adv)
+        if s is None:
+            log(f"{adv}: unreachable — cannot read static serve list")
+            continue
+        static_seen[adv] = s
+
+    work = [(h, host_services(h), "docktail") for h in HOSTS]
+    work += [(a, s, "static") for a, s in static_seen.items()]
+
+    checked_static = set()
+    for host, svcs, kind in work:
         if svcs is None:
             log(f"{host}: unreachable or no docktail — skipping")
             continue
-        log(f"{host}: advertises {len(svcs)} service(s)")
+        log(f"{host}: {kind}, {len(svcs)} service(s)")
         for svc, target in svcs.items():
+            if kind == "static":
+                if svc in checked_static:
+                    continue             # HA pair: probe the VIP once, not per advertiser
+                checked_static.add(svc)
             seen.add(svc)
             if service_up(svc):
                 if dark_counts.pop(svc, None):

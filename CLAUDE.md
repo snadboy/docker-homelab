@@ -156,3 +156,29 @@ Located in `ansible/` subdirectory, used by Semaphore.
 ---
 
 ## Last Updated: 2026-07-29
+
+---
+
+## Topic: arr
+
+This repo root is the working directory for a Remote Control topic session covering
+media acquisition (sonarr, radarr, prowlarr, bazarr, sabnzbd, overseerr, agregarr,
+tracearr, maintainerr, wizarr). Most arr work is **API calls via skills**, not editing
+these compose files.
+
+> Sessions rooted in `plex/`, `home-assistant/`, and `unifi-toolkit/` inherit this file
+> too — those have their own `CLAUDE.md` for topic-scoped notes.
+
+**Skills:** `/sonarr` · `/radarr` · `/sabnzbd` · `/overseerr` · `/agregarr` ·
+`/arr-monitor` · `/arr-troubleshoot` · `/plex-dedup`
+
+**Never do this**
+- **Never restart an unhealthy `docktail`.** It re-registers Tailscale services, which
+  then go dark pending `service-host` approval — this has taken a host's whole service
+  set down before.
+- **Never point the *arr apps' SABnzbd download client at the bare HTTP port.** It does
+  not listen on the tailnet; use the Tailscale Service on 443 with `useSsl=true`.
+- **Don't assume SABnzbd runs on the same host as the *arr apps.** It does not, and at
+  least one skill doc says otherwise. Trust the configured URL.
+
+<!-- Host names, URLs, and running state live in CLAUDE.local.md (gitignored). -->

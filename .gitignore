@@ -1,3 +1,10 @@
 *.env
 __pycache__/
 .env
+
+# MCP server droppings (written into whatever cwd the server starts in)
+mcp_ancestry.log
+.playwright-mcp/
+
+# Machine-local topic notes (Remote Control briefings)
+CLAUDE.local.md

@@ -169,16 +169,43 @@ these compose files.
 > Sessions rooted in `plex/`, `home-assistant/`, and `unifi-toolkit/` inherit this file
 > too — those have their own `CLAUDE.md` for topic-scoped notes.
 
+### Ask me things like
+- "Why hasn't \<show\> downloaded?" / "what's stuck in the queue?"
+- "Is the download stack healthy?" → `/arr-monitor`
+- "Why did \<title\> get tagged / collected / deleted?" (often a scheduled job — below)
+- "How much space would deduping reclaim?" → `/plex-dedup`
+- "Approve the pending Overseerr requests"
+
+### Something is mutating the library while you look at it
+
+**Seven Windmill schedules act on this topic continuously.** A "why did this change?"
+question is usually one of them, not a person:
+
+| Every | Job |
+|---|---|
+| 5 min | `f/plex/sonarr_tag_mirror` |
+| 30 min | `f/plex/jad_lifecycle_tagger` |
+| 2 h | `f/plex/plex_dup_merge` · `f/plex/recently_added` |
+| 3×/day | `f/plex/maintainerr_edition_pill_sync` · `f/plex/maintainerr_partial_watch_guard` |
+| daily 04:30 | `f/plex/maintenance` |
+
+Plus `plex-stereo` every 6 h on the Plex LXC (adds AAC 2.0 to new multichannel-only
+media), and Maintainerr's own auto-delete rules. Check
+`~/projects/docs/scheduled-work.md` before concluding anything was manual.
+
 **Skills:** `/sonarr` · `/radarr` · `/sabnzbd` · `/overseerr` · `/agregarr` ·
-`/arr-monitor` · `/arr-troubleshoot` · `/plex-dedup`
+`/arr-monitor` · `/arr-troubleshoot` · `/plex-dedup` · `/tautulli` · `/dockhand`
 
 **Never do this**
 - **Never restart an unhealthy `docktail`.** It re-registers Tailscale services, which
-  then go dark pending `service-host` approval — this has taken a host's whole service
-  set down before.
+  then go dark pending `service-host` approval — this took 8 bedrock services down on
+  2026-08-01.
 - **Never point the *arr apps' SABnzbd download client at the bare HTTP port.** It does
   not listen on the tailnet; use the Tailscale Service on 443 with `useSsl=true`.
 - **Don't assume SABnzbd runs on the same host as the *arr apps.** It does not, and at
-  least one skill doc says otherwise. Trust the configured URL.
+  least one skill doc says otherwise. Trust the configured URL — the actual host is in
+  `CLAUDE.local.md` (gitignored; this repo is public).
+- **Never make `docker-homelab` private without adding a Dockhand credential first.**
+  Dockhand clones it *anonymously* — going private silently kills all 22 stack deploys.
 
 <!-- Host names, URLs, and running state live in CLAUDE.local.md (gitignored). -->

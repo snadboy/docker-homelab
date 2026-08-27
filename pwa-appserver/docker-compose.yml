@@ -5,14 +5,12 @@ services:
     restart: unless-stopped
     ports:
       - "8200:8200"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://pwa:${POSTGRES_PASSWORD}@pwa-db:5432/pwa
-      - UPLOAD_DIR=/data/uploads
-      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - BULLETIN_API_KEY=${BULLETIN_API_KEY}
-      - PLEX_URL=${PLEX_URL}
-      - PLEX_TOKEN=${PLEX_TOKEN}
+    # Absolute path, so this resolves identically whether the stack is deployed
+    # by hand from ~/docker-homelab or by Dockhand into /data/stacks. Nothing has
+    # to place a .env beside the compose, and no shell-style interpolation is
+    # needed at all (DATABASE_URL is pre-composed inside the file).
+    env_file:
+      - /mnt/shareables/stack-env/pwa-appserver.env
     volumes:
       - pwa-logs:/app/logs
       - pwa-uploads:/data/uploads
@@ -51,10 +49,10 @@ services:
     image: pgvector/pgvector:pg16
     container_name: pwa-db
     restart: unless-stopped
-    environment:
-      - POSTGRES_USER=pwa
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=pwa
+    # Separate file from the app's: pwa-db has no business holding the
+    # ANTHROPIC / VOYAGE / PLEX credentials it never reads.
+    env_file:
+      - /mnt/shareables/stack-env/pwa-db.env
     volumes:
       - pwa-pgdata:/var/lib/postgresql/data
     healthcheck:

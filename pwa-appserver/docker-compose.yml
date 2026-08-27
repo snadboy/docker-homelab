@@ -1,0 +1,69 @@
+services:
+  pwa-appserver:
+    image: ghcr.io/snadboy/pwa:latest
+    container_name: pwa-appserver
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://pwa:${POSTGRES_PASSWORD}@pwa-db:5432/pwa
+      - UPLOAD_DIR=/data/uploads
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BULLETIN_API_KEY=${BULLETIN_API_KEY}
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+    volumes:
+      - pwa-logs:/app/logs
+      - pwa-uploads:/data/uploads
+      # Read-only, and scoped to pwa/ rather than .claude/ — that directory
+      # holds .env with every homelab API key.
+      - /mnt/shareables/pwa:/mnt/shareables/pwa:ro
+    depends_on:
+      pwa-db:
+        condition: service_healthy
+    labels:
+      - "snadboy.revp.8200.domain=calculator.isnadboy.com,inventory.isnadboy.com,plex-recent.isnadboy.com,pwa.isnadboy.com,tag-youre-it.isnadboy.com,cumulus-ledger.isnadboy.com,infra-test.isnadboy.com,bulletin.isnadboy.com,pkdb-app.isnadboy.com"
+      - "docktail.service.enable=true"
+      - "docktail.service.name=bulletin"
+      - "docktail.service.port=8200"
+      - "docktail.service.service-port=443"
+      - "docktail.service.1.name=pwa"
+      - "docktail.service.1.port=8200"
+      - "docktail.service.1.service-port=443"
+      - "docktail.service.2.name=plex-recent"
+      - "docktail.service.2.port=8200"
+      - "docktail.service.2.service-port=443"
+      - "docktail.service.3.name=pkdb-app"
+      - "docktail.service.3.port=8200"
+      - "docktail.service.3.service-port=443"
+      - "docktail.service.4.name=infra-test"
+      - "docktail.service.4.port=8200"
+      - "docktail.service.4.service-port=443"
+      # Claude Remote Control launcher. Tailnet only - deliberately absent from
+      # the snadboy.revp domain list above. The environment URLs it serves are
+      # access-bearing for sdevs; anyone opening one gets a live session.
+      - "docktail.service.5.name=claude"
+      - "docktail.service.5.port=8200"
+      - "docktail.service.5.service-port=443"
+
+  pwa-db:
+    image: pgvector/pgvector:pg16
+    container_name: pwa-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=pwa
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=pwa
+    volumes:
+      - pwa-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pwa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pwa-logs:
+  pwa-pgdata:
+  pwa-uploads:

@@ -14,8 +14,8 @@ services:
       - "docktail.service.service-port=443"
     environment:
       - TZ=America/Chicago
-      - PULSE_PUBLIC_URL=https://pulse.isnadboy.com
-      - PULSE_AGENT_CONNECT_URL=https://pulse.isnadboy.com
+      - PULSE_PUBLIC_URL=https://pulse.swallow-spectrum.ts.net
+      - PULSE_AGENT_CONNECT_URL=https://pulse.swallow-spectrum.ts.net
     restart: unless-stopped
 
 volumes:

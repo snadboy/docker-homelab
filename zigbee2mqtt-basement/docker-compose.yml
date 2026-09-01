@@ -1,0 +1,26 @@
+# Basement Zigbee network. Coordinator is the SLZB-MR1U at 192.168.86.245 (PoE,
+# laundry room) — Radio 2 / CC2652P7 on port 7638. Radio 1 was reflashed off
+# Thread/OTBR to Zigbee Router on 2026-09-01.
+#
+# Separate from zigbee2mqtt-upstairs by design: the basement<->upstairs RF path is
+# poor (the SDR ZBMicro measured LQI 40-61 with 10-56 s command latency across it),
+# so each floor gets its own coordinator. One Z2M drives exactly one coordinator.
+# Channel 25 here vs 20 upstairs to keep the two networks off each other.
+#
+# configuration.yaml lives on the NAS (holds the MQTT password) and is NOT in git.
+services:
+  zigbee2mqtt-basement:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt-basement
+    ports:
+      - 8086:8080
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-basement/app-data:/app/data
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=zigbee2mqtt-basement"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
+    environment:
+      - TZ=America/Chicago
+    restart: unless-stopped

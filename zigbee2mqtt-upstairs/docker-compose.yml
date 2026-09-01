@@ -1,0 +1,19 @@
+# Upstairs (office) Zigbee network. Coordinator is the SLZB-MR1U at
+# 192.168.86.130:7638 (Radio 2 / CC2652P7), channel 20.
+# Renamed from zigbee2mqtt-house 2026-09-01.
+services:
+  zigbee2mqtt-upstairs:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt-upstairs
+    ports:
+      - 8082:8080
+    volumes:
+      - /mnt/docker/zigbee2mqtt/zigbee2mqtt-upstairs/app-data:/app/data
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=zigbee2mqtt-upstairs"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
+    environment:
+      - TZ=America/Chicago
+    restart: unless-stopped

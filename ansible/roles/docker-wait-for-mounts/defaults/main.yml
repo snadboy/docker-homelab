@@ -1,0 +1,10 @@
+---
+# Mounts docker must not start before. Containers on these hosts bind paths under
+# them; if docker starts first it bind-mounts EMPTY directories that then shadow
+# the real data once the share mounts, and nothing ever notices.
+docker_required_mounts:
+  - /mnt/docker
+
+# Legacy hand-applied drop-ins to remove so a host ends up with exactly one.
+docker_legacy_dropins:
+  - wait-for-media.conf

@@ -1,0 +1,8 @@
+---
+# Make docker wait for the NAS mounts on every host whose containers bind them.
+# See roles/docker-wait-for-mounts for the failure this prevents.
+- name: Codify the CIFS mount-race fix on NAS-backed docker hosts
+  hosts: nas_docker_hosts
+  gather_facts: false
+  roles:
+    - docker-wait-for-mounts

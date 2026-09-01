@@ -1,0 +1,15 @@
+# Managed by Ansible (role: docker-wait-for-mounts) — do not edit by hand.
+#
+# Why: containers here bind-mount CIFS paths from the NAS. Without this, docker
+# starts before the share is mounted and containers bind EMPTY local directories
+# that then shadow the real data. It fails silently — `docker ps` shows healthy
+# containers running against empty volumes.
+#
+# Observed on edge 2026-08-21: booted 03:37:04, zigbee2mqtt-office/laundry
+# started 03:37:10, and both ran 11 days against an empty /app/data while their
+# database.db sat untouched on the share. Their Z2M instances looked "never
+# configured" when in fact their state was intact and simply invisible.
+[Unit]
+After=remote-fs.target network-online.target
+Requires=remote-fs.target
+RequiresMountsFor={{ docker_required_mounts | join(' ') }}

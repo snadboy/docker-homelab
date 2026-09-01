@@ -478,9 +478,10 @@ def render_containers():
 # The host port is probed over SSH rather than via the ts.net name so a lost DockTail
 # advertisement is not misreported as a dead server.
 Z2M_INSTANCES = [
-    ("zigbee2mqtt-house",   "utilities", 8082, "zigbee2mqtt-house"),
-    ("zigbee2mqtt-office",  "edge",      8082, "zigbee2mqtt-office"),
-    ("zigbee2mqtt-laundry", "edge",      8083, "zigbee2mqtt-laundry"),
+    ("zigbee2mqtt-upstairs", "utilities", 8082, "zigbee2mqtt-upstairs"),
+    ("zigbee2mqtt-basement", "utilities", 8086, "zigbee2mqtt-basement"),
+    ("zigbee2mqtt-office",   "edge",      8082, "zigbee2mqtt-office"),
+    ("zigbee2mqtt-laundry",  "edge",      8083, "zigbee2mqtt-laundry"),
 ]
 
 # SLZB radios: (label, model, ip, coordinator tcp port). Laundry sits on the

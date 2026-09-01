@@ -122,6 +122,11 @@ a.svc:hover{text-decoration:underline}
 .bar > span{display:block;height:100%}
 .bar-lo>span{background:var(--ok)}.bar-mid>span{background:var(--warn)}.bar-hi>span{background:var(--off)}
 .usage{font-size:.78rem;color:var(--dim)}
+/* Unreachable/absent hardware is informational, not an alarm: render the whole
+   card gray so red stays meaningful for things that are actually broken. */
+.card.unreach h2,.card.unreach h2 a,.card.unreach .gname,
+.card.unreach .stat,.card.unreach .stat.down{color:var(--dim)}
+.card.unreach .meta{color:#6b7681}
 .search{display:flex;align-items:center;gap:.75rem;margin:-.5rem 0 1.5rem}
 .search input{flex:0 1 360px;background:var(--card);border:1px solid var(--edge);
 border-radius:8px;color:var(--fg);padding:.55rem .8rem;font-size:.9rem;outline:none}
@@ -468,10 +473,181 @@ def render_containers():
                 f"its PVE node. Green = running, amber = unhealthy, grey = stopped. Click a container to open it in Dockhand.",
                 search + '<div class="grid">' + "".join(cards) + "</div>" + SEARCH_JS)
 
+# ---------- zigbee ----------
+# Zigbee2MQTT instances: (container, ssh-host, host-published port, DockTail service name)
+# The host port is probed over SSH rather than via the ts.net name so a lost DockTail
+# advertisement is not misreported as a dead server.
+Z2M_INSTANCES = [
+    ("zigbee2mqtt-house",   "utilities", 8082, "zigbee2mqtt-house"),
+    ("zigbee2mqtt-office",  "edge",      8082, "zigbee2mqtt-office"),
+    ("zigbee2mqtt-laundry", "edge",      8083, "zigbee2mqtt-laundry"),
+]
+
+# SLZB radios: (label, model, ip, coordinator tcp port). Laundry sits on the
+# 192.168.10.0/24 VLAN, not the main LAN - the advertiser can still reach it.
+# (label, model, ip, coordinator tcp port, role). Physical locations confirmed by the
+# user 2026-09-01 - HA's area labels for these are WRONG and must not be trusted.
+SLZB_RADIOS = [
+    ("SLZB-MR1U-HOUSE", "SLZB-MR1U", "192.168.86.130", 7638, "upstairs (office) - coordinator"),
+    ("SLZB-MR1U",       "SLZB-MR1U", "192.168.86.245", 7638, "basement (laundry) - coordinator, PoE"),
+    ("SLZB-06M",        "SLZB-06M",  "192.168.10.33",  6638, "SPARE - location unknown"),
+    ("SLZB-06M",        "SLZB-06M",  "192.168.86.251", 6638, "SPARE - unplugged"),
+]
+
+def _icmp(ip):
+    try:
+        return subprocess.run(["ping", "-c2", "-W3", ip], capture_output=True,
+                              timeout=10).returncode == 0
+    except Exception:
+        return False
+
+def _http_code(url, timeout=5):
+    try:
+        r = subprocess.run(["curl", "-sk", "-o", "/dev/null", "-w", "%{http_code}",
+                            "--max-time", str(timeout), url],
+                           capture_output=True, text=True, timeout=timeout + 4)
+        return r.stdout.strip() or "000"
+    except Exception:
+        return "000"
+
+def _tcp_open(ip, port, timeout=4):
+    import socket
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+def z2m_probe(container, host, port):
+    """Container state + frontend liveness + config, in one SSH round trip.
+
+    The frontend probe is the load-bearing check: on 2026-09-01 the adapter
+    socket timed out, Z2M logged 'Stopping Zigbee2MQTT (restart=false)' and
+    exited -- but the CONTAINER stayed up, so `docker ps` still read healthy and
+    the failure was invisible for hours. A dead Z2M stops answering on 8080
+    while the container still reports Up; that divergence is the alarm.
+    Deliberately greps only base_topic/adapter/port -- configuration.yaml also
+    holds the MQTT password in plaintext and it must never reach this page.
+    """
+    cmd = (f"docker inspect -f '{{{{.State.Status}}}}|{{{{.State.StartedAt}}}}' {container} 2>/dev/null; echo '@@'; "
+           f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 5 http://localhost:{port}/ 2>/dev/null; echo; echo '@@'; "
+           f"docker exec {container} sh -c 'grep -E \"base_topic:|port: tcp|adapter:\" /app/data/configuration.yaml 2>/dev/null; "
+           f"echo DEVS=$(grep -c . /app/data/database.db 2>/dev/null || echo 0)' 2>/dev/null")
+    out = ssh(host, cmd, user="snadboy", timeout=30)
+    d = {"state": None, "http": "000", "base_topic": None, "adapter": None,
+         "target": None, "devices": None}
+    if out is None:
+        return d
+    parts = out.split("@@")
+    if parts and parts[0].strip():
+        d["state"] = parts[0].strip().split("|")[0]
+    if len(parts) > 1:
+        d["http"] = parts[1].strip() or "000"
+    if len(parts) > 2:
+        for ln in parts[2].splitlines():
+            ln = ln.strip()
+            if ln.startswith("base_topic:"):
+                d["base_topic"] = ln.split(":", 1)[1].strip()
+            elif ln.startswith("adapter:"):
+                d["adapter"] = ln.split(":", 1)[1].strip()
+            elif ln.startswith("port:") and "tcp://" in ln:
+                d["target"] = ln.split(":", 1)[1].strip()
+            elif ln.startswith("DEVS="):
+                try:
+                    n = int(ln.split("=", 1)[1])
+                    d["devices"] = max(n - 1, 0) if n else 0   # database.db includes the coordinator
+                except Exception:
+                    pass
+    return d
+
+def _row(ok, label, value, warn=False):
+    dot = "on" if ok else ("warn" if warn else "off")
+    return (f'<li><span class="dot {dot}"></span><span class="gname">{html.escape(label)}</span>'
+            f'<span class="stat{"" if ok else " down"}">{html.escape(value)}</span></li>')
+
+def render_zigbee():
+    # --- Z2M servers ---
+    probes, cards = {}, []
+    for container, host, port, svc in Z2M_INSTANCES:
+        p = z2m_probe(container, host, port)
+        probes[container] = p
+        up = p["http"].startswith("2") or p["http"].startswith("3")
+        running = p["state"] == "running"
+        configured = bool(p["target"])
+
+        if running and not up:
+            note = "container up, Z2M NOT RESPONDING"
+        elif not running:
+            note = "container not running"
+        elif not configured:
+            note = "running but no adapter configured"
+        else:
+            note = "healthy"
+
+        rows = _row(up, "frontend", f'HTTP {p["http"]}')
+        rows += _row(running, "container", p["state"] or "unknown")
+        rows += _row(configured, "adapter", p["target"] or "not configured")
+        rows += _row(bool(p["base_topic"]), "base topic", p["base_topic"] or "-")
+        if p["devices"] is not None:
+            rows += _row(True, "devices", str(p["devices"]))
+
+        badge = f'<span class="node-badge">{html.escape(host)}</span>'
+        klass = "card" if running else "card unreach"
+        cards.append(
+            f'<div class="{klass}"><h2><a href="https://{svc}.{TS}">{html.escape(container)}</a>{badge}</h2>'
+            f'<p class="meta">{html.escape(note)}</p><ul>{rows}</ul></div>')
+
+    # map radio IP -> the instance using it, from live config
+    used_by = {}
+    for container, p in probes.items():
+        t = p.get("target") or ""
+        if "tcp://" in t:
+            used_by[t.split("//", 1)[1].split(":")[0]] = container
+
+    # --- SLZB radios ---
+    rcards, radio_up = [], []
+    for label, model, ip, cport, role in SLZB_RADIOS:
+        # Probe all three independently and treat ANY positive as present. Gating
+        # the HTTP/socket checks behind ICMP meant a single dropped ping blanked
+        # the whole card (observed 2026-09-01: MR1U-HOUSE rendered unreachable
+        # while it was serving traffic normally).
+        icmp = _icmp(ip)
+        code = _http_code(f"http://{ip}/")
+        web = code.startswith("2") or code.startswith("3")
+        sock = _tcp_open(ip, cport)
+        up = icmp or web or sock
+        radio_up.append(up)
+        user = used_by.get(ip)
+
+        rows = _row(up, "network", "up" if up else "unreachable")
+        rows += _row(web, "web UI", f"HTTP {code}")
+        rows += _row(sock, f"coordinator :{cport}", "listening" if sock else "closed")
+        rows += _row(bool(user), "used by", user or "unused")
+
+        title = (f'<a href="http://{ip}/">{html.escape(label)}</a>' if up
+                 else html.escape(label))
+        rklass = "card" if up else "card unreach"
+        rcards.append(
+            f'<div class="{rklass}"><h2>{title}</h2>'
+            f'<p class="meta">{html.escape(model)} · {html.escape(ip)} · {html.escape(role)}</p><ul>{rows}</ul></div>')
+
+    live = sum(1 for c, p in probes.items()
+               if (p["http"].startswith("2") or p["http"].startswith("3")) and p["target"])
+    radios_up = sum(radio_up)
+
+    body = (f'<h3 class="section">Zigbee2MQTT servers</h3><div class="grid">{"".join(cards)}</div>'
+            f'<h3 class="section">SLZB radios</h3><div class="grid">{"".join(rcards)}</div>')
+    return page("Zigbee",
+                f"Zigbee2MQTT servers and SLZB coordinator radios — {live} fully-configured server(s) responding, "
+                f"{radios_up}/{len(SLZB_RADIOS)} radios reachable. A server whose container is up but whose "
+                f"frontend does not answer has died inside a healthy-looking container. Click a server or radio to open it.",
+                body)
+
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
     for name, fn in [("proxmox", render_proxmox),
-                     ("servarr", render_servarr), ("containers", render_containers)]:
+                     ("servarr", render_servarr), ("containers", render_containers),
+                     ("zigbee", render_zigbee)]:
         out = fn()
         with open(os.path.join(OUTDIR, name + ".html"), "w") as f:
             f.write(out)

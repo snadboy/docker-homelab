@@ -36,3 +36,4 @@ ts_hubs:
   - proxmox   # Proxmox VE nodes + guests, and PBS datastores (merged)
   - servarr   # media automation stack — grouped app links
   - containers # all docker containers, grouped by host + node
+  - zigbee    # Z2M servers + SLZB coordinator radios (health + links)

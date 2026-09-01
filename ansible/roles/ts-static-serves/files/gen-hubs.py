@@ -489,10 +489,10 @@ Z2M_INSTANCES = [
 # (label, model, ip, coordinator tcp port, role). Physical locations confirmed by the
 # user 2026-09-01 - HA's area labels for these are WRONG and must not be trusted.
 SLZB_RADIOS = [
-    ("SLZB-MR1U-HOUSE", "SLZB-MR1U", "192.168.86.130", 7638, "upstairs (office) - coordinator"),
-    ("SLZB-MR1U",       "SLZB-MR1U", "192.168.86.245", 7638, "basement (laundry) - coordinator, PoE"),
-    ("SLZB-06M",        "SLZB-06M",  "192.168.10.33",  6638, "SPARE - location unknown"),
-    ("SLZB-06M",        "SLZB-06M",  "192.168.86.251", 6638, "SPARE - unplugged"),
+    ("slzb-mr1u-upstairs", "SLZB-MR1U", "192.168.86.130", 7638, "upstairs (office) - coordinator, ch 20"),
+    ("slzb-mr1u-basement", "SLZB-MR1U", "192.168.86.245", 7638, "basement (laundry) - coordinator, ch 25, PoE"),
+    ("slzb-06m-spare",     "SLZB-06M",  "192.168.10.33",  6638, "SPARE - location unknown"),
+    ("slzb-06m-spare",     "SLZB-06M",  "192.168.86.251", 6638, "SPARE - unplugged"),
 ]
 
 def _icmp(ip):

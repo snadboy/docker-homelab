@@ -17,7 +17,7 @@ services:
       - SEMAPHORE_PLAYBOOK_PATH=/etc/semaphore
       - SEMAPHORE_ACCESS_KEY_ENCRYPTION=${SEMAPHORE_ENCRYPTION_KEY:-}
       # Passed through to ansible playbooks
-      - BULLETIN_API_URL=${BULLETIN_API_URL:-https://bulletin.isnadboy.com/api/post}
+      - BULLETIN_API_URL=${BULLETIN_API_URL:-https://bulletin.swallow-spectrum.ts.net/api/post}
       - BULLETIN_API_KEY=${BULLETIN_API_KEY:-}
       # Beszel hub credentials (consumed by ansible/roles/beszel-agent)
       - BESZEL_AGENT_KEY=${BESZEL_AGENT_KEY:-}

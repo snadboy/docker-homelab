@@ -20,7 +20,7 @@ beszel_agent_port: 45876
 # initial upgrade as plain HTTP/HTTPS and Traefik returns 301 (HTTP -> HTTPS
 # redirect) on the wss:// codepath because the agent ends up on http://.
 # To bypass Traefik for any reason, use http://utilities.tail65635.ts.net:8091
-beszel_agent_hub_url: "https://beszel.isnadboy.com"
+beszel_agent_hub_url: "https://beszel.swallow-spectrum.ts.net"
 
 # Hub public key (shown in hub UI under "Add System") and universal token
 # (Settings -> Tokens). Sourced from the controller's environment - in

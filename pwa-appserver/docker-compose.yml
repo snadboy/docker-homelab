@@ -21,7 +21,7 @@ services:
       pwa-db:
         condition: service_healthy
     labels:
-      - "snadboy.revp.8200.domain=calculator.isnadboy.com,inventory.isnadboy.com,plex-recent.isnadboy.com,pwa.isnadboy.com,tag-youre-it.isnadboy.com,cumulus-ledger.isnadboy.com,infra-test.isnadboy.com,bulletin.isnadboy.com,pkdb-app.isnadboy.com"
+      - "snadboy.revp.8200.domain=calculator.isnadboy.com,inventory.isnadboy.com,plex-recent.isnadboy.com,pwa.isnadboy.com,tag-youre-it.isnadboy.com,cumulus-ledger.isnadboy.com,bulletin.isnadboy.com,pkdb-app.isnadboy.com"
       - "docktail.service.enable=true"
       - "docktail.service.name=bulletin"
       - "docktail.service.port=8200"
@@ -35,15 +35,12 @@ services:
       - "docktail.service.3.name=pkdb-app"
       - "docktail.service.3.port=8200"
       - "docktail.service.3.service-port=443"
-      - "docktail.service.4.name=infra-test"
-      - "docktail.service.4.port=8200"
-      - "docktail.service.4.service-port=443"
       # Claude Remote Control launcher. Tailnet only - deliberately absent from
       # the snadboy.revp domain list above. The environment URLs it serves are
       # access-bearing for sdevs; anyone opening one gets a live session.
-      - "docktail.service.5.name=claude"
-      - "docktail.service.5.port=8200"
-      - "docktail.service.5.service-port=443"
+      - "docktail.service.4.name=claude"
+      - "docktail.service.4.port=8200"
+      - "docktail.service.4.service-port=443"
 
   pwa-db:
     image: pgvector/pgvector:pg16

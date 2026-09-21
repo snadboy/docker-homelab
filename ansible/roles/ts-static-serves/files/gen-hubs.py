@@ -683,9 +683,16 @@ def render_zigbee():
 #
 # Do NOT "simplify" this to scraping DockTail labels + the static-serve files.
 # That was the first cut and it silently omitted five live services (claude,
-# infra-test, pkdb-app, plex-recent, pwa) which are advertised by hand-made
-# `tailscale serve` configs on nodes this role never touches. Those two sources
-# are kept only to annotate WHERE a service runs, where the answer is cheap.
+# infra-test, pkdb-app, plex-recent, pwa). All five are published by ONE container
+# -- pwa-appserver on bedrock -- through DockTail's NUMBERED labels
+# (docktail.service.name plus docktail.service.<N>.name), and that scraper read
+# only the un-numbered key, so it saw `bulletin` and missed the other five.
+#
+# The scraper below now handles both label forms, but that is NOT a reason to
+# promote it back to being the source of truth: it costs an SSH round trip per
+# host, it silently under-reports any host that is unreachable, and it has to keep
+# pace with every label form DockTail adds. The netmap has none of those failure
+# modes. These two sources are kept only to annotate WHERE a service runs.
 #
 # Why this matters: the old `sbhome` dashboard hardcoded its source (the Traefik
 # API) and served an empty page for months after Traefik was retired in July 2026.
@@ -819,11 +826,16 @@ def _desired_file(path):
         pass
     return d
 
+# Emits "<container>\t<state>\t<labels-json>" per container. Dumps ALL labels and
+# filters in Python rather than asking for one by name, because DockTail lets a
+# single container publish several services via NUMBERED labels
+# (docktail.service.name plus docktail.service.<N>.name). pwa-appserver on bedrock
+# publishes SIX that way; a probe reading only the un-numbered key sees one.
 _PROBE_DOCKTAIL = (
     "docker ps -a --format '{{.Names}}' 2>/dev/null | while read n; do "
-    "docker inspect -f '{{index .Config.Labels \"docktail.service.enable\"}}|"
-    "{{index .Config.Labels \"docktail.service.name\"}}|{{.State.Status}}' \"$n\" "
-    "2>/dev/null; done")
+    "printf '%s\\t%s\\t' \"$n\" "
+    "\"$(docker inspect -f '{{.State.Status}}' \"$n\" 2>/dev/null)\"; "
+    "docker inspect -f '{{json .Config.Labels}}' \"$n\" 2>/dev/null; done")
 
 def docktail_services():
     """{service: (host, container-state)} from the labels that create them.
@@ -851,10 +863,23 @@ def docktail_services():
             if not out:
                 continue
             for ln in out.splitlines():
-                p = ln.strip().split("|")
-                if len(p) < 3 or p[0] != "true" or not p[1]:
+                parts = ln.split("\t")
+                if len(parts) < 3:
                     continue
-                found[p[1]] = (hostname, p[2])
+                cname, state, raw = parts[0], parts[1], parts[2]
+                try:
+                    labels = json.loads(raw) or {}
+                except Exception:
+                    continue
+                if labels.get("docktail.service.enable") != "true":
+                    continue
+                for key, val in labels.items():
+                    # docktail.service.name and docktail.service.<N>.name
+                    if not val or not key.startswith("docktail.service."):
+                        continue
+                    tail = key[len("docktail.service."):]
+                    if tail == "name" or (tail.endswith(".name") and tail[:-5].isdigit()):
+                        found[val] = (hostname, state)
     return found
 
 def vip_status(names):

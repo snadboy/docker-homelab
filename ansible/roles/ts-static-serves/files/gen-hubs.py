@@ -2,8 +2,10 @@
 """Generate static hub (mini-homepage) HTML for Tailscale Services.
 Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 (advertiser has tag:ssh). Writes self-contained HTML to OUTDIR.
-Hubs: pve (guest map), pbs (datastore usage), servarr (icons), containers."""
+Hubs: home (index of every service), proxmox (guests + datastores),
+servarr (live arr status), containers, zigbee."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
+import concurrent.futures, socket, ssl
 
 TS = "swallow-spectrum.ts.net"
 DOCKHAND = f"https://dockhand.{TS}/containers?search="  # + urlencoded container name
@@ -36,6 +38,12 @@ DOCKER_HOSTS = [
     ("plex-lxc",  "euler",   ("pct", "pve-euler", "107")),
     ("sdevs",     "faraday", ("ssh", "snadboy", "sdevs")),
 ]
+
+# Hosts scanned for DockTail service labels by the `home` index. Deliberately a
+# superset of DOCKER_HOSTS: `edge` runs a docktail agent (and the two retired Z2M
+# shells), so a service re-enabled there must show up on the index even though
+# edge is not yet a card on the containers hub.
+DOCKTAIL_HOSTS = DOCKER_HOSTS + [("edge", "gauss", ("ssh", "snadboy", "edge"))]
 
 def ssh(host, cmd, user="root", timeout=20):
     # Host keys are NOT pinned: the transport is the WireGuard-authenticated,
@@ -136,6 +144,24 @@ border:1px solid var(--edge);border-radius:8px;padding:.45rem .75rem;white-space
 .toplink:hover{border-color:var(--link);background:var(--card)}
 a.cname{flex:1;color:var(--fg);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 a.cname:hover{color:var(--link);text-decoration:underline}
+/* home index: the service NAME is the thing worth remembering (it is the URL),
+   so it gets the monospace/primary slot and the description is secondary. */
+.sname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem}
+.sdesc{color:var(--dim);font-size:.72rem;margin-left:auto;text-align:right;flex:0 1 auto;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:.5rem}
+li.hit{background:#1b2430;border-radius:6px;box-shadow:0 0 0 1px var(--link) inset}
+.hubrow{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin:0 0 .5rem}
+.hubcard{background:var(--card);border:1px solid var(--edge);border-radius:10px;
+padding:.7rem .9rem;text-decoration:none;display:block}
+.hubcard:hover{border-color:var(--link)}
+.hubcard .hn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+color:var(--link);font-size:.92rem}
+.hubcard .hd{color:var(--dim);font-size:.72rem;margin-top:.15rem}
+.hint{color:var(--dim);font-size:.72rem}
+kbd{background:var(--edge);border-radius:4px;padding:.05rem .3rem;font-size:.68rem;
+font-family:ui-monospace,monospace}
+.cat{margin-top:1.5rem}.cat:first-of-type{margin-top:0}
+.grid.wide{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));align-items:start}
 """
 
 def page(title, subtitle, body):
@@ -477,11 +503,13 @@ def render_containers():
 # Zigbee2MQTT instances: (container, ssh-host, host-published port, DockTail service name)
 # The host port is probed over SSH rather than via the ts.net name so a lost DockTail
 # advertisement is not misreported as a dead server.
+# office + laundry removed 2026-09-20: retired on purpose (empty shells, containers
+# exited on `edge`), and their VIP service definitions were deleted, so the cards
+# were advertising links that could not resolve. Do not re-add them — see
+# ~/projects/docs/thread-matter.md / the Z2M estate note.
 Z2M_INSTANCES = [
     ("zigbee2mqtt-upstairs", "utilities", 8082, "zigbee2mqtt-upstairs"),
     ("zigbee2mqtt-basement", "utilities", 8086, "zigbee2mqtt-basement"),
-    ("zigbee2mqtt-office",   "edge",      8082, "zigbee2mqtt-office"),
-    ("zigbee2mqtt-laundry",  "edge",      8083, "zigbee2mqtt-laundry"),
 ]
 
 # SLZB radios: (label, model, ip, coordinator tcp port). Laundry sits on the
@@ -644,9 +672,307 @@ def render_zigbee():
                 f"frontend does not answer has died inside a healthy-looking container. Click a server or radio to open it.",
                 body)
 
+# ---------- home (root index of every service) ----------
+# The point of this page is that `home` is the only name you have to remember.
+#
+# The LIST is discovered, never hand-maintained. It comes from the local netmap's
+# MagicDNS records (`tailscale debug netmap` -> DNS.ExtraRecords), which carry one
+# entry per VIP service and are therefore complete by construction — verified
+# 2026-09-20 to match `GET /api/v2/tailnet/-/vip-services` name-for-name, all 61,
+# with no OAuth secret on the advertiser.
+#
+# Do NOT "simplify" this to scraping DockTail labels + the static-serve files.
+# That was the first cut and it silently omitted five live services (claude,
+# infra-test, pkdb-app, plex-recent, pwa) which are advertised by hand-made
+# `tailscale serve` configs on nodes this role never touches. Those two sources
+# are kept only to annotate WHERE a service runs, where the answer is cheap.
+#
+# Why this matters: the old `sbhome` dashboard hardcoded its source (the Traefik
+# API) and served an empty page for months after Traefik was retired in July 2026.
+# A stale *blurb* below is cosmetic; a stale *list* is the failure that killed it.
+#
+# Categories and blurbs are hand-written because nothing on the wire knows them.
+# Anything discovered but uncategorised falls into "Other" rather than being
+# dropped, so a new service is always reachable even before it is classified.
+HOME_HUBS = [
+    ("servarr",    "Media automation — live arr status"),
+    ("proxmox",    "Cluster nodes, guests and backup datastores"),
+    ("containers", "Every container across the fleet"),
+    ("zigbee",     "Z2M servers and SLZB coordinator radios"),
+]
+
+HOME_CATEGORIES = [
+    ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
+                           "homelab-bar", "trmnl"]),
+    ("Media", ["plex", "plex-recent", "jellyfin", "tautulli", "sonarr", "radarr",
+               "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
+               "maintainerr", "wizarr", "gpu-benchmark"]),
+    ("Virtualization & backup", ["euler", "gauss", "maxwell", "faraday",
+                                 "alexandria", "svalbard", "pve-api"]),
+    ("Containers & monitoring", ["dockhand", "tainer", "beszel", "pulse",
+                                 "uptime-kuma", "gotify", "bulletin", "peanut",
+                                 "infra-test"]),
+    ("Network & storage", ["unifi", "unifi-toolkit", "wan-pin", "technitium",
+                           "media", "unas-able", "unas-baker"]),
+    ("Automation & workflows", ["semaphore", "windmill"]),
+    ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "actual", "firefly",
+                         "firefly-import", "termix", "pdf"]),
+]
+
+# service -> (dashboard-icons slug or None, blurb). A missing entry is fine: the
+# blurb falls back to where the service actually runs, and a slug the CDN does not
+# have degrades to a letter badge.
+HOME_META = {
+    "ha":                   ("home-assistant", "Home Assistant"),
+    "zigbee2mqtt-upstairs": ("zigbee2mqtt", "Z2M — upstairs (office) coordinator"),
+    "zigbee2mqtt-basement": ("zigbee2mqtt", "Z2M — basement (laundry) coordinator"),
+    "homelab-bar":          (None, "RPi rack-panel dashboard"),
+    "trmnl":                (None, "BYOS TRMNL e-ink server"),
+    "plex":                 ("plex", "Plex Media Server"),
+    "plex-recent":          ("plex", "Recently-added feed"),
+    "jellyfin":             ("jellyfin", "Jellyfin"),
+    "tautulli":             ("tautulli", "Plex stats and history"),
+    "sonarr":               ("sonarr", "TV"),
+    "radarr":               ("radarr", "Movies"),
+    "prowlarr":             ("prowlarr", "Indexers"),
+    "bazarr":               ("bazarr", "Subtitles"),
+    "sabnzbd":              ("sabnzbd", "Usenet downloader"),
+    "overseerr":            ("overseerr", "Media requests"),
+    "agregarr":             (None, "Plex collection management"),
+    "tracearr":             (None, "arr activity trace"),
+    "maintainerr":          ("maintainerr", "Library retention / Leaving Soon"),
+    "wizarr":               ("wizarr", "Plex invites and onboarding"),
+    "gpu-benchmark":        (None, "4K transcode benchmark (Arc iGPU)"),
+    "euler":                ("proxmox", "Proxmox VE node"),
+    "gauss":                ("proxmox", "Proxmox VE node"),
+    "maxwell":              ("proxmox", "Proxmox VE node"),
+    "faraday":              ("proxmox", "Proxmox VE node"),
+    "alexandria":           ("proxmox", "Proxmox Backup Server"),
+    "svalbard":             ("proxmox", "Proxmox Backup Server"),
+    "pve-api":              (None, "Proxmox API helper (/health)"),
+    "dockhand":             (None, "Docker stack deploys"),
+    "tainer":               (None, "Container manager"),
+    "beszel":               ("beszel", "System metrics"),
+    "pulse":                (None, "Proxmox monitoring"),
+    "uptime-kuma":          ("uptime-kuma", "Uptime monitoring"),
+    "gotify":               ("gotify", "Push notifications"),
+    "bulletin":             (None, "Homelab bulletin board"),
+    "peanut":               (None, "NUT / UPS dashboard"),
+    "unifi":                ("unifi", "UniFi Network controller"),
+    "unifi-toolkit":        ("unifi", "UniFi helper tools"),
+    "wan-pin":              (None, "Pin a client to a WAN uplink"),
+    "technitium":           ("technitium", "DNS server"),
+    "media":                ("synology", "Synology DSM (syn-media)"),
+    "unas-able":            (None, "UNAS Pro Able — hosts shareables"),
+    "unas-baker":           (None, "UNAS Pro Baker"),
+    "semaphore":            ("semaphore", "Ansible playbook runner"),
+    "windmill":             ("windmill", "Workflow engine"),
+    "infra-test":           (None, "Infra test suite (suite itself retired)"),
+    "pkdb":                 (None, "Personal knowledge database"),
+    "pkdb-app":             (None, "PKDB app"),
+    "pwa":                  (None, "PWA hub"),
+    "claude":               (None, "Claude Code Remote Control"),
+    "actual":               ("actual-budget", "Actual Budget"),
+    "firefly":              ("firefly-iii", "Firefly III"),
+    "firefly-import":       ("firefly-iii", "Firefly III data importer"),
+    "termix":               (None, "Web terminal"),
+    "pdf":                  ("stirling-pdf", "Stirling PDF tools"),
+}
+
+def tailnet_services():
+    """Every VIP service name on the tailnet, from the local netmap.
+
+    One MagicDNS ExtraRecord per service per address family; machine names are not
+    in ExtraRecords, so the set needs no filtering beyond the suffix and rejecting
+    anything with a further label. Returns an empty set on failure, which the
+    caller treats as "keep the previous page" rather than publishing a blank index.
+    """
+    try:
+        r = subprocess.run(["tailscale", "debug", "netmap"],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            return set()
+        recs = (json.loads(r.stdout).get("DNS") or {}).get("ExtraRecords") or []
+    except Exception:
+        return set()
+    names, suffix = set(), "." + TS
+    for rec in recs:
+        n = (rec.get("Name") or "").rstrip(".")
+        if n.endswith(suffix):
+            short = n[:-len(suffix)]
+            if short and "." not in short:
+                names.add(short)
+    return names
+
+def _desired_file(path):
+    """name -> value from a reconciler desired-state file ('name value' lines)."""
+    d = {}
+    try:
+        for ln in open(path):
+            ln = ln.strip()
+            if not ln or ln.startswith("#"):
+                continue
+            parts = ln.split(None, 1)
+            if len(parts) == 2:
+                d[parts[0]] = parts[1]
+    except FileNotFoundError:
+        pass
+    return d
+
+_PROBE_DOCKTAIL = (
+    "docker ps -a --format '{{.Names}}' 2>/dev/null | while read n; do "
+    "docker inspect -f '{{index .Config.Labels \"docktail.service.enable\"}}|"
+    "{{index .Config.Labels \"docktail.service.name\"}}|{{.State.Status}}' \"$n\" "
+    "2>/dev/null; done")
+
+def docktail_services():
+    """{service: (host, container-state)} from the labels that create them.
+
+    Reads the labels rather than the Tailscale API on purpose: the API needs an
+    OAuth secret, and this role deliberately keeps secrets off the advertiser VMs.
+    The labels are also what DockTail itself acts on, so this is the same desired
+    state — and it catches a service whose container has stopped, which the API
+    cannot distinguish from a healthy one.
+    """
+    found = {}
+
+    def scan(entry):
+        hostname, _node, access = entry
+        if access[0] == "ssh":
+            out = ssh(access[2], _PROBE_DOCKTAIL, user=access[1], timeout=30)
+        else:
+            _, pvehost, vmid = access
+            inner = _PROBE_DOCKTAIL.replace("{{", "{{{{").replace("}}", "}}}}")
+            out = ssh(pvehost, f"pct exec {vmid} -- sh -c {json.dumps(inner)}", timeout=30)
+        return hostname, out
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        for hostname, out in ex.map(scan, DOCKTAIL_HOSTS):
+            if not out:
+                continue
+            for ln in out.splitlines():
+                p = ln.strip().split("|")
+                if len(p) < 3 or p[0] != "true" or not p[1]:
+                    continue
+                found[p[1]] = (hostname, p[2])
+    return found
+
+def vip_status(names):
+    """{name: bool} — does the VIP answer at all. Any HTTP status counts.
+
+    Never follows redirects: tautulli 303s to a location that refuses off-host
+    connections, so following it turns a healthy service into a timeout. Same trap
+    ts-service-healer documents.
+    """
+    def probe(n):
+        return n, _http_code(f"https://{n}.{TS}/", timeout=8) != "000"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+        return dict(ex.map(probe, names))
+
+HOME_JS = """
+<script>
+const q=document.getElementById('q'),cnt=document.getElementById('cnt');
+function flt(){
+ const t=q.value.trim().toLowerCase();let n=0,first=null;
+ document.querySelectorAll('li[data-k]').forEach(li=>{
+  const m=!t||li.dataset.k.includes(t);
+  li.hidden=!m;li.classList.remove('hit');
+  if(m){n++;if(!first)first=li;}});
+ document.querySelectorAll('.card').forEach(c=>{
+  c.hidden=!c.querySelector('li[data-k]:not([hidden])');});
+ document.querySelectorAll('.cat').forEach(s=>{
+  s.hidden=!s.querySelector('.card:not([hidden])');});
+ if(t&&first)first.classList.add('hit');
+ cnt.textContent=t?(n+' match'+(n==1?'':'es')+(n?' · Enter opens the first':'')):'';
+}
+q.addEventListener('input',flt);
+q.addEventListener('keydown',e=>{
+ if(e.key==='Enter'){const a=document.querySelector('li[data-k]:not([hidden]) a.svc');
+  if(a)location.href=a.href;}
+ if(e.key==='Escape'){q.value='';flt();}});
+</script>"""
+
+def render_home():
+    static = _desired_file("/etc/ts-static-serves.txt")
+    hubs = _desired_file("/etc/ts-static-serves-hubs.txt")
+
+    discovered = tailnet_services()
+    if not discovered:
+        # Netmap unreadable. Union the two local desired-state files rather than
+        # emitting an index that claims the tailnet is empty — an incomplete page
+        # is recoverable, a confidently-blank one is what sbhome did.
+        discovered = set(static) | set(hubs)
+    dock = docktail_services()
+
+    hub_names = set(hubs) & discovered
+    names = discovered - {"home"}
+    listed = sorted(names - hub_names)
+    up = vip_status(sorted(names))
+
+    def origin(name):
+        if name in dock:
+            host, state = dock[name]
+            return (f"container on {host}" if state == "running"
+                    else f"container on {host} ({state})")
+        if name in static:
+            return "→ " + static[name].split("://", 1)[-1]
+        return ""
+
+    def item(name):
+        slug, blurb = HOME_META.get(name, (None, ""))
+        desc = blurb or origin(name)
+        ok = up.get(name, False)
+        # A stopped container is the reason a link is dead — say so instead of
+        # just greying the dot.
+        if not ok and name in dock and dock[name][1] != "running":
+            desc = origin(name)
+        return (f'<li data-k="{html.escape((name + " " + desc).lower())}">'
+                f'<span class="dot {"on" if ok else "off"}"></span>'
+                f'<a class="svc" href="https://{name}.{TS}">'
+                f'{icon_or_badge(name, slug)}<span class="sname">{html.escape(name)}</span></a>'
+                f'<span class="sdesc">{html.escape(desc)}</span></li>')
+
+    # One card per category, all in a single flowing grid (same shape as the
+    # servarr hub) so the categories tile across the width instead of stacking.
+    cards = []
+    uncategorised = set(listed)
+    for heading, members in HOME_CATEGORIES:
+        present = [m for m in members if m in names]
+        uncategorised -= set(present)
+        if present:
+            cards.append(f'<div class="card"><h2>{html.escape(heading)}</h2><ul>'
+                         + "".join(item(m) for m in present) + "</ul></div>")
+    if uncategorised:
+        cards.append('<div class="card"><h2>Other</h2><ul>'
+                     + "".join(item(m) for m in sorted(uncategorised)) + "</ul></div>")
+    body = ('<section class="cat"><div class="grid wide">' + "".join(cards)
+            + "</div></section>")
+
+    hubrow = "".join(
+        f'<a class="hubcard" href="https://{n}.{TS}"><div class="hn">{html.escape(n)}</div>'
+        f'<div class="hd">{html.escape(d)}</div></a>'
+        for n, d in HOME_HUBS if n in hub_names)
+    if hubrow:
+        body = ('<section class="cat"><h3 class="section">Hubs</h3>'
+                f'<div class="hubrow">{hubrow}</div></section>') + body
+
+    dark = sorted(n for n in listed if not up.get(n, False))
+    search = ('<div class="search"><input id="q" type="search" '
+              'placeholder="Filter services… (try &quot;arr&quot;)" autocomplete="off" autofocus>'
+              '<span id="cnt" class="usage"></span></div>'
+              '<p class="hint">Type to filter, <kbd>Enter</kbd> opens the first match, '
+              '<kbd>Esc</kbd> clears. Every name below is '
+              '<span class="sname">&lt;name&gt;.' + TS + '</span>.</p>')
+
+    sub = (f"{len(listed)} services on the tailnet, {len(listed) - len(dark)} answering. "
+           "Grey means the VIP is not serving right now.")
+    if dark:
+        sub += "  Dark: " + ", ".join(dark) + "."
+    return page("Homelab", sub, search + body + HOME_JS)
+
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    for name, fn in [("proxmox", render_proxmox),
+    for name, fn in [("home", render_home), ("proxmox", render_proxmox),
                      ("servarr", render_servarr), ("containers", render_containers),
                      ("zigbee", render_zigbee)]:
         out = fn()

@@ -134,6 +134,35 @@ pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 
 ---
 
+## Hub pages (`ts-static-serves` role)
+
+Five static HTML hubs, generated on both advertiser VMs by `ts-gen-hubs`
+(`ansible/roles/ts-static-serves/files/gen-hubs.py`) every 15 min and served as
+Tailscale Services:
+
+| Hub | Covers |
+|---|---|
+| **`home`** | **index of EVERY service** — searchable, live up/down. Start here. |
+| `servarr` | media automation, live arr status |
+| `proxmox` | PVE nodes + guests, PBS datastores |
+| `containers` | every container across the fleet |
+| `zigbee` | Z2M servers + SLZB coordinator radios |
+
+**`home`'s service list is discovered from the local netmap** (`tailscale debug
+netmap` → `DNS.ExtraRecords`), which is complete by construction and needs no
+OAuth secret on the advertiser. ⚠️ Do **not** reduce this to scraping DockTail
+labels + `/etc/ts-static-serves.txt`: that misses services advertised by hand-made
+`tailscale serve` configs on other nodes (it silently dropped five). Those two
+sources are read only to annotate *where* a service runs. Deploy with
+`ansible-playbook -i inventory/hosts.yml playbooks/ts-static-serves.yml`.
+
+**sbhome — REMOVED 2026-09-20.** A hand-built FastAPI dashboard on utilities whose
+service list came from the **Traefik API**, retired in July 2026. It kept running
+for two months serving a page with every panel empty, and its UniFi panel generated
+failing controller logins (`429`) on each load. Replaced by the `home` hub;
+container down, VIP service definition and Kuma monitor deleted, stack `git rm`'d.
+Note `~/docker-homelab/sbhome/` still exists on utilities until that clone is pulled.
+
 ## Ansible
 
 Located in `ansible/` subdirectory, used by Semaphore.

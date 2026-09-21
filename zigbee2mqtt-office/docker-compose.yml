@@ -9,8 +9,6 @@ services:
       - /mnt/docker/zigbee2mqtt/zigbee2mqtt-office/app-data:/app/data
     environment:
       - TZ=America/Chicago
-    labels:
-      - "docktail.service.enable=true"
-      - "docktail.service.name=zigbee2mqtt-office"
-      - "docktail.service.port=8080"
-      - "docktail.service.service-port=443"
+    # DockTail labels removed 2026-09-20: this instance is retired on purpose
+    # (empty shell, container left exited) and its VIP service definition was
+    # deleted. Re-adding them would re-advertise a dead service. Do not.

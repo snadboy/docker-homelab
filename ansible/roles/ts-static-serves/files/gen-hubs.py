@@ -150,13 +150,14 @@ a.cname:hover{color:var(--link);text-decoration:underline}
 .sdesc{color:var(--dim);font-size:.72rem;margin-left:auto;text-align:right;flex:0 1 auto;
 overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:.5rem}
 li.hit{background:#1b2430;border-radius:6px;box-shadow:0 0 0 1px var(--link) inset}
-.hubrow{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin:0 0 .5rem}
-.hubcard{background:var(--card);border:1px solid var(--edge);border-radius:10px;
-padding:.7rem .9rem;text-decoration:none;display:block}
-.hubcard:hover{border-color:var(--link)}
-.hubcard .hn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-color:var(--link);font-size:.92rem}
-.hubcard .hd{color:var(--dim);font-size:.72rem;margin-top:.15rem}
+.cardhead{display:flex;align-items:baseline;gap:.75rem}
+.cardhead h2{margin:0}
+.hublink{margin-left:auto;flex:0 0 auto;font-size:.72rem;color:var(--link);
+text-decoration:none;white-space:nowrap;border:1px solid var(--edge);
+border-radius:6px;padding:.15rem .45rem}
+.hublink:hover{border-color:var(--link);background:#1b2430}
+.hublink .hsum{color:var(--dim);margin-right:.4rem}
+.hublink .hname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .hint{color:var(--dim);font-size:.72rem}
 kbd{background:var(--edge);border-radius:4px;padding:.05rem .3rem;font-size:.68rem;
 font-family:ui-monospace,monospace}
@@ -218,8 +219,9 @@ def discover_pve_nodes():
     return PVE_NODES_FALLBACK
 
 def pve_cards():
-    cards = []
+    cards, node_count, guest_count = [], 0, 0
     for name, host in discover_pve_nodes():
+        node_count += 1
         ok, guests = pve_guests(host)
         url = f"https://{name}.{TS}"
         rows = ""
@@ -228,9 +230,10 @@ def pve_cards():
             rows += (f'<li><span class="dot {on}"></span><span class="badge">{kind}</span>'
                      f'<span class="gname">{html.escape(gname)}</span><span class="gid">{vmid}</span></li>')
         state = f"{len(guests)} guests" if ok else '<span style="color:var(--off)">unreachable</span>'
+        guest_count += len(guests)
         cards.append(f'<div class="card"><h2><a href="{url}">{html.escape(name)}</a></h2>'
                      f'<p class="meta">Proxmox VE · {state}</p><ul>{rows}</ul></div>')
-    return '<div class="grid">' + "".join(cards) + "</div>"
+    return '<div class="grid">' + "".join(cards) + "</div>", node_count, guest_count
 
 # ---------- pbs ----------
 def pbs_stores(host):
@@ -276,8 +279,10 @@ def pbs_cards():
     return '<div class="grid">' + "".join(cards) + "</div>"
 
 def render_proxmox():
-    body = (f'<h3 class="section">Virtualization</h3>{pve_cards()}'
+    pve_html, nodes, guests = pve_cards()
+    body = (f'<h3 class="section">Virtualization</h3>{pve_html}'
             f'<h3 class="section">Backup</h3>{pbs_cards()}')
+    HUB_SUMMARY["proxmox"] = f"{guests} guests · {nodes} nodes"
     return page("Proxmox", "Virtualization cluster and backup servers — click any node for its web UI.", body)
 
 # ---------- servarr live status ----------
@@ -420,6 +425,8 @@ def render_servarr():
                       f'{icon_or_badge(label, slug)}<span class="gname">{html.escape(label)}</span></a>'
                       f'{stat_html}</li>')
         cards.append(f'<div class="card"><h2>{html.escape(heading)}</h2><ul>{links}</ul></div>')
+    n_up = sum(1 for v in status.values() if v.get("up"))
+    HUB_SUMMARY["servarr"] = f"{n_up}/{len(status)} up"
     return page("Media Automation",
                 "The Servarr media stack — live status; green = up, grey = down. Click any service to open it.",
                 '<div class="grid">' + "".join(cards) + "</div>")
@@ -491,6 +498,7 @@ def render_containers():
             li += f'<li data-name="{esc.lower()}"><span class="dot {dot}"></span>{name_html}</li>'
         cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
                      f'<p class="meta">Docker · {running}/{len(rows)} running</p><ul>{li}</ul></div>')
+    HUB_SUMMARY["containers"] = f"{running_total}/{total} running"
     search = ('<div class="search"><input id="q" type="search" placeholder="Filter containers or hosts…" '
               'autocomplete="off" autofocus><span id="cnt" class="usage"></span>'
               f'<a class="toplink" href="https://dockhand.{TS}">Dockhand ⬈</a></div>')
@@ -664,6 +672,7 @@ def render_zigbee():
                if (p["http"].startswith("2") or p["http"].startswith("3")) and p["target"])
     radios_up = sum(radio_up)
 
+    HUB_SUMMARY["zigbee"] = f"{live} servers · {radios_up}/{len(SLZB_RADIOS)} radios"
     body = (f'<h3 class="section">Zigbee2MQTT servers</h3><div class="grid">{"".join(cards)}</div>'
             f'<h3 class="section">SLZB radios</h3><div class="grid">{"".join(rcards)}</div>')
     return page("Zigbee",
@@ -701,12 +710,25 @@ def render_zigbee():
 # Categories and blurbs are hand-written because nothing on the wire knows them.
 # Anything discovered but uncategorised falls into "Other" rather than being
 # dropped, so a new service is always reachable even before it is classified.
-HOME_HUBS = [
-    ("servarr",    "Media automation — live arr status"),
-    ("proxmox",    "Cluster nodes, guests and backup datastores"),
-    ("containers", "Every container across the fleet"),
-    ("zigbee",     "Z2M servers and SLZB coordinator radios"),
-]
+# Each topic hub hangs off the category card it belongs to, as a named link in that
+# card's header (not a separate row up top) -- the drill-down sits where the content
+# is, and the hub's NAME stays visible, which is the whole point of this page.
+#
+# `zigbee` is deliberately labelled by name rather than as a generic "Details":
+# it covers only the two Z2M entries of "Home & automation", not ha/homelab-bar/trmnl,
+# so a generic label there would overpromise.
+CATEGORY_HUBS = {
+    "Media":                    "servarr",
+    "Virtualization & backup":  "proxmox",
+    "Containers & monitoring":  "containers",
+    "Home & automation":        "zigbee",
+}
+
+# Headline numbers for those links, filled in by each hub's own renderer. A global
+# because the hub renderers already compute these while building their pages, and
+# recomputing them for `home` would mean a second round of SSH to every host.
+# main() therefore renders the hubs BEFORE home.
+HUB_SUMMARY = {}
 
 HOME_CATEGORIES = [
     ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
@@ -898,22 +920,43 @@ HOME_JS = """
 <script>
 const q=document.getElementById('q'),cnt=document.getElementById('cnt');
 function flt(){
- const t=q.value.trim().toLowerCase();let n=0,first=null;
- document.querySelectorAll('li[data-k]').forEach(li=>{
-  const m=!t||li.dataset.k.includes(t);
-  li.hidden=!m;li.classList.remove('hit');
-  if(m){n++;if(!first)first=li;}});
+ const t=q.value.trim().toLowerCase();let n=0,first=null,hubCard=null;
  document.querySelectorAll('.card').forEach(c=>{
-  c.hidden=!c.querySelector('li[data-k]:not([hidden])');});
+  // A card matches on its own heading or hub name; when it does, every row in it
+  // stays visible rather than being filtered away by the row-level test.
+  const cardMatch=!!t&&(c.dataset.k||'').includes(t);
+  const rows=[...c.querySelectorAll('li[data-k]')];
+  // A card-name hit expands the whole card ONLY when nothing inside it matched.
+  // Otherwise `arr` would drag plex and sabnzbd along just because the card's hub
+  // is named servarr, while `proxmox` (which no service is called) still needs to
+  // show the nodes rather than an empty card.
+  const rowHit=rows.some(li=>li.dataset.k.includes(t));
+  const useAll=cardMatch&&!rowHit;
+  let shown=0;
+  rows.forEach(li=>{
+   const m=!t||useAll||li.dataset.k.includes(t);
+   li.hidden=!m;li.classList.remove('hit');
+   if(m){shown++;if(!first&&!useAll)first=li;}});
+  const vis=!t||cardMatch||shown>0;
+  c.hidden=!vis;
+  if(t&&vis)n+=shown;});
  document.querySelectorAll('.cat').forEach(s=>{
   s.hidden=!s.querySelector('.card:not([hidden])');});
  if(t&&first)first.classList.add('hit');
  cnt.textContent=t?(n+' match'+(n==1?'':'es')+(n?' · Enter opens the first':'')):'';
 }
+function target(){
+ const t=q.value.trim().toLowerCase();
+ // Typing a hub name means you want the hub, not the first service inside it.
+ if(t){const c=[...document.querySelectorAll('.card:not([hidden])')]
+   .find(c=>(c.dataset.hub||'').includes(t));
+  if(c){const h=c.querySelector('.hublink');if(h)return h;}}
+ return document.querySelector('li[data-k]:not([hidden]) a.svc')
+     || document.querySelector('.card:not([hidden]) .hublink');
+}
 q.addEventListener('input',flt);
 q.addEventListener('keydown',e=>{
- if(e.key==='Enter'){const a=document.querySelector('li[data-k]:not([hidden]) a.svc');
-  if(a)location.href=a.href;}
+ if(e.key==='Enter'){const a=target();if(a)location.href=a.href;}
  if(e.key==='Escape'){q.value='';flt();}});
 </script>"""
 
@@ -959,27 +1002,35 @@ def render_home():
 
     # One card per category, all in a single flowing grid (same shape as the
     # servarr hub) so the categories tile across the width instead of stacking.
+    def card(heading, members):
+        hub = CATEGORY_HUBS.get(heading)
+        hub = hub if hub in hub_names else None
+        link, hub_attr = "", ""
+        if hub:
+            summary = HUB_SUMMARY.get(hub, "")
+            sum_html = f'<span class="hsum">{html.escape(summary)}</span>' if summary else ""
+            link = (f'<a class="hublink" href="https://{hub}.{TS}">{sum_html}'
+                    f'<span class="hname">{html.escape(hub)}</span> ↗</a>')
+            hub_attr = f' data-hub="{html.escape(hub)}"'
+        # The card's own data-k carries the heading AND the hub name, so typing
+        # `proxmox` finds the Virtualization card. Without it the four hub names
+        # are unfindable on the page whose entire job is finding things by name.
+        key = html.escape((heading + " " + (hub or "")).strip().lower())
+        return (f'<div class="card" data-k="{key}"{hub_attr}>'
+                f'<div class="cardhead"><h2>{html.escape(heading)}</h2>{link}</div><ul>'
+                + "".join(item(m) for m in members) + "</ul></div>")
+
     cards = []
     uncategorised = set(listed)
     for heading, members in HOME_CATEGORIES:
         present = [m for m in members if m in names]
         uncategorised -= set(present)
         if present:
-            cards.append(f'<div class="card"><h2>{html.escape(heading)}</h2><ul>'
-                         + "".join(item(m) for m in present) + "</ul></div>")
+            cards.append(card(heading, present))
     if uncategorised:
-        cards.append('<div class="card"><h2>Other</h2><ul>'
-                     + "".join(item(m) for m in sorted(uncategorised)) + "</ul></div>")
+        cards.append(card("Other", sorted(uncategorised)))
     body = ('<section class="cat"><div class="grid wide">' + "".join(cards)
             + "</div></section>")
-
-    hubrow = "".join(
-        f'<a class="hubcard" href="https://{n}.{TS}"><div class="hn">{html.escape(n)}</div>'
-        f'<div class="hd">{html.escape(d)}</div></a>'
-        for n, d in HOME_HUBS if n in hub_names)
-    if hubrow:
-        body = ('<section class="cat"><h3 class="section">Hubs</h3>'
-                f'<div class="hubrow">{hubrow}</div></section>') + body
 
     dark = sorted(n for n in listed if not up.get(n, False))
     search = ('<div class="search"><input id="q" type="search" '
@@ -997,9 +1048,11 @@ def render_home():
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    for name, fn in [("home", render_home), ("proxmox", render_proxmox),
-                     ("servarr", render_servarr), ("containers", render_containers),
-                     ("zigbee", render_zigbee)]:
+    # home renders LAST: its category headers show each hub's headline numbers,
+    # which the hub renderers publish into HUB_SUMMARY as they build their pages.
+    for name, fn in [("proxmox", render_proxmox), ("servarr", render_servarr),
+                     ("containers", render_containers), ("zigbee", render_zigbee),
+                     ("home", render_home)]:
         out = fn()
         with open(os.path.join(OUTDIR, name + ".html"), "w") as f:
             f.write(out)

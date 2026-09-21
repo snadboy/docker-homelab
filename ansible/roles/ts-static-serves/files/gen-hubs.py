@@ -170,7 +170,9 @@ font-family:ui-monospace,monospace}
 .grid.wide .card{display:flex;flex-direction:column}
 .grid.wide .card ul{height:18rem;overflow-y:auto;overscroll-behavior:contain;
 padding-right:.35rem}
-body.filtering .grid.wide .card ul{height:auto;overflow:visible;padding-right:0}
+/* No body.filtering escape hatch: the cards stay equal while filtering too. JS
+   equalise() then shrinks that shared height to the tallest VISIBLE result, so a
+   filtered view is uniform without every card being a mostly-empty 18rem box. */
 /* A visible scrollbar is the only cue that a list continues below the fold. */
 .grid.wide .card ul::-webkit-scrollbar{width:8px}
 .grid.wide .card ul::-webkit-scrollbar-track{background:transparent}
@@ -968,9 +970,6 @@ function flt(){
   if(t&&vis)n+=shown;});
  document.querySelectorAll('.cat').forEach(s=>{
   s.hidden=!s.querySelector('.card:not([hidden])');});
- // Release the fixed list height while filtering so short result sets do not sit
- // in a mostly-empty box.
- document.body.classList.toggle('filtering',!!t);
  if(t&&first)first.classList.add('hit');
  cnt.textContent=t?(n+' match'+(n==1?'':'es')+(n?' · Enter opens the first':'')):'';
 }
@@ -983,10 +982,25 @@ function target(){
  return document.querySelector('li[data-k]:not([hidden]) a.svc')
      || document.querySelector('.card:not([hidden]) .hublink');
 }
-q.addEventListener('input',flt);
+// Every visible card gets ONE shared list height: the tallest visible content,
+// capped at CAP so a long category scrolls instead of stretching the page. Applies
+// filtered and unfiltered alike, which is the whole point -- the groups stay the
+// same size in both states.
+const CAP=18*parseFloat(getComputedStyle(document.documentElement).fontSize);
+function equalise(){
+ const uls=[...document.querySelectorAll('.grid.wide .card:not([hidden]) ul')];
+ if(!uls.length)return;
+ uls.forEach(u=>{u.style.height='auto';});
+ const h=Math.min(Math.max(...uls.map(u=>u.scrollHeight)),CAP);
+ uls.forEach(u=>{u.style.height=h+'px';});
+}
+function refresh(){flt();equalise();}
+q.addEventListener('input',refresh);
 q.addEventListener('keydown',e=>{
  if(e.key==='Enter'){const a=target();if(a)location.href=a.href;}
- if(e.key==='Escape'){q.value='';flt();}});
+ if(e.key==='Escape'){q.value='';refresh();}});
+addEventListener('resize',equalise);
+equalise();
 </script>"""
 
 def render_home():

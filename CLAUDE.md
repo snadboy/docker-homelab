@@ -57,10 +57,14 @@ host for three weeks.
 printf '%s' "$GITHUB_TOKEN" | ssh snadboy@bedrock 'sudo docker login ghcr.io -u snadboy --password-stdin'
 ```
 
-Done 2026-09-21 with the existing `GITHUB_TOKEN`, which carries `repo`, `workflow`
-and `delete:packages`. It lands base64-encoded (**not** encrypted) in
-`/root/.docker/config.json`, so a bedrock compromise exposes all of that — a
-`read:packages`-only PAT would be the tighter choice if this is ever revisited.
+Done 2026-09-21. Initially with the broad `GITHUB_TOKEN`, then **replaced the same
+day with `GHCR_READ_TOKEN`** (shareables `.env`), a classic PAT scoped to
+**`read:packages` only**. Verified: it sees **0** private repos where the broad token
+sees 16, and `POST /user/repos` is refused. Use that one — `docker login` stores the
+credential base64-encoded (**not** encrypted) in `/root/.docker/config.json`, so the
+narrower scope is what limits a bedrock compromise to pulling images.
+
+`docker logout ghcr.io` first when rotating, or the old credential can linger.
 
 Deploy is then: copy `pwa-appserver/docker-compose.yml` to
 `~/docker-homelab/pwa-appserver/` on bedrock, `docker compose pull && up -d`.

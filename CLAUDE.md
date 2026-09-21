@@ -12,7 +12,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 
 | Host | Dockhand Env ID | Connection | Key Stacks |
 |------|-----------------|------------|------------|
-| utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub, container-watchdog |
+| utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub |
 | arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
 | edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |

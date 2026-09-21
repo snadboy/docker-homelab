@@ -151,7 +151,16 @@ Deploy is then: copy `pwa-appserver/docker-compose.yml` to
 > `/etc/docker/daemon.json` on arr and restart Docker — note that restarts every container on the
 > host, so schedule it.
 
-**arr-dashboard** — **REMOVED 2026-08-01** (commit 4055ce6, superseded by live status on the servarr hub). Compose dir deleted; its `git_stacks` row (id 25, env 3) was left behind and fails the nightly deploy every night with `Compose file not found`. Same for `kiosk-dashboard` (id 19, removed 2026-05-02) and `status-dashboard` (id 13, removed 2026-05-22).
+**arr-dashboard** — **REMOVED 2026-08-01** (commit 4055ce6, superseded by live status on the servarr hub). Compose dir deleted.
+
+> ✅ **Dead `git_stacks` rows cleaned up 2026-09-21.** Rows 25 (`arr-dashboard`),
+> 19 (`kiosk-dashboard`, removed 2026-05-02) and 13 (`status-dashboard`, removed
+> 2026-05-22) had outlived their compose files and failed the nightly deploy every
+> night with `Compose file not found` — for up to four months. Verified first that no
+> container by those names existed on any host and no compose file existed in the
+> repo, then deleted the rows plus one orphaned `stack_sources` row, keeping
+> `stack_events` as audit history. Registry went 22 → **19 stacks, zero in error**.
+> DB backed up to `/app/data/db/dockhand.db.bak-deadrows-20260921-150640` first.
 - `khak1s/arr-dashboard`, container port 3000 → **host 3005** (3000 taken by tracearr), external volume `arr-dashboard-data`. TS service `arr-dashboard.swallow-spectrum.ts.net`; WebAuthn pinned to that origin. First-run: create admin + add *arr instances via UI.
 
 **Available / Upcoming Episodes** (Plex TV collections; 2026-07-31 redesign, replacing the day-old Episodes trio after real-world viewing found it noisy) —

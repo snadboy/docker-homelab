@@ -163,6 +163,32 @@ kbd{background:var(--edge);border-radius:4px;padding:.05rem .3rem;font-size:.68r
 font-family:ui-monospace,monospace}
 .cat{margin-top:1.5rem}.cat:first-of-type{margin-top:0}
 .grid.wide{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));align-items:start}
+/* Uniform card height: the list gets a fixed height and scrolls, so a 15-row
+   category and a 2-row one occupy the same box. The height is dropped while a
+   filter is active (body.filtering) -- otherwise a search returning two rows would
+   leave most of every card empty. */
+.grid.wide .card{display:flex;flex-direction:column}
+.grid.wide .card ul{height:18rem;overflow-y:auto;overscroll-behavior:contain;
+padding-right:.35rem}
+body.filtering .grid.wide .card ul{height:auto;overflow:visible;padding-right:0}
+/* A visible scrollbar is the only cue that a list continues below the fold. */
+.grid.wide .card ul::-webkit-scrollbar{width:8px}
+.grid.wide .card ul::-webkit-scrollbar-track{background:transparent}
+.grid.wide .card ul::-webkit-scrollbar-thumb{background:var(--edge);border-radius:4px}
+.grid.wide .card ul::-webkit-scrollbar-thumb:hover{background:#313c48}
+.grid.wide .card ul{scrollbar-width:thin;scrollbar-color:var(--edge) transparent}
+.ccount{color:var(--dim);font-size:.72rem;font-weight:400;margin-left:.45rem;vertical-align:middle}
+/* MUST come with !important. The UA sheet's [hidden]{display:none} loses to ANY
+   author display rule regardless of specificity, and `li` and `.grid.wide .card`
+   both set display here -- so without this the filter marks rows hidden and they
+   stay on screen. Verified by computed style, not by querySelector: every
+   `li[data-k]:not([hidden])` selector test passes either way. */
+[hidden]{display:none!important}
+/* Equalise header height whether or not the card has a hub link (the link's border
+   + padding made those cards 2px taller). */
+.cardhead{height:1.75rem;align-items:center}  /* fixed, not min-: baseline
+alignment recomputes the flex line height and leaves a 1px drift between cards
+that have a hub link and cards that do not. */
 """
 
 def page(title, subtitle, body):
@@ -942,6 +968,9 @@ function flt(){
   if(t&&vis)n+=shown;});
  document.querySelectorAll('.cat').forEach(s=>{
   s.hidden=!s.querySelector('.card:not([hidden])');});
+ // Release the fixed list height while filtering so short result sets do not sit
+ // in a mostly-empty box.
+ document.body.classList.toggle('filtering',!!t);
  if(t&&first)first.classList.add('hit');
  cnt.textContent=t?(n+' match'+(n==1?'':'es')+(n?' · Enter opens the first':'')):'';
 }
@@ -1017,7 +1046,8 @@ def render_home():
         # are unfindable on the page whose entire job is finding things by name.
         key = html.escape((heading + " " + (hub or "")).strip().lower())
         return (f'<div class="card" data-k="{key}"{hub_attr}>'
-                f'<div class="cardhead"><h2>{html.escape(heading)}</h2>{link}</div><ul>'
+                f'<div class="cardhead"><h2>{html.escape(heading)}'
+                f'<span class="ccount">{len(members)}</span></h2>{link}</div><ul>'
                 + "".join(item(m) for m in members) + "</ul></div>")
 
     cards = []

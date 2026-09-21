@@ -16,7 +16,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
 | edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |
-| bedrock | 11 | hawser-edge agent | pulse, pwa-appserver, windmill |
+| bedrock | 11 | hawser-edge agent | **stirling-pdf only** — see the warning below |
 | fetch | 12 | hawser-edge agent | sabnzbd |
 
 > **Retired 2026-07:** Traefik and the **cadre** VM (106, pve-maxwell, stopped, onboot=0).
@@ -25,10 +25,45 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 > gone — do not re-add it. `snadboy.revp.*` compose labels are inert leftovers.
 > zigbee2mqtt moved off cadre: house → utilities, laundry + office → edge.
 
+> ⚠️ **`pwa-appserver`, `windmill` and `pulse` are NOT Dockhand stacks** (verified
+> 2026-09-21 against Dockhand's real DB — this table previously claimed they were).
+> Dockhand has **22** stacks and none of them match pwa/windmill/pulse/bulletin;
+> bedrock's env 11 holds exactly one, `stirling-pdf`. Those three are deployed **by
+> hand** from `~/docker-homelab/` on bedrock, which is **not a git clone** — just a
+> loose copy. So a push here never reaches them: the compose has to be copied over
+> and `docker compose up -d` run manually.
+>
+> **Reading Dockhand's database:** `/app/data/dockhand.db` and
+> `/app/data/database.db` are **0-byte leftovers**. The real DB is
+> **`/app/data/db/dockhand.db`** (~124 MB). Querying the empty ones returns zero
+> tables, which reads exactly like "no such stack" — verify against the right path.
+> The stack table is `git_stacks` and its name column is **`stack_name`**, not `name`.
+
 (Env 9 "ansible-controller" was deleted 2026-05-02 — it was a leftover from the
 pre-migration ansible-controller VM. semaphore was reattached to env 1.)
 
 ---
+
+## pwa-appserver deploys (bedrock, manual)
+
+`ghcr.io/snadboy/pwa` is a **private** package, so bedrock needs registry auth to
+pull it. Without it `docker compose pull` returns a bare `unauthorized` and the old
+image keeps running — silently. That is what happened between 2026-08-27 and
+2026-09-21: every push built and pushed fine via Actions, and nothing reached the
+host for three weeks.
+
+```bash
+# one-time, on bedrock (token from shareables .env)
+printf '%s' "$GITHUB_TOKEN" | ssh snadboy@bedrock 'sudo docker login ghcr.io -u snadboy --password-stdin'
+```
+
+Done 2026-09-21 with the existing `GITHUB_TOKEN`, which carries `repo`, `workflow`
+and `delete:packages`. It lands base64-encoded (**not** encrypted) in
+`/root/.docker/config.json`, so a bedrock compromise exposes all of that — a
+`read:packages`-only PAT would be the tighter choice if this is ever revisited.
+
+Deploy is then: copy `pwa-appserver/docker-compose.yml` to
+`~/docker-homelab/pwa-appserver/` on bedrock, `docker compose pull && up -d`.
 
 ## Key Stack Notes
 

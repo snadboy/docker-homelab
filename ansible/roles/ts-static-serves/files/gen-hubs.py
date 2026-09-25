@@ -772,8 +772,8 @@ HOME_CATEGORIES = [
     ("Network & storage", ["unifi", "unifi-toolkit", "wan-pin", "technitium",
                            "media", "unas-able", "unas-baker"]),
     ("Automation & workflows", ["semaphore", "windmill"]),
-    ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "actual", "firefly",
-                         "firefly-import", "termix", "pdf"]),
+    ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
+                         "firefly", "firefly-import", "termix", "pdf"]),
 ]
 
 # service -> (dashboard-icons slug or None, blurb). A missing entry is fine: the
@@ -829,6 +829,7 @@ HOME_META = {
     "pkdb-app":             (None, "PKDB app"),
     "pwa":                  (None, "PWA hub"),
     "claude":               (None, "Claude Code Remote Control"),
+    "aoe":                  (None, "Agent of Empires - agent session manager"),
     "actual":               ("actual-budget", "Actual Budget"),
     "firefly":              ("firefly-iii", "Firefly III"),
     "firefly-import":       ("firefly-iii", "Firefly III data importer"),

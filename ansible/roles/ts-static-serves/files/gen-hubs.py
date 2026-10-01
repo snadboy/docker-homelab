@@ -761,6 +761,7 @@ HUB_SUMMARY = {}
 HOME_CATEGORIES = [
     ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
                            "slzb-upstairs", "slzb-basement",
+                           "slzb-upstairs-thread", "slzb-basement-thread",
                            "homelab-bar", "trmnl"]),
     ("Media", ["plex", "plex-recent", "jellyfin", "tautulli", "sonarr", "radarr",
                "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
@@ -789,6 +790,10 @@ HOME_META = {
     # the service runs, which renders as a bare IP.
     "slzb-upstairs":        (None, "SLZB-MR1U radio — office (Zigbee + Thread)"),
     "slzb-basement":        (None, "SLZB-MR1U radio — laundry (Zigbee)"),
+    # Dedicated Thread border routers (SLZB-06MG24U). Single-radio boxes, so these
+    # do Thread only; Zigbee stays on the MR1Us above. -basement pending 2nd unit.
+    "slzb-upstairs-thread": (None, "Thread border router — office"),
+    "slzb-basement-thread": (None, "Thread border router — laundry"),
     "homelab-bar":          (None, "RPi rack-panel dashboard"),
     "trmnl":                (None, "BYOS TRMNL e-ink server"),
     "plex":                 ("plex", "Plex Media Server"),

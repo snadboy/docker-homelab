@@ -760,6 +760,7 @@ HUB_SUMMARY = {}
 
 HOME_CATEGORIES = [
     ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
+                           "slzb-upstairs", "slzb-basement",
                            "homelab-bar", "trmnl"]),
     ("Media", ["plex", "plex-recent", "jellyfin", "tautulli", "sonarr", "radarr",
                "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
@@ -783,6 +784,11 @@ HOME_META = {
     "ha":                   ("home-assistant", "Home Assistant"),
     "zigbee2mqtt-upstairs": ("zigbee2mqtt", "Z2M — upstairs (office) coordinator"),
     "zigbee2mqtt-basement": ("zigbee2mqtt", "Z2M — basement (laundry) coordinator"),
+    # The adapter hardware behind those two Z2M servers (SLZB-OS web UI). Blurbs
+    # are explicit because a missing HOME_META entry falls back to showing where
+    # the service runs, which renders as a bare IP.
+    "slzb-upstairs":        (None, "SLZB-MR1U radio — office (Zigbee + Thread)"),
+    "slzb-basement":        (None, "SLZB-MR1U radio — laundry (Zigbee)"),
     "homelab-bar":          (None, "RPi rack-panel dashboard"),
     "trmnl":                (None, "BYOS TRMNL e-ink server"),
     "plex":                 ("plex", "Plex Media Server"),

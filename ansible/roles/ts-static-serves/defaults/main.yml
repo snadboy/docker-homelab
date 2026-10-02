@@ -37,7 +37,8 @@ ts_static_services:
   - { name: aoe,           target: "http://192.168.86.220:8080" }            # Agent of Empires, sdevs (token auth)
   # SLZB-MR1U adapter web UIs (SLZB-OS). These are the LIVE Zigbee coordinators —
   # z2m talks to their radio-2 socket on :7638 (upstairs ch20, basement ch25), and
-  # upstairs radio-1 is the Thread radio. The SLZB-06M units are retired spares.
+  # upstairs radio-1 is the Thread radio. These two are the ONLY SLZB radios left —
+  # the SLZB-06M spares and the SLZB-06Mg24U were physically removed 2026-10-02.
   # Plain HTTP on :80; /ha_sensors is the real temp source (HA's SMLIGHT temp
   # sensors read 50-65 C high and are not trustworthy).
   - { name: slzb-upstairs, target: "http://192.168.86.130" }                 # office

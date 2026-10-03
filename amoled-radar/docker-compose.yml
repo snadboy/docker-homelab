@@ -9,6 +9,10 @@ services:
     image: ghcr.io/snadboy/amoled-radar:9d24f12ef298e760b8d52ebe96c5be4462e6554d
     container_name: amoled-radar
     restart: unless-stopped
+    # LAN port for the display itself. The ESP32 can't run Tailscale, so it can't use
+    # radar.swallow-spectrum.ts.net; it fetches http://192.168.86.135:8098 instead.
+    ports:
+      - "8098:8080"
     environment:
       HASS_SERVER: ${HASS_SERVER}
       HASS_TOKEN: ${HASS_TOKEN}

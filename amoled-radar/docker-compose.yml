@@ -8,8 +8,8 @@ services:
     environment:
       HASS_SERVER: ${HASS_SERVER}
       HASS_TOKEN: ${HASS_TOKEN}
-      RADAR_LAT: ${RADAR_LAT:-41.90}
-      RADAR_LON: ${RADAR_LON:--88.32}
+      # Cities (Geneva / St. Louis / Canton) are defined in serve.py. Override with a
+      # JSON list in RADAR_CITIES if they ever change.
       PORT: "8080"
       RADAR_FRAMES: "12"
       RADAR_REFRESH_S: "600"    # RainViewer publishes a new frame every 10 min

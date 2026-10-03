@@ -1,0 +1,26 @@
+# Server for the ESP32-C6 AMOLED radar display -- source and docs:
+# https://github.com/snadboy/amoled-radar
+services:
+  amoled-radar:
+    image: ghcr.io/snadboy/amoled-radar:latest
+    container_name: amoled-radar
+    restart: unless-stopped
+    environment:
+      HASS_SERVER: ${HASS_SERVER}
+      HASS_TOKEN: ${HASS_TOKEN}
+      RADAR_LAT: ${RADAR_LAT:-41.90}
+      RADAR_LON: ${RADAR_LON:--88.32}
+      PORT: "8080"
+      RADAR_FRAMES: "12"
+      RADAR_REFRESH_S: "600"    # RainViewer publishes a new frame every 10 min
+      STATUS_REFRESH_S: "60"    # keeps the outdoor reading fresh
+    volumes:
+      - amoled-radar-cache:/cache   # basemap is fetched once and cached here
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=radar"
+      - "docktail.service.port=8080"
+      - "docktail.service.service-port=443"
+
+volumes:
+  amoled-radar-cache:

@@ -6,7 +6,7 @@ services:
     # changes ("No changes detected, skipping redeploy"), and a new :latest image
     # changes nothing in git -- so it would never be picked up. To ship a server
     # change, bump this tag to the new amoled-radar commit; that IS a git change.
-    image: ghcr.io/snadboy/amoled-radar:9bb0af250cd11e4f016b89ba3c0f2b505ab3da5d
+    image: ghcr.io/snadboy/amoled-radar:9773fe4e2146da4f9d9643a5496e1eed65b90768
     container_name: amoled-radar
     restart: unless-stopped
     environment:

@@ -2,7 +2,11 @@
 # https://github.com/snadboy/amoled-radar
 services:
   amoled-radar:
-    image: ghcr.io/snadboy/amoled-radar:latest
+    # Pinned to a build, NOT :latest. Dockhand's auto-update only redeploys when git
+    # changes ("No changes detected, skipping redeploy"), and a new :latest image
+    # changes nothing in git -- so it would never be picked up. To ship a server
+    # change, bump this tag to the new amoled-radar commit; that IS a git change.
+    image: ghcr.io/snadboy/amoled-radar:c3eba8001f46dfa80eb05636c5cc326b5055fdd4
     container_name: amoled-radar
     restart: unless-stopped
     environment:

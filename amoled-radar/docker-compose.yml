@@ -1,32 +1,42 @@
-# Server for the ESP32-C6 AMOLED radar display -- source and docs:
-# https://github.com/snadboy/amoled-radar
+# display-hub: the server for the ESP32 AMOLED displays (weather radar + aircraft).
+# Source and docs: https://github.com/snadboy/display-hub (formerly amoled-radar).
+#
+# The Dockhand stack, this directory and the service key keep the old "amoled-radar"
+# name so a deploy replaces the old container in place and keeps its cache volume.
 services:
   amoled-radar:
     # Pinned to a build, NOT :latest. Dockhand's auto-update only redeploys when git
     # changes ("No changes detected, skipping redeploy"), and a new :latest image
     # changes nothing in git -- so it would never be picked up. To ship a server
-    # change, bump this tag to the new amoled-radar commit; that IS a git change.
-    image: ghcr.io/snadboy/amoled-radar:27a116dfb56db1e7a32d609691a8aa05237c6046
-    container_name: amoled-radar
+    # change, bump this tag to the new display-hub commit; that IS a git change.
+    image: ghcr.io/snadboy/display-hub:8cd4601190973f9b9b1d1d537fe39e5e65eb8e59
+    container_name: display-hub
     restart: unless-stopped
-    # LAN port for the display itself. The ESP32 can't run Tailscale, so it can't use
-    # radar.swallow-spectrum.ts.net; it fetches http://192.168.86.135:8098 instead.
+    # LAN port for the displays themselves. An ESP32 can't run Tailscale, so it can't use
+    # displays.swallow-spectrum.ts.net; it fetches http://192.168.86.135:8098 instead.
     ports:
       - "8098:8080"
     environment:
       HASS_SERVER: ${HASS_SERVER}
       HASS_TOKEN: ${HASS_TOKEN}
-      # Cities (Geneva / St. Louis / Canton) are defined in serve.py. Override with a
+      # Aircraft app: OpenSky API client, and the view centre (exact home position --
+      # kept out of the public display-hub repo, so it is a stack variable here).
+      OPENSKY_CLIENT_ID: ${OPENSKY_CLIENT_ID}
+      OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET}
+      AIR_LAT: ${AIR_LAT}
+      AIR_LON: ${AIR_LON}
+      # Weather cities are defined in server/hub/weather/__init__.py. Override with a
       # JSON list in RADAR_CITIES if they ever change.
       PORT: "8080"
       RADAR_FRAMES: "12"
       RADAR_REFRESH_S: "600"    # RainViewer publishes a new frame every 10 min
       STATUS_REFRESH_S: "60"    # keeps the outdoor reading fresh
     volumes:
-      - amoled-radar-cache:/cache   # basemap is fetched once and cached here
+      # Basemaps, the device registry (names) and published firmware live here.
+      - amoled-radar-cache:/cache
     labels:
       - "docktail.service.enable=true"
-      - "docktail.service.name=radar"
+      - "docktail.service.name=displays"
       - "docktail.service.port=8080"
       - "docktail.service.service-port=443"
 

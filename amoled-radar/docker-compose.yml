@@ -6,7 +6,7 @@ services:
     # changes ("No changes detected, skipping redeploy"), and a new :latest image
     # changes nothing in git -- so it would never be picked up. To ship a server
     # change, bump this tag to the new amoled-radar commit; that IS a git change.
-    image: ghcr.io/snadboy/amoled-radar:9d24f12ef298e760b8d52ebe96c5be4462e6554d
+    image: ghcr.io/snadboy/amoled-radar:27a116dfb56db1e7a32d609691a8aa05237c6046
     container_name: amoled-radar
     restart: unless-stopped
     # LAN port for the display itself. The ESP32 can't run Tailscale, so it can't use

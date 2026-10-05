@@ -9,24 +9,24 @@ services:
     # changes ("No changes detected, skipping redeploy"), and a new :latest image
     # changes nothing in git -- so it would never be picked up. To ship a server
     # change, bump this tag to the new display-hub commit; that IS a git change.
-    image: ghcr.io/snadboy/display-hub:00190cd841e3e87685c8d54c88aa7fd45b797ba1
+    image: ghcr.io/snadboy/display-hub:725800fb3155a84214b221aec8d419200df8d891
     container_name: display-hub
     restart: unless-stopped
-    # LAN port for the displays themselves. An ESP32 can't run Tailscale, so it can't use
-    # displays.swallow-spectrum.ts.net; it fetches http://192.168.86.135:8098 instead.
+    # LAN port for the displays themselves (read-only paths). An ESP32 can't run Tailscale,
+    # so it fetches http://192.168.86.135:8098. The admin page (container port 8081) is
+    # deliberately NOT published here: it is reachable only through the DockTail VIP below.
     ports:
       - "8098:8080"
     environment:
+      # Settings live in the hub (admin page -> hub.db in the cache volume). These stack
+      # variables only SEED a hub that has no hub.db yet; once the admin page shows the
+      # connections as saved, they can be deleted from the Dockhand stack.
       HASS_SERVER: ${HASS_SERVER}
       HASS_TOKEN: ${HASS_TOKEN}
-      # Aircraft app: OpenSky API client, and the view centre (exact home position --
-      # kept out of the public display-hub repo, so it is a stack variable here).
       OPENSKY_CLIENT_ID: ${OPENSKY_CLIENT_ID}
       OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET}
       AIR_LAT: ${AIR_LAT}
       AIR_LON: ${AIR_LON}
-      # Weather cities are defined in server/hub/weather/__init__.py. Override with a
-      # JSON list in RADAR_CITIES if they ever change.
       PORT: "8080"
       RADAR_FRAMES: "12"
       RADAR_REFRESH_S: "600"    # RainViewer publishes a new frame every 10 min
@@ -37,7 +37,7 @@ services:
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=displays"
-      - "docktail.service.port=8080"
+      - "docktail.service.port=8081"     # the admin page (and everything else) for humans
       - "docktail.service.service-port=443"
 
 volumes:

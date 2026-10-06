@@ -9,7 +9,7 @@ services:
     # changes ("No changes detected, skipping redeploy"), and a new :latest image
     # changes nothing in git -- so it would never be picked up. To ship a server
     # change, bump this tag to the new display-hub commit; that IS a git change.
-    image: ghcr.io/snadboy/display-hub:361a5a14b4973d8367321b3c89f8799f7f69301b
+    image: ghcr.io/snadboy/display-hub:75520d0ed63e767aed5fb7b38833f84858d1218f
     container_name: display-hub
     restart: unless-stopped
     # LAN port for the displays themselves (read-only paths). An ESP32 can't run Tailscale,

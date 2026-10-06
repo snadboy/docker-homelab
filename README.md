@@ -9,7 +9,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | **utilities** | actual-budget, dockhand, peanut, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
 | **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
 | **fetch** | sabnzbd |
-| **bedrock** | pulse |
+| **bedrock** | pulse, cube-loop |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
 | **plex** | plex, transcoding-gpu-benchmark |
 
@@ -74,6 +74,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | Stack | Host | Description |
 |-------|------|-------------|
 | `actual-budget/` | utilities | Budgeting tool |
+| `cube-loop/` | bedrock | Cube Loop puzzle game PWA — `cubeloop.swallow-spectrum.ts.net` (Dockhand stack) |
 | `firefly-iii/` | utilities | Financial management |
 | `pulse/` | bedrock | Proxmox cluster monitoring (requires agents on PVE/PBS nodes) |
 | `termix/` | utilities | Web terminal |

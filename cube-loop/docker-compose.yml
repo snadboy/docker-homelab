@@ -1,0 +1,18 @@
+# Cube Loop: conveyor-belt sorting puzzle (static PWA on nginx).
+# Source: https://github.com/snadboy/cube-loop (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new cube-loop commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
+services:
+  cube-loop:
+    image: ghcr.io/snadboy/cube-loop:c8a43d3e0ff19d6af68a5f5f8b3926eda5730a56
+    container_name: cube-loop
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=cubeloop"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

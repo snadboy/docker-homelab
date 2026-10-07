@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
 services:
   cube-loop:
-    image: ghcr.io/snadboy/cube-loop:06da50372689c4aec7a304ce132c85a88110813f
+    image: ghcr.io/snadboy/cube-loop:276c67d39a439a268ce6da6f746cc71e5c5ed8f5
     container_name: cube-loop
     restart: unless-stopped
     environment:

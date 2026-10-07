@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
 services:
   squad-blitz:
-    image: ghcr.io/snadboy/squad-blitz:d783f6c36768095ab5435681bf35fef7d455973d
+    image: ghcr.io/snadboy/squad-blitz:d776ae38760e3ffc95cb2c3dbc4666ce070b106f
     container_name: squad-blitz
     restart: unless-stopped
     environment:

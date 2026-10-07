@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
 services:
   hearts:
-    image: ghcr.io/snadboy/hearts:404f496bba975aabc6e32fb0911210dd5ff015d9
+    image: ghcr.io/snadboy/hearts:eb0846eb021c5c264fe33df4917a337ef3a5d4eb
     container_name: hearts
     restart: unless-stopped
     environment:

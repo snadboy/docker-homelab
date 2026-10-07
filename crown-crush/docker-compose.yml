@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
 services:
   crown-crush:
-    image: ghcr.io/snadboy/crown-crush:407e6ec2f59c534add0cb83333adfd89e41e04ed
+    image: ghcr.io/snadboy/crown-crush:931830f00e72353bd9bcc1926fc9ab45c476e811
     container_name: crown-crush
     restart: unless-stopped
     environment:

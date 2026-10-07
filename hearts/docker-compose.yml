@@ -1,0 +1,18 @@
+# SB Hearts: card game with CPU levels + teaching coach (static PWA on nginx).
+# Source: https://github.com/snadboy/hearts (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new hearts commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
+services:
+  hearts:
+    image: ghcr.io/snadboy/hearts:0000000
+    container_name: hearts
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=hearts"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

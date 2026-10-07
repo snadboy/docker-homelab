@@ -9,7 +9,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | **utilities** | actual-budget, dockhand, peanut, firefly-iii, gotify, homepage, semaphore, status-dashboard, termix, unifi-toolkit, uptime-kuma |
 | **arr** | agregarr, bazarr, maintainerr, overseerr, prowlarr, radarr, sonarr, tautulli, tracearr, wizarr |
 | **fetch** | sabnzbd |
-| **bedrock** | pulse, cube-loop, squad-blitz, crown-crush, sb-save |
+| **bedrock** | pulse, cube-loop, squad-blitz, crown-crush, sb-save, hearts |
 | **cadre** | cloudflared-gotify, cloudflare-overseerr, cloudflare-plex, traefik-http-provider (includes traefik) |
 | **plex** | plex, transcoding-gpu-benchmark |
 
@@ -77,6 +77,7 @@ Docker Compose stacks for the homelab, deployed via [Dockhand](https://github.co
 | `cube-loop/` | bedrock | Cube Loop puzzle game PWA — `cubeloop.swallow-spectrum.ts.net` (Dockhand stack) |
 | `squad-blitz/` | bedrock | Squad Blitz runner-shooter game PWA — `squadblitz.swallow-spectrum.ts.net` (Dockhand stack) |
 | `crown-crush/` | bedrock | SB Crown Crush match-3 game PWA — `crowncrush.swallow-spectrum.ts.net` (Dockhand stack) |
+| `hearts/` | bedrock | SB Hearts card game PWA (CPU levels + teaching coach) — `hearts.swallow-spectrum.ts.net` (Dockhand stack) |
 | `sb-save/` | bedrock | Cloud saves for the SB games (Tailscale identity) — `sbsave.swallow-spectrum.ts.net` (Dockhand stack, volume `sb-save-data`) |
 | `firefly-iii/` | utilities | Financial management |
 | `pulse/` | bedrock | Proxmox cluster monitoring (requires agents on PVE/PBS nodes) |

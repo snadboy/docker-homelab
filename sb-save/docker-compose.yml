@@ -1,0 +1,23 @@
+# SB Save: cloud saves shared by all SB games (FastAPI + SQLite).
+# Source: https://github.com/snadboy/sb-save (private; bedrock is logged in to ghcr).
+# Identity comes from the Tailscale serve proxy (Tailscale-User-Login header).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change.
+services:
+  sb-save:
+    image: ghcr.io/snadboy/sb-save:151138a58cc441b5cd0bff9998370cb0c8a69577
+    container_name: sb-save
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - sb-save-data:/data
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sbsave"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"
+
+volumes:
+  sb-save-data:
+    external: true

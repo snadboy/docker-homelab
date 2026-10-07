@@ -775,6 +775,7 @@ HOME_CATEGORIES = [
     ("Automation & workflows", ["semaphore", "windmill"]),
     ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
                          "firefly", "firefly-import", "termix", "pdf"]),
+    ("Games", ["cubeloop", "squadblitz", "crowncrush", "sbsave"]),
 ]
 
 # service -> (dashboard-icons slug or None, blurb). A missing entry is fine: the
@@ -840,6 +841,10 @@ HOME_META = {
     "firefly-import":       ("firefly-iii", "Firefly III data importer"),
     "termix":               (None, "Web terminal"),
     "pdf":                  ("stirling-pdf", "Stirling PDF tools"),
+    "cubeloop":             (None, "SB Cube Loop — loop-sort puzzle"),
+    "squadblitz":           (None, "SB Squad Blitz — gate runner shooter"),
+    "crowncrush":           (None, "SB Crown Crush — match-3"),
+    "sbsave":               (None, "SB Save — cloud saves for SB games"),
 }
 
 def tailnet_services():

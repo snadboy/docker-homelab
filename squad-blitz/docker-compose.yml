@@ -1,0 +1,18 @@
+# Squad Blitz: multiplier-gate runner shooter (three.js static PWA on nginx).
+# Source: https://github.com/snadboy/squad-blitz (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new squad-blitz commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
+services:
+  squad-blitz:
+    image: ghcr.io/snadboy/squad-blitz:a2d3ea56aeea45056ead12159536f4689b085c19
+    container_name: squad-blitz
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=squadblitz"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

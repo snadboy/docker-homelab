@@ -1,0 +1,18 @@
+# SB Crown Crush: royal match-3 (static PWA on nginx).
+# Source: https://github.com/snadboy/crown-crush (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new crown-crush commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
+services:
+  crown-crush:
+    image: ghcr.io/snadboy/crown-crush:ef3a8d3c8a494d191d0ab0f8d8e0fe449a15fbef
+    container_name: crown-crush
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=crowncrush"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

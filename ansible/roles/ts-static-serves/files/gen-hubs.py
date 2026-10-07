@@ -803,7 +803,7 @@ HOME_CATEGORIES = [
     ("Automation & workflows", ["semaphore", "windmill"]),
     ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
                          "firefly", "firefly-import", "termix", "pdf"]),
-    ("Games", ["cubeloop", "squadblitz", "crowncrush", "sbsave"]),
+    ("Games", ["cubeloop", "squadblitz", "crowncrush", "hearts", "sbsave"]),
 ]
 
 # service -> (dashboard-icons slug or None, blurb). A missing entry is fine: the
@@ -874,6 +874,7 @@ HOME_META = {
     "cubeloop":             ("https://cubeloop.swallow-spectrum.ts.net/icons/icon-192.png", "SB Cube Loop — loop-sort puzzle"),
     "squadblitz":           ("https://squadblitz.swallow-spectrum.ts.net/icons/icon-192.png", "SB Squad Blitz — gate runner shooter"),
     "crowncrush":           ("https://crowncrush.swallow-spectrum.ts.net/icons/icon-192.png", "SB Crown Crush — match-3"),
+    "hearts":               ("https://hearts.swallow-spectrum.ts.net/icons/icon-192.png", "SB Hearts — card game with a coach"),
     "sbsave":               (SBSAVE_ICON, "SB Save — cloud saves for SB games"),
 }
 

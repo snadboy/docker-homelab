@@ -6,6 +6,7 @@ Hubs: home (index of every service), proxmox (guests + datastores),
 servarr (live arr status), containers, zigbee."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
 import concurrent.futures, socket, ssl
+import base64, re
 
 TS = "swallow-spectrum.ts.net"
 DOCKHAND = f"https://dockhand.{TS}/containers?search="  # + urlencoded container name
@@ -88,7 +89,33 @@ def icon_svg(slug):
     except Exception:
         return None
 
+def icon_img(url):
+    """A PNG icon an app serves itself, fetched once and inlined as a data URI."""
+    os.makedirs(ICONDIR, exist_ok=True)
+    cache = os.path.join(ICONDIR, re.sub(r"[^a-z0-9]+", "_", url.lower()) + ".png")
+    if not os.path.exists(cache):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ts-hubs"})
+            data = urllib.request.urlopen(req, timeout=8).read()
+            if data[:8] != b"\x89PNG\r\n\x1a\n":
+                return None
+            open(cache, "wb").write(data)
+        except Exception:
+            return None
+    try:
+        return "data:image/png;base64," + base64.b64encode(open(cache, "rb").read()).decode()
+    except Exception:
+        return None
+
 def icon_or_badge(label, slug):
+    # A slug may also be inline SVG markup, or an https URL to the app's own PNG.
+    if slug and slug.startswith("<svg"):
+        return f'<span class="ico">{slug}</span>'
+    if slug and slug.startswith("https://"):
+        src = icon_img(slug)
+        if src:
+            return f'<span class="ico"><img src="{src}" alt=""></span>'
+        slug = None
     svg = icon_svg(slug)
     if svg:
         return f'<span class="ico">{svg}</span>'
@@ -125,6 +152,7 @@ a.svc:hover{text-decoration:underline}
 .stat.down{color:var(--off)}
 .ico{width:22px;height:22px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
 .ico svg{width:22px;height:22px}
+.ico img{width:22px;height:22px;border-radius:5px}
 .badge-ico{background:var(--edge);color:var(--fg);border-radius:5px;font-size:.7rem;font-weight:700}
 .bar{height:7px;border-radius:4px;background:var(--edge);overflow:hidden;margin:.35rem 0 .1rem}
 .bar > span{display:block;height:100%}
@@ -781,6 +809,8 @@ HOME_CATEGORIES = [
 # service -> (dashboard-icons slug or None, blurb). A missing entry is fine: the
 # blurb falls back to where the service actually runs, and a slug the CDN does not
 # have degrades to a letter badge.
+SBSAVE_ICON = ('<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="sbsv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7b5cf0"/><stop offset="1" stop-color="#3d2a9e"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#sbsv)"/><path d="M20 45h25a9 9 0 0 0 1-18 13 13 0 0 0-25-3 10.5 10.5 0 0 0-1 21z" fill="#fff"/><path d="M25.5 35.5l5 5 9-10" fill="none" stroke="#e8b923" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+
 HOME_META = {
     "ha":                   ("home-assistant", "Home Assistant"),
     "zigbee2mqtt-upstairs": ("zigbee2mqtt", "Z2M — upstairs (office) coordinator"),
@@ -841,10 +871,10 @@ HOME_META = {
     "firefly-import":       ("firefly-iii", "Firefly III data importer"),
     "termix":               (None, "Web terminal"),
     "pdf":                  ("stirling-pdf", "Stirling PDF tools"),
-    "cubeloop":             (None, "SB Cube Loop — loop-sort puzzle"),
-    "squadblitz":           (None, "SB Squad Blitz — gate runner shooter"),
-    "crowncrush":           (None, "SB Crown Crush — match-3"),
-    "sbsave":               (None, "SB Save — cloud saves for SB games"),
+    "cubeloop":             ("https://cubeloop.swallow-spectrum.ts.net/icons/icon-192.png", "SB Cube Loop — loop-sort puzzle"),
+    "squadblitz":           ("https://squadblitz.swallow-spectrum.ts.net/icons/icon-192.png", "SB Squad Blitz — gate runner shooter"),
+    "crowncrush":           ("https://crowncrush.swallow-spectrum.ts.net/icons/icon-192.png", "SB Crown Crush — match-3"),
+    "sbsave":               (SBSAVE_ICON, "SB Save — cloud saves for SB games"),
 }
 
 def tailnet_services():

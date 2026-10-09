@@ -1,0 +1,107 @@
+blueprint:
+  name: "Vacancy Scene (Time Window)"
+  description: >-
+    Activates a scene once no occupancy has been detected for N minutes, but
+    only inside a daily time window. With several sensors, ALL of them must
+    read "off" for the full N minutes. Fires once per vacancy, not repeatedly.
+
+    If the window opens while the room has already been empty for N minutes,
+    the scene is applied at the window start. Sensors that are unavailable
+    count as "not vacant", so a dead sensor blocks the scene rather than
+    firing it.
+  domain: automation
+  input:
+    occupancy_sensors:
+      name: Occupancy Sensors
+      description: One or more binary sensors. Any sensor reading "on" means occupied.
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    scene:
+      name: Scene
+      description: Scene to activate when the room has been vacant long enough
+      selector:
+        entity:
+          domain: scene
+    vacancy_minutes:
+      name: Vacancy Time
+      description: Minutes with no occupancy detected before the scene is activated
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: minutes
+          mode: box
+    window_start:
+      name: Window Start
+      description: Earliest time of day the scene may be activated
+      selector:
+        time:
+    window_end:
+      name: Window End
+      description: >-
+        Latest time of day the scene may be activated. May be earlier than the
+        start to span midnight (e.g. 22:00 → 06:00).
+      selector:
+        time:
+    recover_on_start:
+      name: Re-check After HA Restart
+      description: >-
+        A restart cancels a pending vacancy timer. When enabled, the automation
+        waits the vacancy time after HA starts and applies the scene if the
+        room is still empty and inside the window.
+      default: true
+      selector:
+        boolean:
+
+triggers:
+  - trigger: state
+    entity_id: !input occupancy_sensors
+    to: "off"
+    for:
+      minutes: !input vacancy_minutes
+    id: vacant
+  - trigger: time
+    at: !input window_start
+    id: window_open
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+
+variables:
+  recover_on_start: !input recover_on_start
+
+conditions:
+  - or:
+      - not:
+          - condition: trigger
+            id: ha_start
+      - condition: template
+        value_template: "{{ recover_on_start }}"
+
+actions:
+  - if:
+      - condition: trigger
+        id: ha_start
+    then:
+      # last_changed resets on restart, so the vacancy clock restarts too.
+      - delay:
+          minutes: !input vacancy_minutes
+  - condition: time
+    after: !input window_start
+    before: !input window_end
+  - condition: state
+    entity_id: !input occupancy_sensors
+    state: "off"
+    for:
+      minutes: !input vacancy_minutes
+  - action: scene.turn_on
+    target:
+      entity_id: !input scene
+
+# parallel: the restart-recovery delay must not hold back the other triggers.
+mode: parallel
+max: 10

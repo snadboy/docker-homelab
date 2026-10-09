@@ -9,6 +9,9 @@ blueprint:
     the scene is applied at the window start. Sensors that are unavailable
     count as "not vacant", so a dead sensor blocks the scene rather than
     firing it.
+
+    Optional: an Occupied Scene applied when occupancy is detected inside the
+    window while every Room Light is off (e.g. a nightlight).
   domain: automation
   input:
     occupancy_sensors:
@@ -47,6 +50,25 @@ blueprint:
         start to span midnight (e.g. 22:00 → 06:00).
       selector:
         time:
+    occupied_scene:
+      name: Occupied Scene (optional)
+      description: >-
+        Scene to activate when occupancy is detected inside the window and all
+        Room Lights are off. Leave empty to disable.
+      default: ""
+      selector:
+        entity:
+          domain: scene
+    room_lights:
+      name: Room Lights
+      description: >-
+        Lights that must all be off for the Occupied Scene to apply. With none
+        selected, the Occupied Scene applies on every detection in the window.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
     recover_on_start:
       name: Re-check After HA Restart
       description: >-
@@ -64,6 +86,10 @@ triggers:
     for:
       minutes: !input vacancy_minutes
     id: vacant
+  - trigger: state
+    entity_id: !input occupancy_sensors
+    to: "on"
+    id: occupied
   - trigger: time
     at: !input window_start
     id: window_open
@@ -73,6 +99,8 @@ triggers:
 
 variables:
   recover_on_start: !input recover_on_start
+  occupied_scene: !input occupied_scene
+  room_lights: !input room_lights
 
 conditions:
   - or:
@@ -83,24 +111,40 @@ conditions:
         value_template: "{{ recover_on_start }}"
 
 actions:
-  - if:
-      - condition: trigger
-        id: ha_start
-    then:
-      # last_changed resets on restart, so the vacancy clock restarts too.
-      - delay:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: occupied
+        sequence:
+          - condition: template
+            value_template: "{{ occupied_scene | length > 0 }}"
+          - condition: time
+            after: !input window_start
+            before: !input window_end
+          - condition: template
+            value_template: "{{ room_lights | select('is_state', 'on') | list | count == 0 }}"
+          - action: scene.turn_on
+            target:
+              entity_id: !input occupied_scene
+    default:
+      - if:
+          - condition: trigger
+            id: ha_start
+        then:
+          # last_changed resets on restart, so the vacancy clock restarts too.
+          - delay:
+              minutes: !input vacancy_minutes
+      - condition: time
+        after: !input window_start
+        before: !input window_end
+      - condition: state
+        entity_id: !input occupancy_sensors
+        state: "off"
+        for:
           minutes: !input vacancy_minutes
-  - condition: time
-    after: !input window_start
-    before: !input window_end
-  - condition: state
-    entity_id: !input occupancy_sensors
-    state: "off"
-    for:
-      minutes: !input vacancy_minutes
-  - action: scene.turn_on
-    target:
-      entity_id: !input scene
+      - action: scene.turn_on
+        target:
+          entity_id: !input scene
 
 # parallel: the restart-recovery delay must not hold back the other triggers.
 mode: parallel

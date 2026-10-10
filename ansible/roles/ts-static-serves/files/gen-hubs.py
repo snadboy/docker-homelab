@@ -696,7 +696,7 @@ def docktail_services():
                 parts = ln.split("\t")
                 if len(parts) < 3:
                     continue
-                cname, state, raw = parts[0], parts[1], parts[2]
+                state, raw = parts[1], parts[2]  # parts[0] is the container name, unused
                 try:
                     labels = json.loads(raw) or {}
                 except Exception:

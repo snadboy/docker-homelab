@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate static hub (mini-homepage) HTML for Tailscale Services.
+"""Generate the `home` page (index of every service) for Tailscale Services.
 Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 (advertiser has tag:ssh). Writes self-contained HTML to OUTDIR.
-Hubs: home (index of every service), proxmox (guests + datastores),
-servarr (live arr status), containers, zigbee."""
+The topic hubs -- proxmox (guests + datastores), servarr (live arr status),
+containers, zigbee -- are modals on home, reachable as home…/#<hub>."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
 import concurrent.futures, socket, ssl
 import base64, re, hashlib
@@ -1816,15 +1816,23 @@ def render_home():
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    # home renders LAST: its category headers show each hub's headline numbers,
-    # which the hub renderers publish into HUB_SUMMARY as they build their pages.
-    for name, fn in [("proxmox", render_proxmox), ("servarr", render_servarr),
-                     ("containers", render_containers), ("zigbee", render_zigbee),
-                     ("home", render_home)]:
-        out = fn()
-        with open(os.path.join(OUTDIR, name + ".html"), "w") as f:
-            f.write(out)
-        print(f"wrote {name}.html ({len(out)} bytes)")
+    # The topic hubs are modals on home since 2026-10-10 and their VIPs are retired,
+    # so only home.html is written. The hub renderers still run FIRST: they gather
+    # the data home's modals are built from (HUB_DATA, HUB_SUMMARY). Their page
+    # output is discarded.
+    for fn in (render_proxmox, render_servarr, render_containers, render_zigbee):
+        fn()
+    out = render_home()
+    with open(os.path.join(OUTDIR, "home.html"), "w") as f:
+        f.write(out)
+    print(f"wrote home.html ({len(out)} bytes)")
+    # Pages left from when the hubs were served on their own.
+    for stale in ("proxmox", "servarr", "containers", "zigbee"):
+        try:
+            os.remove(os.path.join(OUTDIR, stale + ".html"))
+            print(f"removed stale {stale}.html")
+        except FileNotFoundError:
+            pass
 
 if __name__ == "__main__":
     main()

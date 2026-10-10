@@ -142,7 +142,7 @@ Deploy is then: copy `pwa-appserver/docker-compose.yml` to
 - **First run is unconfigured** — visit the URL and complete `/setup/` (create admin, then connect the Plex server) before handing out invites.
 - **API key** (see shareables .env: `WIZARR_API_KEY`, `WIZARR_URL`). Header is `X-API-Key`; `GET /api/status` → `{users, invites, pending, expired}`, plus `/api/users` and `/api/invitations`. Swagger at `/api/docs/`.
 - ⚠️ Wizarr stores only a bcrypt `key_hash` in the `api_key` table — **the plaintext key cannot be recovered from the container** (unlike every *arr app, whose key sits in a readable config). Losing it means minting a new one in the UI. A second copy lives at `~snadboy/.wizarr-api-key` on arr (mode 600) so the servarr hub probe can read it locally; recreate that file after any arr rebuild.
-- Listed on the **servarr hub** (`servarr.swallow-spectrum.ts.net`) under a new "Access" card — shows pending-invite count, falling back to user count. See `ansible/roles/ts-static-serves/files/gen-hubs.py`.
+- Listed on the **servarr hub** (`home.swallow-spectrum.ts.net/#servarr`) under an "Access" card — shows pending-invite count, falling back to user count. See `ansible/roles/ts-static-serves/files/gen-hubs.py`.
 - ⚠️ Docker's default `172.17–172.31` bridge pool is **exhausted on arr**, so `wizarr_default` fell through to `192.168.0.0/20`. **This is now 4 stacks away from breaking arr's LAN routing** — see the countdown below.
 
 > ### ⚠️ arr bridge-pool countdown — 5 stacks to a LAN collision
@@ -184,28 +184,28 @@ Deploy is then: copy `pwa-appserver/docker-compose.yml` to
 
 ## Hub pages (`ts-static-serves` role)
 
-Five static HTML hubs, generated on both advertiser VMs by `ts-gen-hubs`
-(`ansible/roles/ts-static-serves/files/gen-hubs.py`) every 15 min and served as
-Tailscale Services:
+One static HTML page, **`home`**, generated on both advertiser VMs by `ts-gen-hubs`
+(`ansible/roles/ts-static-serves/files/gen-hubs.py`) every 15 min and served as the
+Tailscale Service `home.swallow-spectrum.ts.net` — the **index of EVERY service**,
+searchable, live up/down. Start here.
 
-| Hub | Covers |
+The four topic hubs are **modals on `home`**, deep-linkable:
+
+| Link | Covers |
 |---|---|
-| **`home`** | **index of EVERY service** — searchable, live up/down. Start here. |
-| `servarr` | media automation, live arr status |
-| `proxmox` | PVE nodes + guests, PBS datastores |
-| `containers` | every container across the fleet |
-| `zigbee` | Z2M servers + SLZB coordinator radios |
+| `home.swallow-spectrum.ts.net/#servarr` | media automation, live arr status |
+| `home.swallow-spectrum.ts.net/#proxmox` | PVE nodes + guests, PBS datastores |
+| `home.swallow-spectrum.ts.net/#containers` | every container across the fleet |
+| `home.swallow-spectrum.ts.net/#zigbee` | Z2M servers + SLZB coordinator radios |
 
-**Since 2026-10-10 `home` carries every hub as a modal** — the hub cards, header
-nav and section links open it in place, and `home.swallow-spectrum.ts.net/#servarr`
-(`#proxmox`, `#containers`, `#zigbee`) deep-links straight into one. The modals are
-built from `HUB_DATA`, which each hub renderer fills while building its own page, so
-they do **not** depend on the hub VIPs existing. The four hub VIPs are therefore
-redundant and slated for retirement (drop them from `ts_hubs`, delete the services);
-until then their pages are still written and served. Nothing in Kuma, HA or
-`~/projects` links to them (checked 2026-10-10). Test a generator change without
-touching the served pages: `sudo TS_HUBS_OUTDIR=/tmp/ts-hubs-test python3 gen-hubs.py`
-on an advertiser.
+**Hub VIPs RETIRED 2026-10-10.** `servarr`, `proxmox`, `containers` and `zigbee` were
+Tailscale Services of their own until the home redesign; they were dropped from
+`ts_hubs` and their service definitions deleted. The modals are built from
+`HUB_DATA`, which the hub renderers still fill on every run (their page output is
+discarded), so the drill-downs never depended on those VIPs. Nothing in Kuma, HA or
+`~/projects` linked to them (checked before retiring). Test a generator change
+without touching the served page: `sudo TS_HUBS_OUTDIR=/tmp/ts-hubs-test python3
+gen-hubs.py` on an advertiser.
 
 **`home`'s service list is discovered from the local netmap** (`tailscale debug
 netmap` → `DNS.ExtraRecords`), which is complete by construction and needs no

@@ -5,7 +5,7 @@ Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 The topic hubs -- proxmox (guests + datastores), servarr (live arr status),
 containers, zigbee -- are modals on home, reachable as home…/#<hub>."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
-import concurrent.futures, socket, ssl
+import concurrent.futures
 import base64, re, hashlib
 
 TS = "swallow-spectrum.ts.net"
@@ -108,131 +108,6 @@ def icon_img(url):
     except Exception:
         return None
 
-def icon_or_badge(label, slug):
-    # A slug may also be inline SVG markup, or an https URL to the app's own PNG.
-    if slug and slug.startswith("<svg"):
-        return f'<span class="ico">{slug}</span>'
-    if slug and slug.startswith("https://"):
-        src = icon_img(slug)
-        if src:
-            return f'<span class="ico"><img src="{src}" alt=""></span>'
-        slug = None
-    svg = icon_svg(slug)
-    if svg:
-        return f'<span class="ico">{svg}</span>'
-    return f'<span class="ico badge-ico">{html.escape(label[0])}</span>'
-
-CSS = """
-:root{--bg:#0f1216;--card:#171c22;--edge:#232b34;--fg:#e6edf3;--dim:#8b98a5;
---accent:#c9a227;--ok:#3fb950;--off:#f85149;--warn:#d29922;--link:#58a6ff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
-font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:2rem}
-.wrap{max-width:1100px;margin:0 auto}
-h1{font-size:1.5rem;margin:0 0 .25rem;letter-spacing:.5px}
-.sub{color:var(--dim);margin:0 0 1.75rem;font-size:.85rem}
-h3.section{font-size:.8rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);
-margin:1.5rem 0 .8rem;padding-bottom:.35rem;border-bottom:1px solid var(--edge)}
-h3.section:first-of-type{margin-top:0}
-.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
-.card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:1.1rem 1.25rem}
-.card h2{margin:0 0 .1rem;font-size:1.05rem}
-.card h2 a{color:var(--link);text-decoration:none}.card h2 a:hover{text-decoration:underline}
-.meta{color:var(--dim);font-size:.78rem;margin:0 0 .75rem}
-.node-badge{display:inline-block;font-size:.62rem;font-weight:700;padding:.05rem .4rem;
-border-radius:4px;background:#1f2b1f;color:var(--ok);margin-left:.4rem;vertical-align:middle}
-ul{list-style:none;margin:.5rem 0 0;padding:0}
-li{display:flex;align-items:center;gap:.5rem;padding:.22rem 0;font-size:.9rem}
-.badge{font-size:.62rem;font-weight:700;padding:.05rem .35rem;border-radius:4px;background:var(--edge);color:var(--dim)}
-.dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-.dot.on{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.off{background:var(--dim)}
-.gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gid{color:var(--dim);font-size:.72rem}
-.foot{color:var(--dim);font-size:.72rem;margin-top:2rem;text-align:center}
-a.svc{color:var(--link);text-decoration:none;display:flex;align-items:center;gap:.55rem;flex:1 1 auto;min-width:0}
-a.svc:hover{text-decoration:underline}
-.stat{color:var(--dim);font-size:.75rem;white-space:nowrap;flex:0 0 auto;margin-left:auto}
-.stat.down{color:var(--off)}
-.ico{width:22px;height:22px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
-.ico svg{width:22px;height:22px}
-.ico img{width:22px;height:22px;border-radius:5px}
-.badge-ico{background:var(--edge);color:var(--fg);border-radius:5px;font-size:.7rem;font-weight:700}
-.bar{height:7px;border-radius:4px;background:var(--edge);overflow:hidden;margin:.35rem 0 .1rem}
-.bar > span{display:block;height:100%}
-.bar-lo>span{background:var(--ok)}.bar-mid>span{background:var(--warn)}.bar-hi>span{background:var(--off)}
-.usage{font-size:.78rem;color:var(--dim)}
-/* Unreachable/absent hardware is informational, not an alarm: render the whole
-   card gray so red stays meaningful for things that are actually broken. */
-.card.unreach h2,.card.unreach h2 a,.card.unreach .gname,
-.card.unreach .stat,.card.unreach .stat.down{color:var(--dim)}
-.card.unreach .meta{color:#6b7681}
-.search{display:flex;align-items:center;gap:.75rem;margin:-.5rem 0 1.5rem}
-.search input{flex:0 1 360px;background:var(--card);border:1px solid var(--edge);
-border-radius:8px;color:var(--fg);padding:.55rem .8rem;font-size:.9rem;outline:none}
-.search input:focus{border-color:var(--link)}
-.toplink{margin-left:auto;color:var(--link);text-decoration:none;font-size:.85rem;
-border:1px solid var(--edge);border-radius:8px;padding:.45rem .75rem;white-space:nowrap}
-.toplink:hover{border-color:var(--link);background:var(--card)}
-a.cname{flex:1;color:var(--fg);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-a.cname:hover{color:var(--link);text-decoration:underline}
-/* home index: the service NAME is the thing worth remembering (it is the URL),
-   so it gets the monospace/primary slot and the description is secondary. */
-.sname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem}
-.sdesc{color:var(--dim);font-size:.72rem;margin-left:auto;text-align:right;flex:0 1 auto;
-overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:.5rem}
-li.hit{background:#1b2430;border-radius:6px;box-shadow:0 0 0 1px var(--link) inset}
-.cardhead{display:flex;align-items:baseline;gap:.75rem}
-.cardhead h2{margin:0}
-.hublink{margin-left:auto;flex:0 0 auto;font-size:.72rem;color:var(--link);
-text-decoration:none;white-space:nowrap;border:1px solid var(--edge);
-border-radius:6px;padding:.15rem .45rem}
-.hublink:hover{border-color:var(--link);background:#1b2430}
-.hublink .hsum{color:var(--dim);margin-right:.4rem}
-.hublink .hname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.hint{color:var(--dim);font-size:.72rem}
-kbd{background:var(--edge);border-radius:4px;padding:.05rem .3rem;font-size:.68rem;
-font-family:ui-monospace,monospace}
-.cat{margin-top:1.5rem}.cat:first-of-type{margin-top:0}
-.grid.wide{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));align-items:start}
-/* Uniform card height: the list gets a fixed height and scrolls, so a 15-row
-   category and a 2-row one occupy the same box. The height is dropped while a
-   filter is active (body.filtering) -- otherwise a search returning two rows would
-   leave most of every card empty. */
-.grid.wide .card{display:flex;flex-direction:column}
-.grid.wide .card ul{height:18rem;overflow-y:auto;overscroll-behavior:contain;
-padding-right:.35rem}
-/* No body.filtering escape hatch: the cards stay equal while filtering too. JS
-   equalise() then shrinks that shared height to the tallest VISIBLE result, so a
-   filtered view is uniform without every card being a mostly-empty 18rem box. */
-/* A visible scrollbar is the only cue that a list continues below the fold. */
-.grid.wide .card ul::-webkit-scrollbar{width:8px}
-.grid.wide .card ul::-webkit-scrollbar-track{background:transparent}
-.grid.wide .card ul::-webkit-scrollbar-thumb{background:var(--edge);border-radius:4px}
-.grid.wide .card ul::-webkit-scrollbar-thumb:hover{background:#313c48}
-.grid.wide .card ul{scrollbar-width:thin;scrollbar-color:var(--edge) transparent}
-.ccount{color:var(--dim);font-size:.72rem;font-weight:400;margin-left:.45rem;vertical-align:middle}
-/* MUST come with !important. The UA sheet's [hidden]{display:none} loses to ANY
-   author display rule regardless of specificity, and `li` and `.grid.wide .card`
-   both set display here -- so without this the filter marks rows hidden and they
-   stay on screen. Verified by computed style, not by querySelector: every
-   `li[data-k]:not([hidden])` selector test passes either way. */
-[hidden]{display:none!important}
-/* Equalise header height whether or not the card has a hub link (the link's border
-   + padding made those cards 2px taller). */
-.cardhead{height:1.75rem;align-items:center}  /* fixed, not min-: baseline
-alignment recomputes the flex line height and leaves a 1px drift between cards
-that have a hub link and cards that do not. */
-"""
-
-def page(title, subtitle, body):
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %Z").strip()
-    host = os.uname().nodename
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(title)}</title><style>{CSS}</style></head><body><div class="wrap">
-<h1>{html.escape(title)}</h1><p class="sub">{html.escape(subtitle)}</p>
-{body}
-<p class="foot">generated {now} on {html.escape(host)} · swallow-spectrum.ts.net</p>
-</div></body></html>"""
-
 # ---------- pve ----------
 def pve_guests(host):
     out = ssh(host, "qm list 2>/dev/null; echo ===; pct list 2>/dev/null")
@@ -275,25 +150,6 @@ def discover_pve_nodes():
             return sorted(found)
     return PVE_NODES_FALLBACK
 
-def pve_cards():
-    cards, node_count, guest_count = [], 0, 0
-    data = HUB_DATA.setdefault("proxmox", {}).setdefault("nodes", [])
-    for name, host in discover_pve_nodes():
-        node_count += 1
-        ok, guests = pve_guests(host)
-        data.append({"name": name, "ok": ok, "guests": guests})
-        url = f"https://{name}.{TS}"
-        rows = ""
-        for kind, vmid, gname, status in sorted(guests, key=lambda g: (g[0], g[2].lower())):
-            on = "on" if status == "running" else "off"
-            rows += (f'<li><span class="dot {on}"></span><span class="badge">{kind}</span>'
-                     f'<span class="gname">{html.escape(gname)}</span><span class="gid">{vmid}</span></li>')
-        state = f"{len(guests)} guests" if ok else '<span style="color:var(--off)">unreachable</span>'
-        guest_count += len(guests)
-        cards.append(f'<div class="card"><h2><a href="{url}">{html.escape(name)}</a></h2>'
-                     f'<p class="meta">Proxmox VE · {state}</p><ul>{rows}</ul></div>')
-    return '<div class="grid">' + "".join(cards) + "</div>", node_count, guest_count
-
 # ---------- pbs ----------
 def pbs_stores(host):
     out = ssh(host, "proxmox-backup-manager datastore list --output-format json 2>/dev/null")
@@ -316,35 +172,18 @@ def pbs_stores(host):
         result.append((name, size, used, pct))
     return True, result
 
-def pbs_cards():
-    cards = []
-    data = HUB_DATA.setdefault("proxmox", {}).setdefault("pbs", [])
+def collect_proxmox():
+    nodes = []
+    for name, host in discover_pve_nodes():
+        ok, guests = pve_guests(host)
+        nodes.append({"name": name, "ok": ok, "guests": guests})
+    pbs = []
     for name, host in PBS_NODES:
         ok, stores = pbs_stores(host)
-        data.append({"name": name, "ok": ok, "stores": stores})
-        url = f"https://{name}.{TS}"
-        rows = ""
-        for sname, size, used, pct in stores:
-            if pct is None:
-                rows += f'<li><span class="badge">DS</span><span class="gname">{html.escape(sname)}</span></li>'
-            else:
-                cls = "bar-hi" if pct >= 85 else "bar-mid" if pct >= 70 else "bar-lo"
-                rows += (f'<li style="display:block"><div style="display:flex;gap:.5rem">'
-                         f'<span class="badge">DS</span><span class="gname">{html.escape(sname)}</span>'
-                         f'<span class="usage">{pct}%</span></div>'
-                         f'<div class="bar {cls}"><span style="width:{pct}%"></span></div>'
-                         f'<div class="usage">{human(used)} / {human(size)} used</div></li>')
-        state = f"{len(stores)} datastores" if ok else '<span style="color:var(--off)">unreachable</span>'
-        cards.append(f'<div class="card"><h2><a href="{url}">{html.escape(name)}</a></h2>'
-                     f'<p class="meta">Proxmox Backup Server · {state}</p><ul>{rows}</ul></div>')
-    return '<div class="grid">' + "".join(cards) + "</div>"
-
-def render_proxmox():
-    pve_html, nodes, guests = pve_cards()
-    body = (f'<h3 class="section">Virtualization</h3>{pve_html}'
-            f'<h3 class="section">Backup</h3>{pbs_cards()}')
-    HUB_SUMMARY["proxmox"] = f"{guests} guests · {nodes} nodes"
-    return page("Proxmox", "Virtualization cluster and backup servers — click any node for its web UI.", body)
+        pbs.append({"name": name, "ok": ok, "stores": stores})
+    HUB_DATA["proxmox"] = {"nodes": nodes, "pbs": pbs}
+    guests = sum(len(n["guests"]) for n in nodes)
+    HUB_SUMMARY["proxmox"] = f"{guests} guests · {len(nodes)} nodes"
 
 # ---------- servarr live status ----------
 # Each app's status + one at-a-glance metric is gathered by SSHing to the host it
@@ -466,32 +305,11 @@ def servarr_status():
     return st
 
 # ---------- servarr ----------
-def render_servarr():
+def collect_servarr():
     status = servarr_status()
     HUB_DATA["servarr"] = {"status": status}
-    cards = []
-    for heading, items in SERVARR:
-        links = ""
-        for label, svc, slug in items:
-            st = status.get(svc, {})
-            up = st.get("up", False)
-            stat = st.get("stat", "")
-            if not up:
-                stat_html = '<span class="stat down">down</span>'
-            elif stat:
-                stat_html = f'<span class="stat">{html.escape(stat)}</span>'
-            else:
-                stat_html = ""
-            links += (f'<li><span class="dot {"on" if up else "off"}"></span>'
-                      f'<a class="svc" href="https://{svc}.{TS}">'
-                      f'{icon_or_badge(label, slug)}<span class="gname">{html.escape(label)}</span></a>'
-                      f'{stat_html}</li>')
-        cards.append(f'<div class="card"><h2>{html.escape(heading)}</h2><ul>{links}</ul></div>')
     n_up = sum(1 for v in status.values() if v.get("up"))
     HUB_SUMMARY["servarr"] = f"{n_up}/{len(status)} up"
-    return page("Media Automation",
-                "The Servarr media stack — live status; green = up, grey = down. Click any service to open it.",
-                '<div class="grid">' + "".join(cards) + "</div>")
 
 # ---------- containers ----------
 def docker_ps(access):
@@ -512,64 +330,14 @@ def docker_ps(access):
 
 DOCKHAND_HOSTS = {"utilities", "arr", "fetch", "cadre", "bedrock", "plex-lxc"}
 
-SEARCH_JS = """
-<script>
-const q=document.getElementById('q'),cnt=document.getElementById('cnt');
-function flt(){
- const t=q.value.trim().toLowerCase();let n=0;
- document.querySelectorAll('.card[data-host]').forEach(card=>{
-  const hostMatch=!t||card.dataset.host.includes(t);let shown=0;
-  card.querySelectorAll('li[data-name]').forEach(li=>{
-   const m=!t||hostMatch||li.dataset.name.includes(t);
-   li.style.display=m?'':'none';if(m)shown++;});
-  card.style.display=(!t||shown>0)?'':'none';
-  if(t)n+=shown;});
- cnt.textContent=t?(n+' match'+(n==1?'':'es')):'';
-}
-q.addEventListener('input',flt);
-</script>"""
-
-def render_containers():
-    cards, total, running_total = [], 0, 0
-    data = HUB_DATA.setdefault("containers", {"hosts": []})["hosts"]
-    for hostname, node, access in DOCKER_HOSTS:
-        rows = docker_ps(access)
-        data.append({"name": hostname, "node": node, "rows": rows})
-        nb = (f'<span class="node-badge">{html.escape(node)}</span>' if node
-              else '<span class="node-badge" style="background:#2b2320;color:var(--warn)">bare-metal</span>')
-        if rows is None:
-            cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
-                         f'<p class="meta"><span style="color:var(--off)">unreachable</span></p></div>')
-            continue
-        total += len(rows)
-        running = sum(1 for _, st, _ in rows if st == "running")
-        running_total += running
-        # running first (green/amber), then stopped (grey), each alphabetical
-        def sortkey(r):
-            return (0 if r[1] == "running" else 1, r[0].lower())
-        li = ""
-        for cname, state, status in sorted(rows, key=sortkey):
-            if state == "running":
-                dot = "warn" if "unhealthy" in status.lower() else "on"
-            else:
-                dot = "off"
-            esc = html.escape(cname)
-            if hostname in DOCKHAND_HOSTS:
-                link = DOCKHAND + urllib.parse.quote(cname)
-                name_html = f'<a class="cname" href="{link}">{esc}</a>'
-            else:
-                name_html = f'<span class="gname">{esc}</span>'
-            li += f'<li data-name="{esc.lower()}"><span class="dot {dot}"></span>{name_html}</li>'
-        cards.append(f'<div class="card" data-host="{html.escape(hostname)}"><h2>{html.escape(hostname)}{nb}</h2>'
-                     f'<p class="meta">Docker · {running}/{len(rows)} running</p><ul>{li}</ul></div>')
-    HUB_SUMMARY["containers"] = f"{running_total}/{total} running"
-    search = ('<div class="search"><input id="q" type="search" placeholder="Filter containers or hosts…" '
-              'autocomplete="off" autofocus><span id="cnt" class="usage"></span>'
-              f'<a class="toplink" href="https://dockhand.{TS}">Dockhand ⬈</a></div>')
-    return page("Docker Containers",
-                f"All containers across the fleet — {running_total} running of {total} total, grouped by host with "
-                f"its PVE node. Green = running, amber = unhealthy, grey = stopped. Click a container to open it in Dockhand.",
-                search + '<div class="grid">' + "".join(cards) + "</div>" + SEARCH_JS)
+def collect_containers():
+    # rows is None for an unreachable host -- the modal shows it as such rather
+    # than dropping the card.
+    hosts = [{"name": h, "node": n, "rows": docker_ps(a)} for h, n, a in DOCKER_HOSTS]
+    HUB_DATA["containers"] = {"hosts": hosts}
+    rows = [r for h in hosts if h["rows"] for r in h["rows"]]
+    running = sum(1 for r in rows if r[1] == "running")
+    HUB_SUMMARY["containers"] = f"{running}/{len(rows)} running"
 
 # ---------- zigbee ----------
 # Zigbee2MQTT instances: (container, ssh-host, host-published port, DockTail service name)
@@ -661,21 +429,14 @@ def z2m_probe(container, host, port):
                     pass
     return d
 
-def _row(ok, label, value, warn=False):
-    dot = "on" if ok else ("warn" if warn else "off")
-    return (f'<li><span class="dot {dot}"></span><span class="gname">{html.escape(label)}</span>'
-            f'<span class="stat{"" if ok else " down"}">{html.escape(value)}</span></li>')
-
-def render_zigbee():
-    # --- Z2M servers ---
-    probes, cards = {}, []
+def collect_zigbee():
+    servers, probes = [], {}
     for container, host, port, svc in Z2M_INSTANCES:
         p = z2m_probe(container, host, port)
         probes[container] = p
         up = p["http"].startswith("2") or p["http"].startswith("3")
         running = p["state"] == "running"
         configured = bool(p["target"])
-
         if running and not up:
             note = "container up, Z2M NOT RESPONDING"
         elif not running:
@@ -684,23 +445,9 @@ def render_zigbee():
             note = "running but no adapter configured"
         else:
             note = "healthy"
-        zdata = HUB_DATA.setdefault("zigbee", {"servers": [], "radios": []})
-        zdata["servers"].append({"container": container, "host": host, "svc": svc, "probe": p,
-                                 "up": up, "running": running, "configured": configured,
-                                 "healthy": up and configured, "note": note})
-
-        rows = _row(up, "frontend", f'HTTP {p["http"]}')
-        rows += _row(running, "container", p["state"] or "unknown")
-        rows += _row(configured, "adapter", p["target"] or "not configured")
-        rows += _row(bool(p["base_topic"]), "base topic", p["base_topic"] or "-")
-        if p["devices"] is not None:
-            rows += _row(True, "devices", str(p["devices"]))
-
-        badge = f'<span class="node-badge">{html.escape(host)}</span>'
-        klass = "card" if running else "card unreach"
-        cards.append(
-            f'<div class="{klass}"><h2><a href="https://{svc}.{TS}">{html.escape(container)}</a>{badge}</h2>'
-            f'<p class="meta">{html.escape(note)}</p><ul>{rows}</ul></div>')
+        servers.append({"container": container, "host": host, "svc": svc, "probe": p,
+                        "up": up, "running": running, "configured": configured,
+                        "healthy": up and configured, "note": note})
 
     # map radio IP -> the instance using it, from live config
     used_by = {}
@@ -709,8 +456,7 @@ def render_zigbee():
         if "tcp://" in t:
             used_by[t.split("//", 1)[1].split(":")[0]] = container
 
-    # --- SLZB radios ---
-    rcards, radio_up = [], []
+    radios = []
     for label, model, ip, cport, role in SLZB_RADIOS:
         # Probe all three independently and treat ANY positive as present. Gating
         # the HTTP/socket checks behind ICMP meant a single dropped ping blanked
@@ -720,37 +466,14 @@ def render_zigbee():
         code = _http_code(f"http://{ip}/")
         web = code.startswith("2") or code.startswith("3")
         sock = _tcp_open(ip, cport)
-        up = icmp or web or sock
-        radio_up.append(up)
-        user = used_by.get(ip)
-        HUB_DATA.setdefault("zigbee", {"servers": [], "radios": []})["radios"].append(
-            {"label": label, "model": model, "ip": ip, "cport": cport, "role": role,
-             "up": up, "web": web, "code": code, "sock": sock, "user": user})
+        radios.append({"label": label, "model": model, "ip": ip, "cport": cport, "role": role,
+                       "up": icmp or web or sock, "web": web, "code": code, "sock": sock,
+                       "user": used_by.get(ip)})
 
-        rows = _row(up, "network", "up" if up else "unreachable")
-        rows += _row(web, "web UI", f"HTTP {code}")
-        rows += _row(sock, f"coordinator :{cport}", "listening" if sock else "closed")
-        rows += _row(bool(user), "used by", user or "unused")
-
-        title = (f'<a href="http://{ip}/">{html.escape(label)}</a>' if up
-                 else html.escape(label))
-        rklass = "card" if up else "card unreach"
-        rcards.append(
-            f'<div class="{rklass}"><h2>{title}</h2>'
-            f'<p class="meta">{html.escape(model)} · {html.escape(ip)} · {html.escape(role)}</p><ul>{rows}</ul></div>')
-
-    live = sum(1 for c, p in probes.items()
-               if (p["http"].startswith("2") or p["http"].startswith("3")) and p["target"])
-    radios_up = sum(radio_up)
-
-    HUB_SUMMARY["zigbee"] = f"{live} servers · {radios_up}/{len(SLZB_RADIOS)} radios"
-    body = (f'<h3 class="section">Zigbee2MQTT servers</h3><div class="grid">{"".join(cards)}</div>'
-            f'<h3 class="section">SLZB radios</h3><div class="grid">{"".join(rcards)}</div>')
-    return page("Zigbee",
-                f"Zigbee2MQTT servers and SLZB coordinator radios — {live} fully-configured server(s) responding, "
-                f"{radios_up}/{len(SLZB_RADIOS)} radios reachable. A server whose container is up but whose "
-                f"frontend does not answer has died inside a healthy-looking container. Click a server or radio to open it.",
-                body)
+    HUB_DATA["zigbee"] = {"servers": servers, "radios": radios}
+    live = sum(1 for s in servers if s["healthy"])
+    radios_up = sum(1 for r in radios if r["up"])
+    HUB_SUMMARY["zigbee"] = f"{live} servers · {radios_up}/{len(radios)} radios"
 
 # ---------- home (root index of every service) ----------
 # The point of this page is that `home` is the only name you have to remember.
@@ -781,9 +504,9 @@ def render_zigbee():
 # Categories and blurbs are hand-written because nothing on the wire knows them.
 # Anything discovered but uncategorised falls into "Other" rather than being
 # dropped, so a new service is always reachable even before it is classified.
-# Each topic hub hangs off the category card it belongs to, as a named link in that
-# card's header (not a separate row up top) -- the drill-down sits where the content
-# is, and the hub's NAME stays visible, which is the whole point of this page.
+# Each topic hub also hangs off the section it belongs to, as a named link in that
+# section's header that opens the hub's modal -- the drill-down sits where the
+# content is, and the hub's NAME stays visible.
 #
 # `zigbee` is deliberately labelled by name rather than as a generic "Details":
 # it covers only the two Z2M entries of "Home & automation", not ha/homelab-bar/trmnl,
@@ -795,14 +518,10 @@ CATEGORY_HUBS = {
     "Home & automation":        "zigbee",
 }
 
-# Headline numbers for those links, filled in by each hub's own renderer. A global
-# because the hub renderers already compute these while building their pages, and
-# recomputing them for `home` would mean a second round of SSH to every host.
-# main() therefore renders the hubs BEFORE home.
+# Filled by the collect_* functions above, which main() runs BEFORE render_home():
+# HUB_SUMMARY holds the headline string for each section's hub link, HUB_DATA the
+# full data each modal is built from.
 HUB_SUMMARY = {}
-
-# The full data behind each hub, for the modals on `home`. Filled the same way and
-# for the same reason as HUB_SUMMARY: the hub renderers already gather it.
 HUB_DATA = {}
 
 HOME_CATEGORIES = [
@@ -1006,8 +725,7 @@ def vip_status(names):
         return dict(ex.map(probe, names))
 
 # ---------- home page: look ----------
-# The home page has its own stylesheet and script (the hub pages above keep the
-# shared CSS). Dark by default, light under prefers-color-scheme: light.
+# Dark by default, light under prefers-color-scheme: light.
 HOME_CSS = """
 :root{color-scheme:dark;--bg:#0B0E13;--surface:#12171E;--surface-2:#171D26;--line:#222A35;
 --line-strong:#344052;--text:#E9EEF4;--dim:#94A1B0;--ok:#3DD68C;--ok-ring:rgba(61,214,140,.16);
@@ -1816,17 +1534,16 @@ def render_home():
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    # The topic hubs are modals on home since 2026-10-10 and their VIPs are retired,
-    # so only home.html is written. The hub renderers still run FIRST: they gather
-    # the data home's modals are built from (HUB_DATA, HUB_SUMMARY). Their page
-    # output is discarded.
-    for fn in (render_proxmox, render_servarr, render_containers, render_zigbee):
-        fn()
+    # The hub collectors run FIRST: home's modals and hub links are built from what
+    # they gather into HUB_DATA / HUB_SUMMARY.
+    for collect in (collect_proxmox, collect_servarr, collect_containers, collect_zigbee):
+        collect()
     out = render_home()
     with open(os.path.join(OUTDIR, "home.html"), "w") as f:
         f.write(out)
     print(f"wrote home.html ({len(out)} bytes)")
-    # Pages left from when the hubs were served on their own.
+    # Pages left from when the topic hubs were served as their own VIPs (retired
+    # 2026-10-10). Harmless no-op once they are gone.
     for stale in ("proxmox", "servarr", "containers", "zigbee"):
         try:
             os.remove(os.path.join(OUTDIR, stale + ".html"))

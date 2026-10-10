@@ -196,6 +196,17 @@ Tailscale Services:
 | `containers` | every container across the fleet |
 | `zigbee` | Z2M servers + SLZB coordinator radios |
 
+**Since 2026-10-10 `home` carries every hub as a modal** — the hub cards, header
+nav and section links open it in place, and `home.swallow-spectrum.ts.net/#servarr`
+(`#proxmox`, `#containers`, `#zigbee`) deep-links straight into one. The modals are
+built from `HUB_DATA`, which each hub renderer fills while building its own page, so
+they do **not** depend on the hub VIPs existing. The four hub VIPs are therefore
+redundant and slated for retirement (drop them from `ts_hubs`, delete the services);
+until then their pages are still written and served. Nothing in Kuma, HA or
+`~/projects` links to them (checked 2026-10-10). Test a generator change without
+touching the served pages: `sudo TS_HUBS_OUTDIR=/tmp/ts-hubs-test python3 gen-hubs.py`
+on an advertiser.
+
 **`home`'s service list is discovered from the local netmap** (`tailscale debug
 netmap` → `DNS.ExtraRecords`), which is complete by construction and needs no
 OAuth secret on the advertiser. ⚠️ Do **not** reduce this to scraping DockTail

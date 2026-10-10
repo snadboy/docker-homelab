@@ -6,11 +6,12 @@ Hubs: home (index of every service), proxmox (guests + datastores),
 servarr (live arr status), containers, zigbee."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
 import concurrent.futures, socket, ssl
-import base64, re
+import base64, re, hashlib
 
 TS = "swallow-spectrum.ts.net"
 DOCKHAND = f"https://dockhand.{TS}/containers?search="  # + urlencoded container name
-OUTDIR = "/var/lib/ts-hubs"
+# TS_HUBS_OUTDIR lets a test run write somewhere other than the served directory.
+OUTDIR = os.environ.get("TS_HUBS_OUTDIR", "/var/lib/ts-hubs")
 ICONDIR = os.path.join(OUTDIR, "icons")
 ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/{}.svg"
 
@@ -276,9 +277,11 @@ def discover_pve_nodes():
 
 def pve_cards():
     cards, node_count, guest_count = [], 0, 0
+    data = HUB_DATA.setdefault("proxmox", {}).setdefault("nodes", [])
     for name, host in discover_pve_nodes():
         node_count += 1
         ok, guests = pve_guests(host)
+        data.append({"name": name, "ok": ok, "guests": guests})
         url = f"https://{name}.{TS}"
         rows = ""
         for kind, vmid, gname, status in sorted(guests, key=lambda g: (g[0], g[2].lower())):
@@ -315,8 +318,10 @@ def pbs_stores(host):
 
 def pbs_cards():
     cards = []
+    data = HUB_DATA.setdefault("proxmox", {}).setdefault("pbs", [])
     for name, host in PBS_NODES:
         ok, stores = pbs_stores(host)
+        data.append({"name": name, "ok": ok, "stores": stores})
         url = f"https://{name}.{TS}"
         rows = ""
         for sname, size, used, pct in stores:
@@ -436,7 +441,7 @@ def _parse_probe(out):
                 if "=" in pair:
                     a, b = pair.split("=", 1)
                     kv[a.strip()] = b.strip()
-        res[svc] = {"up": bool(code) and code != "000", "stat": _fmt_stat(svc, kv)}
+        res[svc] = {"up": bool(code) and code != "000", "stat": _fmt_stat(svc, kv), "kv": kv}
     return res
 
 # gpu-benchmark is the one servarr app not on a docker host we SSH into: it runs
@@ -463,6 +468,7 @@ def servarr_status():
 # ---------- servarr ----------
 def render_servarr():
     status = servarr_status()
+    HUB_DATA["servarr"] = {"status": status}
     cards = []
     for heading, items in SERVARR:
         links = ""
@@ -525,8 +531,10 @@ q.addEventListener('input',flt);
 
 def render_containers():
     cards, total, running_total = [], 0, 0
+    data = HUB_DATA.setdefault("containers", {"hosts": []})["hosts"]
     for hostname, node, access in DOCKER_HOSTS:
         rows = docker_ps(access)
+        data.append({"name": hostname, "node": node, "rows": rows})
         nb = (f'<span class="node-badge">{html.escape(node)}</span>' if node
               else '<span class="node-badge" style="background:#2b2320;color:var(--warn)">bare-metal</span>')
         if rows is None:
@@ -676,6 +684,10 @@ def render_zigbee():
             note = "running but no adapter configured"
         else:
             note = "healthy"
+        zdata = HUB_DATA.setdefault("zigbee", {"servers": [], "radios": []})
+        zdata["servers"].append({"container": container, "host": host, "svc": svc, "probe": p,
+                                 "up": up, "running": running, "configured": configured,
+                                 "healthy": up and configured, "note": note})
 
         rows = _row(up, "frontend", f'HTTP {p["http"]}')
         rows += _row(running, "container", p["state"] or "unknown")
@@ -711,6 +723,9 @@ def render_zigbee():
         up = icmp or web or sock
         radio_up.append(up)
         user = used_by.get(ip)
+        HUB_DATA.setdefault("zigbee", {"servers": [], "radios": []})["radios"].append(
+            {"label": label, "model": model, "ip": ip, "cport": cport, "role": role,
+             "up": up, "web": web, "code": code, "sock": sock, "user": user})
 
         rows = _row(up, "network", "up" if up else "unreachable")
         rows += _row(web, "web UI", f"HTTP {code}")
@@ -785,6 +800,10 @@ CATEGORY_HUBS = {
 # recomputing them for `home` would mean a second round of SSH to every host.
 # main() therefore renders the hubs BEFORE home.
 HUB_SUMMARY = {}
+
+# The full data behind each hub, for the modals on `home`. Filled the same way and
+# for the same reason as HUB_SUMMARY: the hub renderers already gather it.
+HUB_DATA = {}
 
 HOME_CATEGORIES = [
     ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
@@ -986,81 +1005,689 @@ def vip_status(names):
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
         return dict(ex.map(probe, names))
 
-HOME_JS = """
-<script>
-const q=document.getElementById('q'),cnt=document.getElementById('cnt');
-function flt(){
- const t=q.value.trim().toLowerCase();let n=0,first=null,hubCard=null;
- document.querySelectorAll('.card').forEach(c=>{
-  // A card matches on its own heading or hub name; when it does, every row in it
-  // stays visible rather than being filtered away by the row-level test.
-  const cardMatch=!!t&&(c.dataset.k||'').includes(t);
-  const rows=[...c.querySelectorAll('li[data-k]')];
-  // A card-name hit expands the whole card ONLY when nothing inside it matched.
-  // Otherwise `arr` would drag plex and sabnzbd along just because the card's hub
-  // is named servarr, while `proxmox` (which no service is called) still needs to
-  // show the nodes rather than an empty card.
-  const rowHit=rows.some(li=>li.dataset.k.includes(t));
-  const useAll=cardMatch&&!rowHit;
+# ---------- home page: look ----------
+# The home page has its own stylesheet and script (the hub pages above keep the
+# shared CSS). Dark by default, light under prefers-color-scheme: light.
+HOME_CSS = """
+:root{color-scheme:dark;--bg:#0B0E13;--surface:#12171E;--surface-2:#171D26;--line:#222A35;
+--line-strong:#344052;--text:#E9EEF4;--dim:#94A1B0;--ok:#3DD68C;--ok-ring:rgba(61,214,140,.16);
+--warn:#F0B44C;--bad:#F2685F;--mute:#5B6575;--accent:#7CB7FF;--ring:rgba(124,183,255,.22);
+--scrim:rgba(4,6,10,.68);--shadow:0 1px 0 rgba(255,255,255,.03) inset;
+--tb-l:60%;--tb-a:.14;--tf-s:80%;--tf-l:76%;--sw-s:65%;--sw-l:62%;
+--sans:'Instrument Sans',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+--mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#F6F7F9;--surface:#fff;
+--surface-2:#F1F4F8;--line:#E2E6EC;--line-strong:#C3CBD6;--text:#0F1722;--dim:#556171;--ok:#13A05F;
+--ok-ring:rgba(19,160,95,.12);--warn:#B87208;--bad:#C93C32;--mute:#A3ACB8;--accent:#1F5FD1;
+--ring:rgba(31,95,209,.16);--scrim:rgba(15,23,34,.42);--shadow:0 1px 2px rgba(15,23,34,.05);
+--tb-l:50%;--tb-a:.11;--tf-s:60%;--tf-l:34%;--sw-s:60%;--sw-l:48%}}
+/* MUST be !important: the UA [hidden] rule loses to any author display rule, and
+   tiles/sections/chips all set display. Without it the filter "hides" rows that stay
+   on screen (the bug the old index shipped with). */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+body:has(dialog[open]){overflow:hidden}
+a{color:inherit}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1240px;margin:0 auto;padding-left:clamp(16px,4vw,40px);padding-right:clamp(16px,4vw,40px)}
+.tint{background:hsla(var(--h),70%,var(--tb-l),var(--tb-a));color:hsl(var(--h),var(--tf-s),var(--tf-l))}
+.d{width:8px;height:8px;border-radius:50%;flex:0 0 auto;display:inline-block}
+.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}.d-bad{background:var(--bad)}.d-mute{background:var(--mute)}
+:where(a,button,input):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.top{border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:16px 24px;padding-top:18px;padding-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--text);color:var(--bg);display:inline-flex;align-items:center;justify-content:center}
+.brand-txt{display:flex;flex-direction:column;line-height:1.15}
+.brand-txt b{font-size:16px;letter-spacing:-.01em}
+.brand-txt span{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.hubnav{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto}
+.hubnav a{font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;padding:8px 12px;min-height:44px;display:inline-flex;align-items:center;border:1px solid transparent;border-radius:8px}
+.hubnav a:hover{color:var(--text);border-color:var(--line-strong)}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-variant-numeric:tabular-nums}
+.pill .d{box-shadow:0 0 0 3px var(--ok-ring)}
+.pill.warn .d{background:var(--warn);box-shadow:0 0 0 3px rgba(240,180,76,.18)}
+
+/* hero + search */
+.hero{padding:clamp(40px,7vw,72px) 0 32px;display:flex;flex-direction:column;gap:14px}
+.eyebrow{margin:0;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.hero h1{margin:0;font-size:clamp(32px,4.6vw,52px);line-height:1.05;font-weight:600;letter-spacing:-.025em;max-width:18ch}
+.lede{margin:0;font-size:17px;color:var(--dim);max-width:58ch}
+.lede .mono{font-size:15px;color:var(--text)}
+.search{margin-top:14px;display:flex;flex-direction:column;gap:10px;max-width:640px}
+.sbox{position:relative}
+.sbox svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none}
+.sbox input{width:100%;height:56px;padding:0 128px 0 48px;font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px;outline:none;box-shadow:var(--shadow);-webkit-appearance:none;appearance:none}
+.sbox input::placeholder{color:var(--dim)}
+.sbox input:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
+.sbox input::-webkit-search-cancel-button{display:none}
+.scnt{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;pointer-events:none}
+.hint{margin:0;font-size:13px;color:var(--dim);display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.cap{margin:0 0 14px;font-size:13px;font-weight:600;color:var(--dim);letter-spacing:.02em}
+
+/* hub cards */
+.hubs{padding:8px 0 40px}
+.hubgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.hub{display:flex;flex-direction:column;gap:18px;padding:20px;min-height:148px;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);transition:border-color .15s,background-color .15s}
+.hub:hover{border-color:var(--line-strong);background:var(--surface-2)}
+.hub-top{display:flex;align-items:center;gap:10px}
+.hub-ico{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.hub-name{font-family:var(--mono);font-size:14px;font-weight:500}
+.hub-top .exp{margin-left:auto;color:var(--dim)}
+.hub-num{display:flex;flex-direction:column;gap:2px}
+.big{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.big .of{color:var(--dim);font-weight:500}
+.big .unit{color:var(--dim);font-weight:500;font-size:18px;letter-spacing:0}
+.hub-lbl{font-size:13px;color:var(--dim)}
+
+/* service sections */
+.chipbar{position:sticky;top:0;z-index:2;background:var(--bg);padding:14px 0;margin:0 0 8px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chipbar .cap{margin:0 10px 0 0}
+/* On a phone the wrapped chips are five rows of a sticky bar; one sideways-scrolling
+   row keeps the list readable. */
+@media (max-width:640px){.chipbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:calc(-1*clamp(16px,4vw,40px));margin-right:calc(-1*clamp(16px,4vw,40px));padding-left:clamp(16px,4vw,40px);padding-right:clamp(16px,4vw,40px)}
+.chipbar::-webkit-scrollbar{display:none}.chip{flex:0 0 auto}}
+.chip{font:inherit;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--dim);transition:border-color .15s,color .15s}
+.chip:hover{color:var(--text);border-color:var(--line-strong)}
+.chip .cc{font-size:12px;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:var(--bg)}
+.svc{padding:20px 0 16px;display:flex;flex-direction:column;gap:14px}
+.shead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.swatch{width:10px;height:10px;border-radius:3px;background:hsl(var(--h),var(--sw-s),var(--sw-l))}
+.shead h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.scount{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+.hublink{margin-left:auto;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;font-size:13px;color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:8px}
+.hublink:hover{color:var(--text);border-color:var(--line-strong)}
+.hublink .mono{color:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:10px}
+.tile{display:flex;align-items:center;gap:12px;padding:12px 14px;min-height:64px;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background-color .15s}
+.tile:hover{border-color:var(--line-strong);background:var(--surface-2)}
+.tile.hit{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.tile.off{opacity:.62}
+.ico{flex:0 0 auto;width:38px;height:38px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:-.02em;background:var(--surface-2) center/24px 24px no-repeat}
+.ico.sm{width:24px;height:24px;border-radius:6px;font-size:10px;background-size:16px 16px}
+.ico.tint{background:hsla(var(--h),70%,var(--tb-l),var(--tb-a))}  /* .ico's shorthand would repaint it grey */
+.tbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.tname{font-family:var(--mono);font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdesc{font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tend{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px}
+.tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:2px 7px;border-radius:5px;border:1px solid var(--line)}
+.go{color:var(--dim);opacity:0;transition:opacity .15s}
+.tile:hover .go{opacity:1}
+.empty{padding:56px 24px;text-align:center;border:1px dashed var(--line-strong);border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.empty p{margin:0}
+.empty .t{font-size:17px;font-weight:600}
+.empty .s{font-size:14px;color:var(--dim)}
+.empty button{font:inherit;font-size:14px;font-weight:500;cursor:pointer;min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+footer{border-top:1px solid var(--line);margin-top:48px}
+footer .wrap{padding-top:22px;padding-bottom:22px;display:flex;flex-wrap:wrap;gap:8px 24px;font-size:13px;color:var(--dim)}
+footer .r{margin-left:auto}
+
+/* hub modal */
+dialog.hubdlg{width:min(960px,calc(100vw - 32px));max-width:none;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);margin:auto;padding:0;border:1px solid var(--line-strong);border-radius:18px;background:var(--bg);color:var(--text);box-shadow:0 30px 80px -20px rgba(0,0,0,.55);overflow:hidden;flex-direction:column}
+dialog.hubdlg[open]{display:flex;animation:rise .22s cubic-bezier(.2,.8,.2,1)}
+dialog.hubdlg::backdrop{background:var(--scrim);backdrop-filter:blur(4px)}
+@keyframes rise{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){dialog.hubdlg[open]{animation:none}}
+.mhead{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 16px;padding:22px 22px 18px 24px;border-bottom:1px solid var(--line);background:var(--surface)}
+.mico{flex:0 0 auto;width:44px;height:44px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center}
+.mtitle{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.mtl{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.mtl h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-.015em}
+.mtl .mono{font-size:13px;color:var(--accent)}
+.mtitle p{margin:0;font-size:14px;color:var(--dim);max-width:64ch}
+.mact{flex:0 0 auto;display:flex;align-items:center;gap:8px;margin-left:auto}
+.mbtn{font:inherit;cursor:pointer;background:transparent;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:9px}
+.mbtn:hover{color:var(--text);border-color:var(--line-strong)}
+.xbtn{font:inherit;cursor:pointer;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:10px;background:transparent;color:var(--dim)}
+.xbtn:hover{background:var(--surface-2);color:var(--text)}
+.mbody{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;padding:22px 24px 26px;display:flex;flex-direction:column;gap:26px}
+.mbody>*{flex-shrink:0}  /* a scrolling flex column squashes its children otherwise */
+dialog.hubdlg:focus{outline:none}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+@media (max-width:520px){.mhead{padding:18px 16px 14px}.mbody{padding:16px}.metric{padding:12px 14px}.metric .big{font-size:24px}}
+.metric{display:flex;flex-direction:column;gap:4px;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.m-lbl{font-size:12px;font-weight:500;color:var(--dim)}
+.metric .big{font-size:28px}
+.m-sub{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+.m-sub .d{width:6px;height:6px}
+.mcap{margin:0;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.mgroup{display:flex;flex-direction:column;gap:10px}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--min,260px),1fr));gap:10px;align-items:start}
+.mcard{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mcard>.mcap{padding:12px 14px 8px}
+.mrow{display:flex;align-items:center;gap:10px;padding:9px 14px;min-height:44px;text-decoration:none;border-top:1px solid var(--line)}
+a.mrow:hover,a.mhd:hover{background:var(--surface-2)}
+.mrow.off{opacity:.62}
+.mrow-name{flex:1 1 auto;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow-stat{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mrow-stat.bad{color:var(--bad)}
+.mhd{display:flex;align-items:center;gap:10px;padding:12px 14px;min-height:44px;text-decoration:none}
+.mhd .mono{font-size:14px;font-weight:600}
+.mhd .r{margin-left:auto;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.mhd .r.bad{color:var(--bad)}
+.guests{display:flex;flex-direction:column;padding:4px 0 8px;border-top:1px solid var(--line)}
+.guest{display:flex;align-items:center;gap:10px;padding:5px 14px;font-size:13px}
+.guest.off{opacity:.55}
+.kind{flex:0 0 auto;width:26px;font-family:var(--mono);font-size:10px;font-weight:600;text-align:center;padding:1px 0;border-radius:4px}
+.kind.vm{--h:268}.kind.ct{--h:205}
+.guest .n{flex:1 1 auto;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.guest .id{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.store{display:flex;flex-direction:column;gap:6px;padding:12px 16px 14px;border-top:1px solid var(--line)}
+.store-row{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.store-row .mono{color:var(--dim)}
+.store-row .u{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
+.store-row b{font-variant-numeric:tabular-nums}
+.bar{display:block;height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar>span{display:block;height:100%;border-radius:99px;background:var(--ok)}
+.bar.warn>span{background:var(--warn)}.bar.bad>span{background:var(--bad)}
+.hostcard{display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.hosthd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hosthd .mono{font-size:14px;font-weight:600}
+.badge{font-size:11px;font-weight:500;color:var(--dim);padding:1px 7px;border-radius:5px;border:1px solid var(--line)}
+.hosthd .r{margin-left:auto;font-size:13px;font-variant-numeric:tabular-nums}
+.hosthd .r span{color:var(--dim)}
+.hosthd .r.bad{color:var(--bad)}
+.ctrs{display:flex;flex-wrap:wrap;gap:6px}
+.ctr{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:3px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);text-decoration:none}
+a.ctr:hover{border-color:var(--line-strong)}
+.ctr .d{width:6px;height:6px}
+.ctr.off{opacity:.6}
+.mfilter{width:100%;max-width:360px;height:40px;padding:0 12px;font:inherit;font-size:14px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:9px;outline:none}
+.mfilter:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+.zhd{display:flex;flex-direction:column;gap:2px;padding:12px 16px;text-decoration:none}
+a.zhd:hover{background:var(--surface-2)}
+.zhd .l{display:flex;align-items:center;gap:10px}
+.zhd .mono{font-size:14px;font-weight:600}
+.zhd .s{font-size:12px;color:var(--dim)}
+.state{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.state .d{width:6px;height:6px}
+.state.ok{color:var(--ok);background:var(--ok-ring)}
+.state.warn{color:var(--warn);background:rgba(240,180,76,.14)}
+.state.bad{color:var(--bad);background:rgba(242,104,95,.14)}
+.kv{margin:0;padding:6px 16px 12px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:6px 12px;font-size:13px}
+.kv dt{color:var(--dim)}
+.kv dd{margin:0;font-family:var(--mono);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv dd.bad{color:var(--bad)}
+.mfoot{margin:0;font-size:12px;color:var(--dim)}
+.mfoot .mono{color:var(--text)}
+"""
+
+HOME_JS = r"""
+(()=>{
+const q=document.getElementById('q'),cnt=document.getElementById('cnt'),
+ nextWrap=document.getElementById('next'),nextName=document.getElementById('next-name'),
+ empty=document.getElementById('empty'),emptyQ=document.getElementById('empty-q');
+const secs=[...document.querySelectorAll('section.svc')];
+const chips=[...document.querySelectorAll('.chip[data-cat]')];
+let cat='all',target=null;
+function apply(){
+ const t=q.value.trim().toLowerCase();let total=0;const per={};target=null;
+ secs.forEach(s=>{
+  const tiles=[...s.querySelectorAll('.tile')];
+  // A section-name (or hub-name) hit expands the section ONLY when no row inside
+  // it matched -- otherwise `arr` drags plex and sabnzbd in just because the hub
+  // is called servarr, while `proxmox` (no service is called that) still shows the
+  // nodes instead of nothing.
+  const rowHit=!!t&&tiles.some(a=>a.dataset.k.includes(t));
+  const useAll=!!t&&!rowHit&&s.dataset.k.includes(t);
   let shown=0;
-  rows.forEach(li=>{
-   const m=!t||useAll||li.dataset.k.includes(t);
-   li.hidden=!m;li.classList.remove('hit');
-   if(m){shown++;if(!first&&!useAll)first=li;}});
-  const vis=!t||cardMatch||shown>0;
-  c.hidden=!vis;
-  if(t&&vis)n+=shown;});
- document.querySelectorAll('.cat').forEach(s=>{
-  s.hidden=!s.querySelector('.card:not([hidden])');});
- if(t&&first)first.classList.add('hit');
- cnt.textContent=t?(n+' match'+(n==1?'':'es')+(n?' · Enter opens the first':'')):'';
+  tiles.forEach(a=>{const m=!t||useAll||a.dataset.k.includes(t);a.hidden=!m;a.classList.remove('hit');if(m)shown++;});
+  per[s.dataset.cat]=shown;total+=shown;
+  const vis=shown>0&&(cat==='all'||cat===s.dataset.cat);
+  s.hidden=!vis;
+  s.querySelector('.scount').textContent=t?shown+' of '+tiles.length:tiles.length+' services';
+  if(vis&&!target){
+   // Typing a hub name means you want the hub, not the first service inside it.
+   const hub=s.dataset.hub;
+   target=(t&&hub&&hub.startsWith(t))?{hub:hub,name:hub}:{el:tiles.find(a=>!a.hidden)};
+   if(!target.el&&!target.hub)target=null;
+  }
+ });
+ chips.forEach(c=>{const n=c.dataset.cat==='all'?total:(per[c.dataset.cat]||0);c.querySelector('.cc').textContent=n;});
+ if(t&&target&&target.el){target.el.classList.add('hit');}
+ nextWrap.hidden=!(t&&target);
+ if(t&&target)nextName.textContent=target.hub||target.el.dataset.name;
+ cnt.textContent=t?(total+' match'+(total===1?'':'es')):cnt.dataset.all;
+ const none=!secs.some(s=>!s.hidden);
+ empty.hidden=!none;emptyQ.textContent=q.value.trim();
 }
-function target(){
- const t=q.value.trim().toLowerCase();
- // Typing a hub name means you want the hub, not the first service inside it.
- if(t){const c=[...document.querySelectorAll('.card:not([hidden])')]
-   .find(c=>(c.dataset.hub||'').includes(t));
-  if(c){const h=c.querySelector('.hublink');if(h)return h;}}
- return document.querySelector('li[data-k]:not([hidden]) a.svc')
-     || document.querySelector('.card:not([hidden]) .hublink');
-}
-// Every visible card gets ONE shared list height: the tallest visible content,
-// capped at CAP so a long category scrolls instead of stretching the page. Applies
-// filtered and unfiltered alike, which is the whole point -- the groups stay the
-// same size in both states.
-const CAP=18*parseFloat(getComputedStyle(document.documentElement).fontSize);
-function equalise(){
- const uls=[...document.querySelectorAll('.grid.wide .card:not([hidden]) ul')];
- if(!uls.length)return;
- uls.forEach(u=>{u.style.height='auto';});
- const h=Math.min(Math.max(...uls.map(u=>u.scrollHeight)),CAP);
- uls.forEach(u=>{u.style.height=h+'px';});
-}
-function refresh(){flt();equalise();}
-q.addEventListener('input',refresh);
+q.addEventListener('input',apply);
 q.addEventListener('keydown',e=>{
- if(e.key==='Enter'){const a=target();if(a)location.href=a.href;}
- if(e.key==='Escape'){q.value='';refresh();}});
-addEventListener('resize',equalise);
-equalise();
-</script>"""
+ if(e.key==='Enter'&&target){e.preventDefault();if(target.hub)openHub(target.hub);else location.href=target.el.href;}
+ if(e.key==='Escape'){q.value='';apply();}
+});
+document.getElementById('clear').addEventListener('click',()=>{q.value='';cat='all';chips.forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.cat==='all')));apply();q.focus();});
+
+// Hub modals. #servarr, #proxmox, #containers, #zigbee open one, so a link or an
+// old bookmark lands on the hub -- the hubs need no addresses of their own.
+const dlgs={};
+document.querySelectorAll('dialog.hubdlg').forEach(d=>{dlgs[d.id.slice(4)]=d;});
+function show(n){
+ const d=dlgs[n];if(!d||d.open)return;
+ Object.values(dlgs).forEach(x=>{if(x.open)x.close();});
+ // Focus the dialog itself, not its first button: the copy/close buttons would
+ // otherwise open with a focus ring every time.
+ d.showModal();d.focus();d.querySelector('.mbody').scrollTop=0;
+}
+function openHub(n){
+ if(!dlgs[n])return;
+ if(location.hash!=='#'+n)history.pushState(null,'','#'+n);
+ show(n);
+}
+function sync(){
+ const n=location.hash.slice(1).toLowerCase();
+ if(dlgs[n])show(n);else Object.values(dlgs).forEach(d=>{if(d.open)d.close();});
+}
+Object.entries(dlgs).forEach(([n,d])=>{
+ d.addEventListener('close',()=>{if(location.hash==='#'+n)history.replaceState(null,'',location.pathname+location.search);});
+ d.addEventListener('click',e=>{if(e.target===d)d.close();});  // backdrop
+});
+document.addEventListener('click',e=>{
+ const a=e.target.closest('a[data-hub]');
+ if(a){
+  // A modified click (new tab, new window) keeps the browser's own behaviour; the
+  // new tab opens on the hash and lands on the modal.
+  if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||e.button)return;
+  e.preventDefault();openHub(a.dataset.hub);return;
+ }
+ const x=e.target.closest('[data-close]');
+ if(x){x.closest('dialog').close();return;}
+ const cp=e.target.closest('[data-copy]');
+ if(cp){
+  const url=location.origin+location.pathname+'#'+cp.dataset.copy,lab=cp.querySelector('span');
+  const done=()=>{lab.textContent='Copied';setTimeout(()=>{lab.textContent='Copy link';},1600);};
+  if(navigator.clipboard)navigator.clipboard.writeText(url).then(done,()=>{lab.textContent=url;});
+  else lab.textContent=url;
+  return;
+ }
+ const ch=e.target.closest('.chip[data-cat]');
+ if(ch){
+  cat=(ch.dataset.cat===cat&&cat!=='all')?'all':ch.dataset.cat;
+  chips.forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.cat===cat)));
+  apply();
+ }
+});
+addEventListener('hashchange',sync);
+addEventListener('popstate',sync);
+
+// Filter inside the containers modal.
+document.querySelectorAll('input.mfilter').forEach(inp=>inp.addEventListener('input',()=>{
+ const t=inp.value.trim().toLowerCase();
+ inp.closest('dialog').querySelectorAll('[data-host]').forEach(card=>{
+  const hm=!t||card.dataset.host.includes(t);let n=0;
+  card.querySelectorAll('[data-name]').forEach(c=>{const m=!t||hm||c.dataset.name.includes(t);c.hidden=!m;if(m)n++;});
+  card.hidden=!(!t||n>0);
+ });
+}));
+
+apply();sync();
+})();
+"""
+
+# ---------- home page: data → markup ----------
+CATEGORY_HUE = {
+    "Home & automation": 152, "Media": 18, "Virtualization & backup": 268,
+    "Containers & monitoring": 205, "Network & storage": 228,
+    "Automation & workflows": 45, "Apps & personal": 330, "Games": 290, "Other": 210,
+}
+HUB_CATEGORY = {hub: cat for cat, hub in CATEGORY_HUBS.items()}
+HUB_ORDER = ["servarr", "proxmox", "containers", "zigbee"]
+
+HUB_INFO = {
+    "servarr": ("Media automation",
+                "The Servarr stack — indexers, managers, requests, downloads and retention, "
+                "with live queue and library numbers."),
+    "proxmox": ("Proxmox cluster",
+                "Virtualization nodes and backup servers. Open a node for its web UI."),
+    "containers": ("Docker containers",
+                   "Every container across the fleet, grouped by Docker host and the PVE node it "
+                   "runs on. Click a container to open it in Dockhand."),
+    "zigbee": ("Zigbee",
+               "Zigbee2MQTT servers and their SLZB coordinator radios. A server only counts as "
+               "healthy when its frontend answers — a dead Z2M can hide inside a running container."),
+}
+
+_P = {  # stroke-icon path data, 24×24 viewBox
+    "servarr": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/>',
+    "proxmox": '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+    "containers": '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+    "zigbee": '<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/><path d="M1.5 9a15 15 0 0 1 21 0"/>',
+    "expand": '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+    "out": '<path d="M7 17 17 7M8 7h9v9"/>',
+    "search": '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    "link": '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
+    "x": '<path d="M18 6 6 18M6 6l12 12"/>',
+    "brand": '<path d="M3 12h3l3-7 4 14 3-7h5"/>',
+}
+
+def _svg(key, size=18, cls=""):
+    c = f' class="{cls}"' if cls else ""
+    return (f'<svg{c} width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{_P[key]}</svg>')
+
+# App logos, each emitted ONCE into the page's stylesheet as a background image and
+# referenced by class. Never inline the SVG markup: dashboard-icons files carry their
+# own <style> blocks (.st0{fill:…}) that leak page-wide once inlined, so one logo
+# repaints another -- the old index rendered several with the wrong colours.
+_ICON_CSS = {}
+
+def _icon_class(slug):
+    if not slug:
+        return None
+    key = "ic-" + hashlib.sha1(slug.encode()).hexdigest()[:10]
+    if key in _ICON_CSS:
+        return key
+    if slug.startswith("<svg"):
+        uri = "data:image/svg+xml;base64," + base64.b64encode(slug.encode()).decode()
+    elif slug.startswith("https://"):
+        uri = icon_img(slug)
+    else:
+        svg = icon_svg(slug)
+        uri = "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode() if svg else None
+    if not uri:
+        return None
+    _ICON_CSS[key] = uri
+    return key
+
+def _mono(name):
+    parts = [p for p in name.split("-") if p]
+    if len(parts) > 1:
+        return (parts[0][0] + parts[1][0]).upper()
+    return name[:1].upper() + name[1:2]
+
+def _ico(slug, label, small=False):
+    """App logo when one exists, else a two-letter monogram in the category tint."""
+    sm = " sm" if small else ""
+    cls = _icon_class(slug)
+    if cls:
+        return f'<span class="ico{sm} {cls}" aria-hidden="true"></span>'
+    return f'<span class="ico{sm} tint" aria-hidden="true">{html.escape(_mono(label))}</span>'
+
+def _big(value, of="", unit=""):
+    of_html = f'<span class="of">{html.escape(of)}</span>' if of else ""
+    unit_html = f' <span class="unit">{html.escape(unit)}</span>' if unit else ""
+    return f'<span class="big">{html.escape(str(value))}{of_html}{unit_html}</span>'
+
+def _metric(label, value, of="", sub="", tone="ok"):
+    return (f'<div class="metric"><span class="m-lbl">{html.escape(label)}</span>{_big(value, of)}'
+            f'<span class="m-sub"><span class="d d-{tone}"></span>{html.escape(sub)}</span></div>')
+
+def _pct_tone(pct):
+    return "bad" if pct >= 85 else "warn" if pct >= 70 else "ok"
+
+def _num(v):
+    return "—" if v is None else str(v)
+
+def _hub_servarr():
+    d = HUB_DATA.get("servarr")
+    if not d:
+        return None
+    status = d["status"]
+    n, n_up = len(status), sum(1 for v in status.values() if v.get("up"))
+
+    def kvint(svc, key):
+        try:
+            return int(status.get(svc, {}).get("kv", {}).get(key))
+        except (TypeError, ValueError):
+            return None
+    queues = [kvint("sonarr", "queue"), kvint("radarr", "queue")]
+    queue = sum(x for x in queues if x is not None) if any(x is not None for x in queues) else None
+    pending, leaving = kvint("overseerr", "pending"), kvint("maintainerr", "leaving")
+    metrics = [
+        _metric("Services up", n_up, f"/{n}", "all answering" if n_up == n else f"{n - n_up} down",
+                "ok" if n_up == n else "bad"),
+        _metric("In queue", _num(queue), "", "Sonarr + Radarr", "mute" if queue is None else "ok"),
+        _metric("Pending requests", _num(pending), "", "Overseerr",
+                "mute" if pending is None else "warn" if pending else "ok"),
+        _metric("Leaving soon", _num(leaving), "", "Maintainerr retention", "mute" if leaving is None else "ok"),
+    ]
+    groups = ""
+    for heading, items in SERVARR:
+        rows = ""
+        for label, svc, slug in items:
+            st = status.get(svc, {})
+            up = st.get("up", False)
+            stat = st.get("stat", "") if up else "down"
+            rows += (f'<a class="mrow{"" if up else " off"}" href="https://{svc}.{TS}">'
+                     f'<span class="d d-{"ok" if up else "mute"}"></span>{_ico(slug, label, True)}'
+                     f'<span class="mrow-name">{html.escape(label)}</span>'
+                     f'<span class="mrow-stat{"" if up else " bad"}">{html.escape(stat)}</span></a>')
+        groups += f'<div class="mcard"><h3 class="mcap">{html.escape(heading)}</h3>{rows}</div>'
+    return {"tile": (_big(n_up, f"/{n}"), "media services up"), "metrics": metrics,
+            "body": f'<div class="mgrid">{groups}</div>', "ext": None}
+
+def _hub_proxmox():
+    d = HUB_DATA.get("proxmox") or {}
+    nodes, pbs = d.get("nodes"), d.get("pbs", [])
+    if nodes is None:
+        return None
+    guests = [g for nd in nodes for g in nd["guests"]]
+    vms = sum(1 for g in guests if g[0] == "VM")
+    stopped = sum(1 for g in guests if g[3] != "running")
+    ok_nodes = sum(1 for nd in nodes if nd["ok"])
+    ok_pbs = sum(1 for b in pbs if b["ok"])
+    stores = [s for b in pbs for s in b["stores"] if s[3] is not None]
+    size, used = sum(s[1] for s in stores), sum(s[2] for s in stores)
+    pct = round(100 * used / size) if size else None
+    gsub = f"{vms} VMs · {len(guests) - vms} containers" + (f" · {stopped} stopped" if stopped else "")
+    metrics = [
+        _metric("Nodes", ok_nodes, f"/{len(nodes)}",
+                "all online" if ok_nodes == len(nodes) else f"{len(nodes) - ok_nodes} unreachable",
+                "ok" if ok_nodes == len(nodes) else "bad"),
+        _metric("Guests", len(guests), "", gsub, "warn" if stopped else "ok"),
+        _metric("Backup servers", ok_pbs, f"/{len(pbs)}",
+                "all reachable" if ok_pbs == len(pbs) else f"{len(pbs) - ok_pbs} unreachable",
+                "ok" if ok_pbs == len(pbs) else "bad"),
+        _metric("Backup storage", _num(pct), "%" if pct is not None else "",
+                f"{human(used)} of {human(size)} used" if size else "no datastore usage",
+                _pct_tone(pct) if pct is not None else "mute"),
+    ]
+    ncards = ""
+    for nd in nodes:
+        ng = len(nd["guests"])
+        right = (f'<span class="r">{ng} guest{"" if ng == 1 else "s"}</span>' if nd["ok"]
+                 else '<span class="r bad">unreachable</span>')
+        rows = ""
+        for kind, vmid, gname, gstatus in sorted(nd["guests"], key=lambda g: (g[0], g[2].lower())):
+            on = gstatus == "running"
+            rows += (f'<div class="guest{"" if on else " off"}"><span class="d d-{"ok" if on else "mute"}"></span>'
+                     f'<span class="kind tint {kind.lower()}">{kind}</span>'
+                     f'<span class="n">{html.escape(gname)}</span><span class="id">{html.escape(vmid)}</span></div>')
+        ncards += (f'<div class="mcard"><a class="mhd" href="https://{nd["name"]}.{TS}">'
+                   f'<span class="d d-{"ok" if nd["ok"] else "bad"}"></span>'
+                   f'<span class="mono">{html.escape(nd["name"])}</span>{right}</a>'
+                   + (f'<div class="guests">{rows}</div>' if rows else "") + '</div>')
+    bcards = ""
+    for b in pbs:
+        right = ('<span class="r">Proxmox Backup Server</span>' if b["ok"]
+                 else '<span class="r bad">unreachable</span>')
+        srows = ""
+        for sname, ssize, sused, spct in b["stores"]:
+            if spct is None:
+                srows += (f'<div class="store"><div class="store-row"><span class="mono">{html.escape(sname)}</span>'
+                          f'<span class="u">usage unknown</span></div></div>')
+                continue
+            srows += (f'<div class="store"><div class="store-row"><span class="mono">{html.escape(sname)}</span>'
+                      f'<span class="u">{human(sused)} / {human(ssize)}</span><b>{spct}%</b></div>'
+                      f'<span class="bar {_pct_tone(spct)}"><span style="width:{spct}%"></span></span></div>')
+        bcards += (f'<div class="mcard"><a class="mhd" href="https://{b["name"]}.{TS}">'
+                   f'<span class="d d-{"ok" if b["ok"] else "bad"}"></span>'
+                   f'<span class="mono">{html.escape(b["name"])}</span>{right}</a>{srows}</div>')
+    body = (f'<div class="mgroup"><h3 class="mcap">Virtualization nodes</h3>'
+            f'<div class="mgrid" style="--min:210px">{ncards}</div></div>'
+            f'<div class="mgroup"><h3 class="mcap">Backup servers</h3>'
+            f'<div class="mgrid" style="--min:300px">{bcards}</div></div>')
+    return {"tile": (_big(len(guests), "", "guests"), f"across {len(nodes)} nodes · {len(pbs)} backup servers"),
+            "metrics": metrics, "body": body, "ext": None}
+
+def _hub_containers():
+    d = HUB_DATA.get("containers")
+    if not d:
+        return None
+    hosts = d["hosts"]
+    total = running = unhealthy = stopped = reach = 0
+    cards = ""
+    for h in hosts:
+        node = (f'<span class="badge">{html.escape(h["node"])}</span>' if h["node"]
+                else '<span class="badge">bare-metal</span>')
+        rows = h["rows"]
+        if rows is None:
+            cards += (f'<div class="hostcard" data-host="{html.escape(h["name"])}"><div class="hosthd">'
+                      f'<span class="mono">{html.escape(h["name"])}</span>{node}'
+                      f'<span class="r bad">unreachable</span></div></div>')
+            continue
+        reach += 1
+        n_run = sum(1 for _, st, _ in rows if st == "running")
+        total += len(rows)
+        running += n_run
+        chips = ""
+        for cname, state, cstatus in sorted(rows, key=lambda r: (0 if r[1] == "running" else 1, r[0].lower())):
+            if state == "running":
+                bad = "unhealthy" in cstatus.lower()
+                unhealthy += bad
+                tone, off = ("warn" if bad else "ok"), ""
+            else:
+                stopped += 1
+                tone, off = "mute", " off"
+            esc = html.escape(cname)
+            inner = f'<span class="d d-{tone}"></span>{esc}'
+            if h["name"] in DOCKHAND_HOSTS:
+                chips += (f'<a class="ctr{off}" data-name="{esc.lower()}" '
+                          f'href="{DOCKHAND + urllib.parse.quote(cname)}">{inner}</a>')
+            else:
+                chips += f'<span class="ctr{off}" data-name="{esc.lower()}">{inner}</span>'
+        width = round(100 * n_run / len(rows)) if rows else 0
+        cards += (f'<div class="hostcard" data-host="{html.escape(h["name"])}"><div class="hosthd">'
+                  f'<span class="mono">{html.escape(h["name"])}</span>{node}'
+                  f'<span class="r"><b>{n_run}</b><span>/{len(rows)} running</span></span></div>'
+                  f'<span class="bar{"" if n_run == len(rows) else " warn"}" style="height:4px">'
+                  f'<span style="width:{width}%"></span></span><div class="ctrs">{chips}</div></div>')
+    metrics = [
+        _metric("Running", running, f"/{total}", "fleet-wide", "ok" if running == total else "warn"),
+        _metric("Docker hosts", reach, f"/{len(hosts)}",
+                "all reachable" if reach == len(hosts) else f"{len(hosts) - reach} unreachable",
+                "ok" if reach == len(hosts) else "bad"),
+        _metric("Unhealthy", unhealthy, "", "health checks failing" if unhealthy else "none flagged",
+                "warn" if unhealthy else "ok"),
+        _metric("Stopped", stopped, "", "not running" if stopped else "none stopped",
+                "mute" if stopped else "ok"),
+    ]
+    body = ('<label class="sr" for="mf-containers">Filter containers or hosts</label>'
+            '<input id="mf-containers" class="mfilter" type="search" autocomplete="off" '
+            'placeholder="Filter containers or hosts…">'
+            f'<div class="mgrid" style="--min:280px">{cards}</div>')
+    return {"tile": (_big(running, f"/{total}"), "containers running"), "metrics": metrics,
+            "body": body, "ext": (f"https://dockhand.{TS}", "Open Dockhand")}
+
+def _hub_zigbee():
+    d = HUB_DATA.get("zigbee")
+    if not d:
+        return None
+    servers, radios = d["servers"], d["radios"]
+    live = sum(1 for s in servers if s["healthy"])
+    radios_up = sum(1 for r in radios if r["up"])
+    devs = [s["probe"]["devices"] for s in servers if s["probe"]["devices"] is not None]
+    chans = [m.group(1) for r in radios for m in [re.search(r"\bch (\d+)", r["role"])] if m]
+    where = [r["role"].split()[0] for r in radios if re.search(r"\bch \d+", r["role"])]
+    metrics = [
+        _metric("Servers healthy", live, f"/{len(servers)}",
+                "frontends answering" if live == len(servers) else f"{len(servers) - live} not healthy",
+                "ok" if live == len(servers) else "bad"),
+        _metric("Radios reachable", radios_up, f"/{len(radios)}",
+                "coordinators up" if radios_up == len(radios) else f"{len(radios) - radios_up} unreachable",
+                "ok" if radios_up == len(radios) else "bad"),
+        _metric("Devices paired", sum(devs) if devs else "—", "", "across all networks",
+                "ok" if devs else "mute"),
+        _metric("Channels", " · ".join(chans) or "—", "", " · ".join(where), "ok" if chans else "mute"),
+    ]
+
+    def kv(rows):
+        bad = ' class="bad"'
+        return '<dl class="kv">' + "".join(
+            f'<dt>{html.escape(k)}</dt><dd{"" if ok else bad}>{html.escape(v)}</dd>'
+            for ok, k, v in rows) + "</dl>"
+
+    scards = ""
+    for s in servers:
+        p = s["probe"]
+        tone = "ok" if s["healthy"] else "bad" if s["running"] and not s["up"] else "warn"
+        rows = [(s["up"], "frontend", f'HTTP {p["http"]}'),
+                (s["running"], "container", p["state"] or "unknown"),
+                (s["configured"], "adapter", p["target"] or "not configured"),
+                (bool(p["base_topic"]), "base topic", p["base_topic"] or "—")]
+        if p["devices"] is not None:
+            rows.append((True, "devices", str(p["devices"])))
+        scards += (f'<div class="mcard"><a class="zhd" href="https://{s["svc"]}.{TS}"><span class="l">'
+                   f'<span class="mono">{html.escape(s["container"])}</span>'
+                   f'<span class="state {tone}"><span class="d d-{tone}"></span>{html.escape(s["note"])}</span></span>'
+                   f'<span class="s">on {html.escape(s["host"])}</span></a>{kv(rows)}</div>')
+    rcards = ""
+    for r in radios:
+        tone = "ok" if r["up"] else "bad"
+        rows = [(r["up"], "network", "up" if r["up"] else "unreachable"),
+                (r["web"], "web UI", f'HTTP {r["code"]}'),
+                (r["sock"], f'coordinator :{r["cport"]}', "listening" if r["sock"] else "closed"),
+                (bool(r["user"]), "used by", r["user"] or "unused")]
+        tag, end = (f'<a class="zhd" href="http://{r["ip"]}/">', "</a>") if r["up"] else ('<div class="zhd">', "</div>")
+        rcards += (f'<div class="mcard">{tag}<span class="l"><span class="mono">{html.escape(r["label"])}</span>'
+                   f'<span class="state {tone}"><span class="d d-{tone}"></span>{"up" if r["up"] else "unreachable"}</span></span>'
+                   f'<span class="s">{html.escape(r["model"])} · {html.escape(r["ip"])} · {html.escape(r["role"])}</span>'
+                   f'{end}{kv(rows)}</div>')
+    body = (f'<div class="mgroup"><h3 class="mcap">Zigbee2MQTT servers</h3>'
+            f'<div class="mgrid" style="--min:320px">{scards}</div></div>'
+            f'<div class="mgroup"><h3 class="mcap">SLZB radios</h3>'
+            f'<div class="mgrid" style="--min:320px">{rcards}</div></div>')
+    return {"tile": (_big(radios_up, f"/{len(radios)}", "radios"),
+                     f"{live} Zigbee2MQTT server{'' if live == 1 else 's'} healthy"),
+            "metrics": metrics, "body": body, "ext": None}
+
+HUB_BUILDERS = {"servarr": _hub_servarr, "proxmox": _hub_proxmox,
+                "containers": _hub_containers, "zigbee": _hub_zigbee}
+
+def _modal(name, hub, now):
+    title, blurb = HUB_INFO[name]
+    hue = CATEGORY_HUE.get(HUB_CATEGORY.get(name, "Other"), 210)
+    ext = ""
+    if hub["ext"]:
+        url, label = hub["ext"]
+        ext = f'<a class="mbtn" href="{url}">{html.escape(label)}{_svg("out", 14)}</a>'
+    return (f'<dialog class="hubdlg" id="hub-{name}" tabindex="-1" aria-labelledby="hub-{name}-t" style="--h:{hue}">'
+            f'<div class="mhead"><span class="mico tint">{_svg(name, 22)}</span>'
+            f'<div class="mtitle"><div class="mtl"><h2 id="hub-{name}-t">{html.escape(title)}</h2>'
+            f'<span class="mono">{name}</span></div><p>{html.escape(blurb)}</p></div>'
+            f'<div class="mact">{ext}<button type="button" class="mbtn" data-copy="{name}">'
+            f'{_svg("link", 14)}<span aria-live="polite">Copy link</span></button>'
+            f'<button type="button" class="xbtn" data-close aria-label="Close">{_svg("x", 20)}</button></div></div>'
+            f'<div class="mbody"><div class="metrics">{"".join(hub["metrics"])}</div>{hub["body"]}'
+            f'<p class="mfoot">Direct link <span class="mono">home.{TS}/#{name}</span> · generated '
+            f'{html.escape(now)} · <kbd>Esc</kbd> closes</p></div></dialog>')
 
 def render_home():
     static = _desired_file("/etc/ts-static-serves.txt")
-    hubs = _desired_file("/etc/ts-static-serves-hubs.txt")
+    hubs_file = _desired_file("/etc/ts-static-serves-hubs.txt")
 
     discovered = tailnet_services()
     if not discovered:
         # Netmap unreadable. Union the two local desired-state files rather than
         # emitting an index that claims the tailnet is empty — an incomplete page
         # is recoverable, a confidently-blank one is what sbhome did.
-        discovered = set(static) | set(hubs)
+        discovered = set(static) | set(hubs_file)
     dock = docktail_services()
 
-    hub_names = set(hubs) & discovered
+    # Hub pages still served as their own VIPs are not listed as services: the hub
+    # is reached through its modal here. Once those VIPs are retired this set is
+    # simply empty.
+    hub_vips = set(hubs_file) & discovered
     names = discovered - {"home"}
-    listed = sorted(names - hub_names)
-    up = vip_status(sorted(names))
+    listed = sorted(names - hub_vips)
+    up = vip_status(listed)
 
     def origin(name):
         if name in dock:
@@ -1071,7 +1698,14 @@ def render_home():
             return "→ " + static[name].split("://", 1)[-1]
         return ""
 
-    def item(name):
+    # The modals are built from what the hub renderers collected into HUB_DATA, NOT
+    # from whether a hub VIP exists -- that is what lets the hub VIPs be retired
+    # without the drill-downs disappearing with them.
+    hubs = {n: h for n in HUB_ORDER for h in [HUB_BUILDERS[n]()] if h}
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %Z").strip()
+    host = os.uname().nodename
+
+    def tile(name):
         slug, blurb = HOME_META.get(name, (None, ""))
         desc = blurb or origin(name)
         ok = up.get(name, False)
@@ -1079,58 +1713,106 @@ def render_home():
         # just greying the dot.
         if not ok and name in dock and dock[name][1] != "running":
             desc = origin(name)
-        return (f'<li data-k="{html.escape((name + " " + desc).lower())}">'
-                f'<span class="dot {"on" if ok else "off"}"></span>'
-                f'<a class="svc" href="https://{name}.{TS}">'
-                f'{icon_or_badge(name, slug)}<span class="sname">{html.escape(name)}</span></a>'
-                f'<span class="sdesc">{html.escape(desc)}</span></li>')
+        if not ok and not desc:
+            desc = "Not serving right now"
+        tag = "" if ok else '<span class="tag">Offline</span>'
+        return (f'<a class="tile{"" if ok else " off"}" href="https://{name}.{TS}" data-name="{html.escape(name)}" '
+                f'data-k="{html.escape((name + " " + desc).lower())}">{_ico(slug, name)}'
+                f'<span class="tbody"><span class="tname">{html.escape(name)}</span>'
+                f'<span class="tdesc">{html.escape(desc)}</span></span>'
+                f'<span class="tend">{tag}<span class="d d-{"ok" if ok else "mute"}" '
+                f'title="{"Serving" if ok else "Not serving right now"}"></span>{_svg("out", 16, "go")}</span></a>')
 
-    # One card per category, all in a single flowing grid (same shape as the
-    # servarr hub) so the categories tile across the width instead of stacking.
-    def card(heading, members):
-        hub = CATEGORY_HUBS.get(heading)
-        hub = hub if hub in hub_names else None
-        link, hub_attr = "", ""
-        if hub:
-            summary = HUB_SUMMARY.get(hub, "")
-            sum_html = f'<span class="hsum">{html.escape(summary)}</span>' if summary else ""
-            link = (f'<a class="hublink" href="https://{hub}.{TS}">{sum_html}'
-                    f'<span class="hname">{html.escape(hub)}</span> ↗</a>')
-            hub_attr = f' data-hub="{html.escape(hub)}"'
-        # The card's own data-k carries the heading AND the hub name, so typing
-        # `proxmox` finds the Virtualization card. Without it the four hub names
-        # are unfindable on the page whose entire job is finding things by name.
-        key = html.escape((heading + " " + (hub or "")).strip().lower())
-        return (f'<div class="card" data-k="{key}"{hub_attr}>'
-                f'<div class="cardhead"><h2>{html.escape(heading)}'
-                f'<span class="ccount">{len(members)}</span></h2>{link}</div><ul>'
-                + "".join(item(m) for m in members) + "</ul></div>")
-
-    cards = []
+    groups = []
     uncategorised = set(listed)
     for heading, members in HOME_CATEGORIES:
-        present = [m for m in members if m in names]
+        present = [m for m in members if m in listed]
         uncategorised -= set(present)
         if present:
-            cards.append(card(heading, present))
+            groups.append((heading, present))
     if uncategorised:
-        cards.append(card("Other", sorted(uncategorised)))
-    body = ('<section class="cat"><div class="grid wide">' + "".join(cards)
-            + "</div></section>")
+        groups.append(("Other", sorted(uncategorised)))
 
-    dark = sorted(n for n in listed if not up.get(n, False))
-    search = ('<div class="search"><input id="q" type="search" '
-              'placeholder="Filter services… (try &quot;arr&quot;)" autocomplete="off" autofocus>'
-              '<span id="cnt" class="usage"></span></div>'
-              '<p class="hint">Type to filter, <kbd>Enter</kbd> opens the first match, '
-              '<kbd>Esc</kbd> clears. Every name below is '
-              '<span class="sname">&lt;name&gt;.' + TS + '</span>.</p>')
+    sections, chips = [], []
+    total = sum(len(m) for _, m in groups)
+    chips.append(f'<button type="button" class="chip" data-cat="all" aria-pressed="true">All'
+                 f'<span class="cc">{total}</span></button>')
+    for heading, members in groups:
+        slug = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
+        hub = CATEGORY_HUBS.get(heading)
+        hub = hub if hub in hubs else None
+        link = ""
+        if hub:
+            summary = HUB_SUMMARY.get(hub, "")
+            link = (f'<a class="hublink" href="#{hub}" data-hub="{hub}" aria-haspopup="dialog">'
+                    f'{html.escape(summary)}<span class="mono">{hub}</span>{_svg("expand", 14)}</a>')
+        # The section's own data-k carries the heading AND the hub name, so typing
+        # `proxmox` finds the Virtualization section.
+        key = html.escape((heading + " " + (hub or "")).strip().lower())
+        sections.append(
+            f'<section class="svc" data-cat="{slug}" data-k="{key}" data-hub="{hub or ""}" '
+            f'aria-label="{html.escape(heading)}" style="--h:{CATEGORY_HUE.get(heading, 210)}">'
+            f'<div class="shead"><span class="swatch"></span><h3>{html.escape(heading)}</h3>'
+            f'<span class="scount">{len(members)} services</span>{link}</div>'
+            f'<div class="tiles">{"".join(tile(m) for m in members)}</div></section>')
+        chips.append(f'<button type="button" class="chip" data-cat="{slug}" aria-pressed="false">'
+                     f'{html.escape(heading)}<span class="cc">{len(members)}</span></button>')
 
-    sub = (f"{len(listed)} services on the tailnet, {len(listed) - len(dark)} answering. "
-           "Grey means the VIP is not serving right now.")
-    if dark:
-        sub += "  Dark: " + ", ".join(dark) + "."
-    return page("Homelab", sub, search + body + HOME_JS)
+    hub_cards = ""
+    for name, h in hubs.items():
+        hue = CATEGORY_HUE.get(HUB_CATEGORY.get(name, "Other"), 210)
+        big, label = h["tile"]
+        hub_cards += (f'<a class="hub" href="#{name}" data-hub="{name}" aria-haspopup="dialog" style="--h:{hue}">'
+                      f'<span class="hub-top"><span class="hub-ico tint">{_svg(name)}</span>'
+                      f'<span class="hub-name">{name}</span>{_svg("expand", 16, "exp")}</span>'
+                      f'<span class="hub-num">{big}<span class="hub-lbl">{html.escape(label)}</span></span></a>')
+    hubs_html = (f'<section class="hubs" aria-labelledby="hubs-t"><h2 id="hubs-t" class="cap">Topic hubs</h2>'
+                 f'<div class="hubgrid">{hub_cards}</div></section>') if hubs else ""
+    nav = "".join(f'<a href="#{n}" data-hub="{n}" aria-haspopup="dialog">{n}</a>' for n in hubs)
+
+    dark = [n for n in listed if not up.get(n, False)]
+    n_up = len(listed) - len(dark)
+    pill_title = f' title="Not serving: {html.escape(", ".join(dark))}"' if dark else ""
+    icon_css = "".join(f'.{k}{{background-image:url("{v}")}}' for k, v in _ICON_CSS.items())
+    modals = "".join(_modal(n, h, now) for n, h in hubs.items())
+
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Homelab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>{HOME_CSS}{icon_css}</style></head><body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><span class="brand-mark">{_svg("brand", 20)}</span>
+<span class="brand-txt"><b>Homelab</b><span>{TS}</span></span></a>
+<nav class="hubnav" aria-label="Topic hubs">{nav}</nav>
+<span class="pill{" warn" if dark else ""}"{pill_title}><span class="d d-ok"></span><span>{n_up} of {len(listed)} serving</span></span>
+</div></header>
+<main class="wrap">
+<section class="hero" aria-labelledby="hero-t">
+<p class="eyebrow">Service index</p>
+<h1 id="hero-t">Every service on the tailnet, one name away.</h1>
+<p class="lede">Each name below is its own address: <span class="mono">&lt;name&gt;.{TS}</span>. Type to find one, press Enter to open it.</p>
+<div class="search"><label class="sr" for="q">Filter services</label>
+<div class="sbox">{_svg("search", 20)}<input id="q" type="search" autocomplete="off" autofocus placeholder="Filter services… try “arr” or “proxmox”"><span id="cnt" class="scnt" data-all="{total} services">{total} services</span></div>
+<p class="hint"><span><kbd>Enter</kbd> opens the first match</span><span><kbd>Esc</kbd> clears</span><span id="next" hidden>→ <span id="next-name" class="mono"></span></span></p>
+</div></section>
+{hubs_html}
+<section aria-labelledby="svc-t">
+<div class="chipbar"><h2 id="svc-t" class="cap">Services</h2>{"".join(chips)}</div>
+{"".join(sections)}
+<div id="empty" class="empty" hidden><p class="t">Nothing on the tailnet matches “<span id="empty-q"></span>”.</p>
+<p class="s">Search covers names, descriptions and categories.</p>
+<button type="button" id="clear">Clear the filter</button></div>
+</section>
+</main>
+<footer><div class="wrap"><span>Generated {html.escape(now)} on <span class="mono">{html.escape(host)}</span> · refreshes every 15 minutes</span>
+<span class="r">Source: tailnet netmap, one entry per VIP service</span></div></footer>
+{modals}
+<script>{HOME_JS}</script>
+</body></html>"""
+
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)

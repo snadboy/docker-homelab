@@ -1,0 +1,18 @@
+# SB Loop Sort: truck/conveyor colour-sorting puzzle (static PWA on nginx). No ads, no purchases.
+# Source: https://github.com/snadboy/loop-sort (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new loop-sort commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up). sb-game-deploy.sh does this.
+services:
+  loop-sort:
+    image: ghcr.io/snadboy/loop-sort:c4ba84f2aca877d61faf71c2634fc841f6aa1fb2
+    container_name: loop-sort
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=loopsort"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

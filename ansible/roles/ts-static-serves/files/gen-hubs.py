@@ -2,8 +2,9 @@
 """Generate the `home` page (index of every service) for Tailscale Services.
 Runs on a ts-advertiser VM; gathers live data via Tailscale SSH to the nodes
 (advertiser has tag:ssh). Writes self-contained HTML to OUTDIR.
-The topic hubs -- proxmox (guests + datastores), servarr (live arr status),
-containers, zigbee -- are modals on home, reachable as home…/#<hub>."""
+Live numbers sit on the tiles and section headers. Two inventories -- Guests
+(proxmox nodes + datastores) and Containers -- are modals on home, reachable as
+home…/#proxmox and home…/#containers."""
 import subprocess, html, os, datetime, json, urllib.request, urllib.parse, urllib.error
 import concurrent.futures
 import base64, re, hashlib
@@ -182,8 +183,6 @@ def collect_proxmox():
         ok, stores = pbs_stores(host)
         pbs.append({"name": name, "ok": ok, "stores": stores})
     HUB_DATA["proxmox"] = {"nodes": nodes, "pbs": pbs}
-    guests = sum(len(n["guests"]) for n in nodes)
-    HUB_SUMMARY["proxmox"] = f"{guests} guests · {len(nodes)} nodes"
 
 # ---------- servarr live status ----------
 # Each app's status + one at-a-glance metric is gathered by SSHing to the host it
@@ -308,8 +307,6 @@ def servarr_status():
 def collect_servarr():
     status = servarr_status()
     HUB_DATA["servarr"] = {"status": status}
-    n_up = sum(1 for v in status.values() if v.get("up"))
-    HUB_SUMMARY["servarr"] = f"{n_up}/{len(status)} up"
 
 # ---------- containers ----------
 def docker_ps(access):
@@ -335,9 +332,6 @@ def collect_containers():
     # than dropping the card.
     hosts = [{"name": h, "node": n, "rows": docker_ps(a)} for h, n, a in DOCKER_HOSTS]
     HUB_DATA["containers"] = {"hosts": hosts}
-    rows = [r for h in hosts if h["rows"] for r in h["rows"]]
-    running = sum(1 for r in rows if r[1] == "running")
-    HUB_SUMMARY["containers"] = f"{running}/{len(rows)} running"
 
 # ---------- zigbee ----------
 # Zigbee2MQTT instances: (container, ssh-host, host-published port, DockTail service name)
@@ -471,9 +465,6 @@ def collect_zigbee():
                        "user": used_by.get(ip)})
 
     HUB_DATA["zigbee"] = {"servers": servers, "radios": radios}
-    live = sum(1 for s in servers if s["healthy"])
-    radios_up = sum(1 for r in radios if r["up"])
-    HUB_SUMMARY["zigbee"] = f"{live} servers · {radios_up}/{len(radios)} radios"
 
 # ---------- home (root index of every service) ----------
 # The point of this page is that `home` is the only name you have to remember.
@@ -504,13 +495,14 @@ def collect_zigbee():
 # Categories and blurbs are hand-written because nothing on the wire knows them.
 # Anything discovered but uncategorised falls into "Other" rather than being
 # dropped, so a new service is always reachable even before it is classified.
-# Each topic hub also hangs off the section it belongs to, as a named link in that
-# section's header that opens the hub's modal -- the drill-down sits where the
-# content is, and the hub's NAME stays visible.
 #
-# `zigbee` is deliberately labelled by name rather than as a generic "Details":
-# it covers only the two Z2M entries of "Home & automation", not ha/homelab-bar/trmnl,
-# so a generic label there would overpromise.
+# The four topic hubs were merged into the sections on 2026-10-11. servarr and
+# zigbee only repeated their section's links, so their numbers moved onto the tiles
+# and the section header (see _live_stats) and their modals went. proxmox and
+# containers are inventories the tiles cannot show, so they stay as modals, opened
+# from a "N guests" / "N containers" button in their section's header.
+# The old hub names are kept here as search keywords for their section, and as
+# #hash aliases so old links and bookmarks still land somewhere useful.
 CATEGORY_HUBS = {
     "Media":                    "servarr",
     "Virtualization & backup":  "proxmox",
@@ -519,9 +511,7 @@ CATEGORY_HUBS = {
 }
 
 # Filled by the collect_* functions above, which main() runs BEFORE render_home():
-# HUB_SUMMARY holds the headline string for each section's hub link, HUB_DATA the
-# full data each modal is built from.
-HUB_SUMMARY = {}
+# the tile stats, section totals and both modals are all built from it.
 HUB_DATA = {}
 
 HOME_CATEGORIES = [
@@ -763,10 +753,7 @@ a{color:inherit}
 .brand-txt{display:flex;flex-direction:column;line-height:1.15}
 .brand-txt b{font-size:16px;letter-spacing:-.01em}
 .brand-txt span{font-family:var(--mono);font-size:12px;color:var(--dim)}
-.hubnav{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto}
-.hubnav a{font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;padding:8px 12px;min-height:44px;display:inline-flex;align-items:center;border:1px solid transparent;border-radius:8px}
-.hubnav a:hover{color:var(--text);border-color:var(--line-strong)}
-.pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-variant-numeric:tabular-nums}
+.pill{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-variant-numeric:tabular-nums}
 .pill .d{box-shadow:0 0 0 3px var(--ok-ring)}
 .pill.warn .d{background:var(--warn);box-shadow:0 0 0 3px rgba(240,180,76,.18)}
 
@@ -789,20 +776,10 @@ kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;bor
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .cap{margin:0 0 14px;font-size:13px;font-weight:600;color:var(--dim);letter-spacing:.02em}
 
-/* hub cards */
-.hubs{padding:8px 0 40px}
-.hubgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-.hub{display:flex;flex-direction:column;gap:18px;padding:20px;min-height:148px;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);transition:border-color .15s,background-color .15s}
-.hub:hover{border-color:var(--line-strong);background:var(--surface-2)}
-.hub-top{display:flex;align-items:center;gap:10px}
-.hub-ico{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
-.hub-name{font-family:var(--mono);font-size:14px;font-weight:500}
-.hub-top .exp{margin-left:auto;color:var(--dim)}
-.hub-num{display:flex;flex-direction:column;gap:2px}
+/* big numbers (modal metrics) */
 .big{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
 .big .of{color:var(--dim);font-weight:500}
 .big .unit{color:var(--dim);font-weight:500;font-size:18px;letter-spacing:0}
-.hub-lbl{font-size:13px;color:var(--dim)}
 
 /* service sections */
 .chipbar{position:sticky;top:0;z-index:2;background:var(--bg);padding:14px 0;margin:0 0 8px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -815,14 +792,30 @@ kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;bor
 .chip:hover{color:var(--text);border-color:var(--line-strong)}
 .chip .cc{font-size:12px;font-variant-numeric:tabular-nums}
 .chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:var(--bg)}
-.svc{padding:20px 0 16px;display:flex;flex-direction:column;gap:14px}
+.allbtn{margin-left:auto;border-radius:8px}
+.svc{padding:20px 0 16px;display:flex;flex-direction:column;gap:14px;border-radius:12px;scroll-margin-top:72px}
+.svc.flash{animation:flash 1.6s ease}
+@keyframes flash{0%{background:var(--ring)}100%{background:transparent}}
 .shead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
 .swatch{width:10px;height:10px;border-radius:3px;background:hsl(var(--h),var(--sw-s),var(--sw-l))}
 .shead h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+/* Each section folds to its header, which keeps its totals. Folded state is the
+   viewer's own (localStorage); a filter or a picked category shows matches anyway. */
+.stog{font:inherit;letter-spacing:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 10px 0 6px;margin-left:-6px;border:0;border-radius:8px;background:transparent}
+.stog:hover{background:var(--surface-2)}
+.chev{color:var(--dim);transition:transform .15s}
+.svc.shut{padding:8px 0}
+.svc.shut .chev{transform:rotate(-90deg)}
+.svc.shut .tiles{display:none}
 .scount{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
-.hublink{margin-left:auto;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;font-size:13px;color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:8px}
-.hublink:hover{color:var(--text);border-color:var(--line-strong)}
-.hublink .mono{color:var(--accent)}
+.ssum{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding-left:14px;border-left:1px solid var(--line)}
+.ssum .sm{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+.ssum .d{width:6px;height:6px}
+.ssum b,.inv b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.inv{margin-left:auto;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.inv:hover{color:var(--text);border-color:var(--accent)}
+.inv svg{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}.svc.flash{animation:none}}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:10px}
 .tile{display:flex;align-items:center;gap:12px;padding:12px 14px;min-height:64px;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background-color .15s}
 .tile:hover{border-color:var(--line-strong);background:var(--surface-2)}
@@ -832,7 +825,10 @@ kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;bor
 .ico.sm{width:24px;height:24px;border-radius:6px;font-size:10px;background-size:16px 16px}
 .ico.tint{background:hsla(var(--h),70%,var(--tb-l),var(--tb-a))}  /* .ico's shorthand would repaint it grey */
 .tbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
-.tname{font-family:var(--mono);font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tname{flex:1 1 auto;min-width:0;font-family:var(--mono);font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tstat{flex:0 1 auto;max-width:60%;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tstat.ok{color:var(--ok)}.tstat.warn{color:var(--warn)}.tstat.bad{color:var(--bad)}
 .tdesc{font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tend{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px}
 .tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:2px 7px;border-radius:5px;border:1px solid var(--line)}
@@ -880,12 +876,7 @@ dialog.hubdlg:focus{outline:none}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--min,260px),1fr));gap:10px;align-items:start}
 .mcard{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .mcard>.mcap{padding:12px 14px 8px}
-.mrow{display:flex;align-items:center;gap:10px;padding:9px 14px;min-height:44px;text-decoration:none;border-top:1px solid var(--line)}
-a.mrow:hover,a.mhd:hover{background:var(--surface-2)}
-.mrow.off{opacity:.62}
-.mrow-name{flex:1 1 auto;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mrow-stat{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
-.mrow-stat.bad{color:var(--bad)}
+a.mhd:hover{background:var(--surface-2)}
 .mhd{display:flex;align-items:center;gap:10px;padding:12px 14px;min-height:44px;text-decoration:none}
 .mhd .mono{font-size:14px;font-weight:600}
 .mhd .r{margin-left:auto;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
@@ -919,20 +910,6 @@ a.ctr:hover{border-color:var(--line-strong)}
 .ctr.off{opacity:.6}
 .mfilter{width:100%;max-width:360px;height:40px;padding:0 12px;font:inherit;font-size:14px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:9px;outline:none}
 .mfilter:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
-.zhd{display:flex;flex-direction:column;gap:2px;padding:12px 16px;text-decoration:none}
-a.zhd:hover{background:var(--surface-2)}
-.zhd .l{display:flex;align-items:center;gap:10px}
-.zhd .mono{font-size:14px;font-weight:600}
-.zhd .s{font-size:12px;color:var(--dim)}
-.state{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
-.state .d{width:6px;height:6px}
-.state.ok{color:var(--ok);background:var(--ok-ring)}
-.state.warn{color:var(--warn);background:rgba(240,180,76,.14)}
-.state.bad{color:var(--bad);background:rgba(242,104,95,.14)}
-.kv{margin:0;padding:6px 16px 12px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:6px 12px;font-size:13px}
-.kv dt{color:var(--dim)}
-.kv dd{margin:0;font-family:var(--mono);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kv dd.bad{color:var(--bad)}
 .mfoot{margin:0;font-size:12px;color:var(--dim)}
 .mfoot .mono{color:var(--text)}
 """
@@ -944,15 +921,36 @@ const q=document.getElementById('q'),cnt=document.getElementById('cnt'),
  empty=document.getElementById('empty'),emptyQ=document.getElementById('empty-q');
 const secs=[...document.querySelectorAll('section.svc')];
 const chips=[...document.querySelectorAll('.chip[data-cat]')];
+const allBtn=document.getElementById('allbtn');
 let cat='all',target=null;
+
+// Folded sections, by data-cat. Kept per viewer in localStorage; storage can be
+// missing or throw (private window, blocked site data), so every access is guarded
+// and the page simply opens fully expanded then.
+const FOLD_KEY='home.folded';
+let shut=new Set();
+try{shut=new Set(JSON.parse(localStorage.getItem(FOLD_KEY)||'[]'));}catch(e){}
+function saveFold(){try{localStorage.setItem(FOLD_KEY,JSON.stringify([...shut]));}catch(e){}}
+// A filter or a picked category always shows its matches, folded or not.
+function fold(forced){
+ secs.forEach(s=>{
+  const c=!forced&&shut.has(s.dataset.cat);
+  s.classList.toggle('shut',c);
+  s.querySelector('.stog').setAttribute('aria-expanded',String(!c));
+ });
+ const all=secs.every(s=>shut.has(s.dataset.cat));
+ allBtn.querySelector('.lbl').textContent=all?'Expand all':'Collapse all';
+ allBtn.querySelector('.i-fold').hidden=all;
+ allBtn.querySelector('.i-unfold').hidden=!all;
+}
 function apply(){
  const t=q.value.trim().toLowerCase();let total=0;const per={};target=null;
  secs.forEach(s=>{
   const tiles=[...s.querySelectorAll('.tile')];
-  // A section-name (or hub-name) hit expands the section ONLY when no row inside
-  // it matched -- otherwise `arr` drags plex and sabnzbd in just because the hub
-  // is called servarr, while `proxmox` (no service is called that) still shows the
-  // nodes instead of nothing.
+  // A section-name (or old hub-name) hit expands the section ONLY when no row
+  // inside it matched -- otherwise `arr` drags plex and sabnzbd in just because
+  // the old hub was called servarr, while `proxmox` (no service is called that)
+  // still shows the nodes instead of nothing.
   const rowHit=!!t&&tiles.some(a=>a.dataset.k.includes(t));
   const useAll=!!t&&!rowHit&&s.dataset.k.includes(t);
   let shown=0;
@@ -962,19 +960,21 @@ function apply(){
   s.hidden=!vis;
   s.querySelector('.scount').textContent=t?shown+' of '+tiles.length:tiles.length+' services';
   if(vis&&!target){
-   // Typing a hub name means you want the hub, not the first service inside it.
-   const hub=s.dataset.hub;
-   target=(t&&hub&&hub.startsWith(t))?{hub:hub,name:hub}:{el:tiles.find(a=>!a.hidden)};
+   // Typing an inventory's name (`guests`, `containers`, or the old `proxmox`)
+   // means you want the inventory, not the first service in its section.
+   const inv=s.dataset.inv,invn=s.dataset.invname;
+   target=(t&&inv&&(invn.startsWith(t)||inv.startsWith(t)))?{hub:inv,name:invn}:{el:tiles.find(a=>!a.hidden)};
    if(!target.el&&!target.hub)target=null;
   }
  });
  chips.forEach(c=>{const n=c.dataset.cat==='all'?total:(per[c.dataset.cat]||0);c.querySelector('.cc').textContent=n;});
  if(t&&target&&target.el){target.el.classList.add('hit');}
  nextWrap.hidden=!(t&&target);
- if(t&&target)nextName.textContent=target.hub||target.el.dataset.name;
+ if(t&&target)nextName.textContent=target.hub?target.name:target.el.dataset.name;
  cnt.textContent=t?(total+' match'+(total===1?'':'es')):cnt.dataset.all;
  const none=!secs.some(s=>!s.hidden);
  empty.hidden=!none;emptyQ.textContent=q.value.trim();
+ fold(!!t||cat!=='all');
 }
 q.addEventListener('input',apply);
 q.addEventListener('keydown',e=>{
@@ -983,8 +983,12 @@ q.addEventListener('keydown',e=>{
 });
 document.getElementById('clear').addEventListener('click',()=>{q.value='';cat='all';chips.forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.cat==='all')));apply();q.focus();});
 
-// Hub modals. #servarr, #proxmox, #containers, #zigbee open one, so a link or an
-// old bookmark lands on the hub -- the hubs need no addresses of their own.
+// Inventory modals. #proxmox (or #guests) and #containers open one. The retired
+// hubs' links still land: #servarr and #zigbee scroll to the section that now
+// carries their numbers, and so does any section's own slug (#media, #games…).
+const ALIAS={guests:'proxmox'};
+const SEC={servarr:'media',zigbee:'home-automation'};
+const hashName=()=>{const h=location.hash.slice(1).toLowerCase();return ALIAS[h]||h;};
 const dlgs={};
 document.querySelectorAll('dialog.hubdlg').forEach(d=>{dlgs[d.id.slice(4)]=d;});
 function show(n){
@@ -1000,11 +1004,18 @@ function openHub(n){
  show(n);
 }
 function sync(){
- const n=location.hash.slice(1).toLowerCase();
- if(dlgs[n])show(n);else Object.values(dlgs).forEach(d=>{if(d.open)d.close();});
+ const n=hashName();
+ if(dlgs[n]){show(n);return;}
+ Object.values(dlgs).forEach(d=>{if(d.open)d.close();});
+ const s=n&&secs.find(x=>x.dataset.cat===(SEC[n]||n));
+ if(!s)return;
+ if(shut.delete(s.dataset.cat))saveFold();
+ apply();
+ s.scrollIntoView({block:'start'});
+ s.classList.remove('flash');void s.offsetWidth;s.classList.add('flash');
 }
 Object.entries(dlgs).forEach(([n,d])=>{
- d.addEventListener('close',()=>{if(location.hash==='#'+n)history.replaceState(null,'',location.pathname+location.search);});
+ d.addEventListener('close',()=>{if(hashName()===n)history.replaceState(null,'',location.pathname+location.search);});
  d.addEventListener('click',e=>{if(e.target===d)d.close();});  // backdrop
 });
 document.addEventListener('click',e=>{
@@ -1024,6 +1035,17 @@ document.addEventListener('click',e=>{
   if(navigator.clipboard)navigator.clipboard.writeText(url).then(done,()=>{lab.textContent=url;});
   else lab.textContent=url;
   return;
+ }
+ const tg=e.target.closest('.stog');
+ if(tg){
+  const c=tg.closest('section.svc').dataset.cat;
+  if(!shut.delete(c))shut.add(c);
+  saveFold();apply();return;
+ }
+ if(e.target.closest('#allbtn')){
+  const all=secs.every(s=>shut.has(s.dataset.cat));
+  shut=new Set(all?[]:secs.map(s=>s.dataset.cat));
+  saveFold();apply();return;
  }
  const ch=e.target.closest('.chip[data-cat]');
  if(ch){
@@ -1056,27 +1078,25 @@ CATEGORY_HUE = {
     "Automation & workflows": 45, "Apps & personal": 330, "Games": 290, "Other": 210,
 }
 HUB_CATEGORY = {hub: cat for cat, hub in CATEGORY_HUBS.items()}
-HUB_ORDER = ["servarr", "proxmox", "containers", "zigbee"]
+# The inventories that stay as modals, and the name each one's button and title use.
+HUB_ORDER = ["proxmox", "containers"]
+INV_LABEL = {"proxmox": "guests", "containers": "containers"}
 
 HUB_INFO = {
-    "servarr": ("Media automation",
-                "The Servarr stack — indexers, managers, requests, downloads and retention, "
-                "with live queue and library numbers."),
-    "proxmox": ("Proxmox cluster",
-                "Virtualization nodes and backup servers. Open a node for its web UI."),
-    "containers": ("Docker containers",
+    "proxmox": ("Guests",
+                "Every VM and container on the Proxmox nodes, and the backup datastores. "
+                "Open a node for its web UI."),
+    "containers": ("Containers",
                    "Every container across the fleet, grouped by Docker host and the PVE node it "
                    "runs on. Click a container to open it in Dockhand."),
-    "zigbee": ("Zigbee",
-               "Zigbee2MQTT servers and their SLZB coordinator radios. A server only counts as "
-               "healthy when its frontend answers — a dead Z2M can hide inside a running container."),
 }
 
 _P = {  # stroke-icon path data, 24×24 viewBox
-    "servarr": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/>',
     "proxmox": '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
     "containers": '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
-    "zigbee": '<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/><path d="M1.5 9a15 15 0 0 1 21 0"/>',
+    "chev": '<path d="m6 9 6 6 6-6"/>',
+    "fold": '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+    "unfold": '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
     "expand": '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
     "out": '<path d="M7 17 17 7M8 7h9v9"/>',
     "search": '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -1143,44 +1163,6 @@ def _pct_tone(pct):
 def _num(v):
     return "—" if v is None else str(v)
 
-def _hub_servarr():
-    d = HUB_DATA.get("servarr")
-    if not d:
-        return None
-    status = d["status"]
-    n, n_up = len(status), sum(1 for v in status.values() if v.get("up"))
-
-    def kvint(svc, key):
-        try:
-            return int(status.get(svc, {}).get("kv", {}).get(key))
-        except (TypeError, ValueError):
-            return None
-    queues = [kvint("sonarr", "queue"), kvint("radarr", "queue")]
-    queue = sum(x for x in queues if x is not None) if any(x is not None for x in queues) else None
-    pending, leaving = kvint("overseerr", "pending"), kvint("maintainerr", "leaving")
-    metrics = [
-        _metric("Services up", n_up, f"/{n}", "all answering" if n_up == n else f"{n - n_up} down",
-                "ok" if n_up == n else "bad"),
-        _metric("In queue", _num(queue), "", "Sonarr + Radarr", "mute" if queue is None else "ok"),
-        _metric("Pending requests", _num(pending), "", "Overseerr",
-                "mute" if pending is None else "warn" if pending else "ok"),
-        _metric("Leaving soon", _num(leaving), "", "Maintainerr retention", "mute" if leaving is None else "ok"),
-    ]
-    groups = ""
-    for heading, items in SERVARR:
-        rows = ""
-        for label, svc, slug in items:
-            st = status.get(svc, {})
-            up = st.get("up", False)
-            stat = st.get("stat", "") if up else "down"
-            rows += (f'<a class="mrow{"" if up else " off"}" href="https://{svc}.{TS}">'
-                     f'<span class="d d-{"ok" if up else "mute"}"></span>{_ico(slug, label, True)}'
-                     f'<span class="mrow-name">{html.escape(label)}</span>'
-                     f'<span class="mrow-stat{"" if up else " bad"}">{html.escape(stat)}</span></a>')
-        groups += f'<div class="mcard"><h3 class="mcap">{html.escape(heading)}</h3>{rows}</div>'
-    return {"tile": (_big(n_up, f"/{n}"), "media services up"), "metrics": metrics,
-            "body": f'<div class="mgrid">{groups}</div>', "ext": None}
-
 def _hub_proxmox():
     d = HUB_DATA.get("proxmox") or {}
     nodes, pbs = d.get("nodes"), d.get("pbs", [])
@@ -1242,8 +1224,7 @@ def _hub_proxmox():
             f'<div class="mgrid" style="--min:210px">{ncards}</div></div>'
             f'<div class="mgroup"><h3 class="mcap">Backup servers</h3>'
             f'<div class="mgrid" style="--min:300px">{bcards}</div></div>')
-    return {"tile": (_big(len(guests), "", "guests"), f"across {len(nodes)} nodes · {len(pbs)} backup servers"),
-            "metrics": metrics, "body": body, "ext": None}
+    return {"metrics": metrics, "body": body, "ext": None}
 
 def _hub_containers():
     d = HUB_DATA.get("containers")
@@ -1301,73 +1282,121 @@ def _hub_containers():
             '<input id="mf-containers" class="mfilter" type="search" autocomplete="off" '
             'placeholder="Filter containers or hosts…">'
             f'<div class="mgrid" style="--min:280px">{cards}</div>')
-    return {"tile": (_big(running, f"/{total}"), "containers running"), "metrics": metrics,
-            "body": body, "ext": (f"https://dockhand.{TS}", "Open Dockhand")}
+    return {"metrics": metrics, "body": body, "ext": (f"https://dockhand.{TS}", "Open Dockhand")}
 
-def _hub_zigbee():
-    d = HUB_DATA.get("zigbee")
-    if not d:
-        return None
-    servers, radios = d["servers"], d["radios"]
-    live = sum(1 for s in servers if s["healthy"])
-    radios_up = sum(1 for r in radios if r["up"])
-    devs = [s["probe"]["devices"] for s in servers if s["probe"]["devices"] is not None]
-    chans = [m.group(1) for r in radios for m in [re.search(r"\bch (\d+)", r["role"])] if m]
-    where = [r["role"].split()[0] for r in radios if re.search(r"\bch \d+", r["role"])]
-    metrics = [
-        _metric("Servers healthy", live, f"/{len(servers)}",
-                "frontends answering" if live == len(servers) else f"{len(servers) - live} not healthy",
-                "ok" if live == len(servers) else "bad"),
-        _metric("Radios reachable", radios_up, f"/{len(radios)}",
-                "coordinators up" if radios_up == len(radios) else f"{len(radios) - radios_up} unreachable",
-                "ok" if radios_up == len(radios) else "bad"),
-        _metric("Devices paired", sum(devs) if devs else "—", "", "across all networks",
-                "ok" if devs else "mute"),
-        _metric("Channels", " · ".join(chans) or "—", "", " · ".join(where), "ok" if chans else "mute"),
-    ]
+def _live_stats():
+    """Numbers for the tiles and section headers, from what the collectors gathered.
 
-    def kv(rows):
-        bad = ' class="bad"'
-        return '<dl class="kv">' + "".join(
-            f'<dt>{html.escape(k)}</dt><dd{"" if ok else bad}>{html.escape(v)}</dd>'
-            for ok, k, v in rows) + "</dl>"
+    Returns (tiles, summary, inventory):
+      tiles     {service: (text, tone)}   the stat beside a tile's name
+      summary   {heading: [(value, label, tone)]}   totals in a section's header
+      inventory {heading: (hub, value)}   the button that opens a modal
+    tone is "" (plain), "ok", "warn", "bad" or "mute". Anything a collector could not
+    reach is simply left out, so its tile shows no stat rather than a wrong one.
+    """
+    tiles, summary, inventory = {}, {}, {}
 
-    scards = ""
-    for s in servers:
-        p = s["probe"]
-        tone = "ok" if s["healthy"] else "bad" if s["running"] and not s["up"] else "warn"
-        rows = [(s["up"], "frontend", f'HTTP {p["http"]}'),
-                (s["running"], "container", p["state"] or "unknown"),
-                (s["configured"], "adapter", p["target"] or "not configured"),
-                (bool(p["base_topic"]), "base topic", p["base_topic"] or "—")]
-        if p["devices"] is not None:
-            rows.append((True, "devices", str(p["devices"])))
-        scards += (f'<div class="mcard"><a class="zhd" href="https://{s["svc"]}.{TS}"><span class="l">'
-                   f'<span class="mono">{html.escape(s["container"])}</span>'
-                   f'<span class="state {tone}"><span class="d d-{tone}"></span>{html.escape(s["note"])}</span></span>'
-                   f'<span class="s">on {html.escape(s["host"])}</span></a>{kv(rows)}</div>')
-    rcards = ""
-    for r in radios:
-        tone = "ok" if r["up"] else "bad"
-        rows = [(r["up"], "network", "up" if r["up"] else "unreachable"),
-                (r["web"], "web UI", f'HTTP {r["code"]}'),
-                (r["sock"], f'coordinator :{r["cport"]}', "listening" if r["sock"] else "closed"),
-                (bool(r["user"]), "used by", r["user"] or "unused")]
-        tag, end = (f'<a class="zhd" href="http://{r["ip"]}/">', "</a>") if r["up"] else ('<div class="zhd">', "</div>")
-        rcards += (f'<div class="mcard">{tag}<span class="l"><span class="mono">{html.escape(r["label"])}</span>'
-                   f'<span class="state {tone}"><span class="d d-{tone}"></span>{"up" if r["up"] else "unreachable"}</span></span>'
-                   f'<span class="s">{html.escape(r["model"])} · {html.escape(r["ip"])} · {html.escape(r["role"])}</span>'
-                   f'{end}{kv(rows)}</div>')
-    body = (f'<div class="mgroup"><h3 class="mcap">Zigbee2MQTT servers</h3>'
-            f'<div class="mgrid" style="--min:320px">{scards}</div></div>'
-            f'<div class="mgroup"><h3 class="mcap">SLZB radios</h3>'
-            f'<div class="mgrid" style="--min:320px">{rcards}</div></div>')
-    return {"tile": (_big(radios_up, f"/{len(radios)}", "radios"),
-                     f"{live} Zigbee2MQTT server{'' if live == 1 else 's'} healthy"),
-            "metrics": metrics, "body": body, "ext": None}
+    status = (HUB_DATA.get("servarr") or {}).get("status")
+    if status:
+        def kvint(svc, key):
+            try:
+                return int(status.get(svc, {}).get("kv", {}).get(key))
+            except (TypeError, ValueError):
+                return None
+        for svc, st in status.items():
+            if not st.get("up"):
+                tiles[svc] = ("down", "bad")
+                continue
+            text = st.get("stat", "")
+            if not text:
+                continue
+            tone = ""
+            if svc == "maintainerr":
+                text = text.replace(" leaving soon", " leaving")
+                tone = "warn" if kvint(svc, "leaving") else ""
+            elif svc == "overseerr" and kvint(svc, "pending"):
+                tone = "warn"
+            tiles[svc] = (text, tone)
+        n, n_up = len(status), sum(1 for v in status.values() if v.get("up"))
+        queues = [q for q in (kvint("sonarr", "queue"), kvint("radarr", "queue")) if q is not None]
+        queue = sum(queues) if queues else None
+        pending, leaving = kvint("overseerr", "pending"), kvint("maintainerr", "leaving")
+        summary["Media"] = [
+            (f"{n_up}/{n}", "up", "ok" if n_up == n else "bad"),
+            (_num(queue), "in queue", "mute" if queue is None else "ok"),
+            (_num(pending), "pending", "mute" if pending is None else "warn" if pending else "ok"),
+            (_num(leaving), "leaving soon", "mute" if leaving is None else "ok"),
+        ]
 
-HUB_BUILDERS = {"servarr": _hub_servarr, "proxmox": _hub_proxmox,
-                "containers": _hub_containers, "zigbee": _hub_zigbee}
+    zb = HUB_DATA.get("zigbee")
+    if zb:
+        servers, radios = zb["servers"], zb["radios"]
+        for s in servers:
+            devs = s["probe"]["devices"]
+            if s["healthy"]:
+                text = "healthy" if devs is None else f"healthy · {devs} device{'' if devs == 1 else 's'}"
+                tiles[s["svc"]] = (text, "ok")
+            else:
+                tiles[s["svc"]] = (s["note"], "bad")
+        for r in radios:
+            # slzb-mr1u-upstairs is the radio; its web UI's VIP is slzb-upstairs.
+            vip = "slzb-" + r["label"].rsplit("-", 1)[-1]
+            m = re.search(r"\bch (\d+)", r["role"])
+            tiles[vip] = ((f"ch {m.group(1)}" if m else "up"), "") if r["up"] else ("unreachable", "bad")
+        live = sum(1 for s in servers if s["healthy"])
+        radios_up = sum(1 for r in radios if r["up"])
+        devs = [s["probe"]["devices"] for s in servers if s["probe"]["devices"] is not None]
+        summary["Home & automation"] = [
+            (f"{live}/{len(servers)}", "Z2M healthy", "ok" if live == len(servers) else "bad"),
+            (f"{radios_up}/{len(radios)}", "radios", "ok" if radios_up == len(radios) else "bad"),
+            (str(sum(devs)) if devs else "—", "devices", "ok" if devs else "mute"),
+        ]
+
+    px = HUB_DATA.get("proxmox") or {}
+    nodes, pbs = px.get("nodes"), px.get("pbs", [])
+    if nodes is not None:
+        for nd in nodes:
+            if not nd["ok"]:
+                tiles[nd["name"]] = ("unreachable", "bad")
+                continue
+            ng = len(nd["guests"])
+            off = sum(1 for g in nd["guests"] if g[3] != "running")
+            tiles[nd["name"]] = (f"{ng} guest{'' if ng == 1 else 's'}" + (f" · {off} off" if off else ""),
+                                 "warn" if off else "")
+        all_stores = []
+        for b in pbs:
+            if not b["ok"]:
+                tiles[b["name"]] = ("unreachable", "bad")
+                continue
+            stores = [s for s in b["stores"] if s[3] is not None]
+            all_stores += stores
+            size = sum(s[1] for s in stores)
+            if size:
+                pct = round(100 * sum(s[2] for s in stores) / size)
+                tone = _pct_tone(pct)
+                tiles[b["name"]] = (f"{pct}% used", "" if tone == "ok" else tone)
+        ok_nodes = sum(1 for nd in nodes if nd["ok"])
+        summary["Virtualization & backup"] = [
+            (f"{ok_nodes}/{len(nodes)}", "nodes", "ok" if ok_nodes == len(nodes) else "bad")]
+        size = sum(s[1] for s in all_stores)
+        if size:
+            pct = round(100 * sum(s[2] for s in all_stores) / size)
+            summary["Virtualization & backup"].append((f"{pct}%", "backup used", _pct_tone(pct)))
+        inventory["Virtualization & backup"] = ("proxmox", str(sum(len(nd["guests"]) for nd in nodes)))
+
+    ct = HUB_DATA.get("containers")
+    if ct:
+        hosts = ct["hosts"]
+        reach = sum(1 for h in hosts if h["rows"] is not None)
+        rows = [r for h in hosts if h["rows"] for r in h["rows"]]
+        running = sum(1 for r in rows if r[1] == "running")
+        summary["Containers & monitoring"] = [
+            (f"{reach}/{len(hosts)}", "Docker hosts", "ok" if reach == len(hosts) else "bad")]
+        inventory["Containers & monitoring"] = ("containers", f"{running}/{len(rows)}")
+
+    return tiles, summary, inventory
+
+HUB_BUILDERS = {"proxmox": _hub_proxmox, "containers": _hub_containers}
 
 def _modal(name, hub, now):
     title, blurb = HUB_INFO[name]
@@ -1379,7 +1408,7 @@ def _modal(name, hub, now):
     return (f'<dialog class="hubdlg" id="hub-{name}" tabindex="-1" aria-labelledby="hub-{name}-t" style="--h:{hue}">'
             f'<div class="mhead"><span class="mico tint">{_svg(name, 22)}</span>'
             f'<div class="mtitle"><div class="mtl"><h2 id="hub-{name}-t">{html.escape(title)}</h2>'
-            f'<span class="mono">{name}</span></div><p>{html.escape(blurb)}</p></div>'
+            f'</div><p>{html.escape(blurb)}</p></div>'
             f'<div class="mact">{ext}<button type="button" class="mbtn" data-copy="{name}">'
             f'{_svg("link", 14)}<span aria-live="polite">Copy link</span></button>'
             f'<button type="button" class="xbtn" data-close aria-label="Close">{_svg("x", 20)}</button></div></div>'
@@ -1420,6 +1449,7 @@ def render_home():
     # from whether a hub VIP exists -- that is what lets the hub VIPs be retired
     # without the drill-downs disappearing with them.
     hubs = {n: h for n in HUB_ORDER for h in [HUB_BUILDERS[n]()] if h}
+    stats, summaries, inventories = _live_stats()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %Z").strip()
     host = os.uname().nodename
 
@@ -1434,9 +1464,13 @@ def render_home():
         if not ok and not desc:
             desc = "Not serving right now"
         tag = "" if ok else '<span class="tag">Offline</span>'
+        stat, tone = stats.get(name, ("", ""))
+        stat_html = (f'<span class="tstat{" " + tone if tone else ""}" title="{html.escape(stat)}">'
+                     f'{html.escape(stat)}</span>') if stat else ""
+        # The stat is searchable too: `leaving`, `off` or `unreachable` finds tiles.
         return (f'<a class="tile{"" if ok else " off"}" href="https://{name}.{TS}" data-name="{html.escape(name)}" '
-                f'data-k="{html.escape((name + " " + desc).lower())}">{_ico(slug, name)}'
-                f'<span class="tbody"><span class="tname">{html.escape(name)}</span>'
+                f'data-k="{html.escape((name + " " + desc + " " + stat).lower())}">{_ico(slug, name)}'
+                f'<span class="tbody"><span class="trow"><span class="tname">{html.escape(name)}</span>{stat_html}</span>'
                 f'<span class="tdesc">{html.escape(desc)}</span></span>'
                 f'<span class="tend">{tag}<span class="d d-{"ok" if ok else "mute"}" '
                 f'title="{"Serving" if ok else "Not serving right now"}"></span>{_svg("out", 16, "go")}</span></a>')
@@ -1457,36 +1491,33 @@ def render_home():
                  f'<span class="cc">{total}</span></button>')
     for heading, members in groups:
         slug = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
-        hub = CATEGORY_HUBS.get(heading)
-        hub = hub if hub in hubs else None
-        link = ""
-        if hub:
-            summary = HUB_SUMMARY.get(hub, "")
-            link = (f'<a class="hublink" href="#{hub}" data-hub="{hub}" aria-haspopup="dialog">'
-                    f'{html.escape(summary)}<span class="mono">{hub}</span>{_svg("expand", 14)}</a>')
-        # The section's own data-k carries the heading AND the hub name, so typing
-        # `proxmox` finds the Virtualization section.
-        key = html.escape((heading + " " + (hub or "")).strip().lower())
+        summary = "".join(
+            f'<span class="sm"><span class="d d-{tone}"></span><b>{html.escape(value)}</b>{html.escape(label)}</span>'
+            for value, label, tone in summaries.get(heading, []))
+        summary = f'<span class="ssum">{summary}</span>' if summary else ""
+        inv, inv_label, inv_html = "", "", ""
+        if heading in inventories and inventories[heading][0] in hubs:
+            inv, value = inventories[heading]
+            inv_label = INV_LABEL[inv]
+            inv_html = (f'<a class="inv" href="#{inv}" data-hub="{inv}" aria-haspopup="dialog">'
+                        f'<b>{html.escape(value)}</b>{inv_label}{_svg("expand", 14)}</a>')
+        # The section's own data-k carries the heading, the old hub name and the
+        # inventory's name, so `proxmox`, `servarr` or `guests` find their section.
+        key = html.escape(" ".join(x for x in (heading, CATEGORY_HUBS.get(heading, ""), inv_label) if x).lower())
         sections.append(
-            f'<section class="svc" data-cat="{slug}" data-k="{key}" data-hub="{hub or ""}" '
-            f'aria-label="{html.escape(heading)}" style="--h:{CATEGORY_HUE.get(heading, 210)}">'
-            f'<div class="shead"><span class="swatch"></span><h3>{html.escape(heading)}</h3>'
-            f'<span class="scount">{len(members)} services</span>{link}</div>'
-            f'<div class="tiles">{"".join(tile(m) for m in members)}</div></section>')
+            f'<section class="svc" id="sec-{slug}" data-cat="{slug}" data-k="{key}" data-inv="{inv}" '
+            f'data-invname="{inv_label}" aria-label="{html.escape(heading)}" '
+            f'style="--h:{CATEGORY_HUE.get(heading, 210)}">'
+            f'<div class="shead"><h3><button type="button" class="stog" aria-expanded="true" '
+            f'aria-controls="tiles-{slug}">{_svg("chev", 18, "chev")}<span class="swatch"></span>'
+            f'<span>{html.escape(heading)}</span></button></h3>'
+            f'<span class="scount">{len(members)} services</span>{summary}{inv_html}</div>'
+            f'<div class="tiles" id="tiles-{slug}">{"".join(tile(m) for m in members)}</div></section>')
         chips.append(f'<button type="button" class="chip" data-cat="{slug}" aria-pressed="false">'
                      f'{html.escape(heading)}<span class="cc">{len(members)}</span></button>')
-
-    hub_cards = ""
-    for name, h in hubs.items():
-        hue = CATEGORY_HUE.get(HUB_CATEGORY.get(name, "Other"), 210)
-        big, label = h["tile"]
-        hub_cards += (f'<a class="hub" href="#{name}" data-hub="{name}" aria-haspopup="dialog" style="--h:{hue}">'
-                      f'<span class="hub-top"><span class="hub-ico tint">{_svg(name)}</span>'
-                      f'<span class="hub-name">{name}</span>{_svg("expand", 16, "exp")}</span>'
-                      f'<span class="hub-num">{big}<span class="hub-lbl">{html.escape(label)}</span></span></a>')
-    hubs_html = (f'<section class="hubs" aria-labelledby="hubs-t"><h2 id="hubs-t" class="cap">Topic hubs</h2>'
-                 f'<div class="hubgrid">{hub_cards}</div></section>') if hubs else ""
-    nav = "".join(f'<a href="#{n}" data-hub="{n}" aria-haspopup="dialog">{n}</a>' for n in hubs)
+    chips.append('<button type="button" class="chip allbtn" id="allbtn">'
+                 f'<span class="i-fold">{_svg("fold", 16)}</span><span class="i-unfold" hidden>{_svg("unfold", 16)}</span>'
+                 '<span class="lbl">Collapse all</span></button>')
 
     dark = [n for n in listed if not up.get(n, False)]
     n_up = len(listed) - len(dark)
@@ -1504,7 +1535,6 @@ def render_home():
 <header class="top"><div class="wrap">
 <a class="brand" href="/"><span class="brand-mark">{_svg("brand", 20)}</span>
 <span class="brand-txt"><b>Homelab</b><span>{TS}</span></span></a>
-<nav class="hubnav" aria-label="Topic hubs">{nav}</nav>
 <span class="pill{" warn" if dark else ""}"{pill_title}><span class="d d-ok"></span><span>{n_up} of {len(listed)} serving</span></span>
 </div></header>
 <main class="wrap">
@@ -1513,15 +1543,14 @@ def render_home():
 <h1 id="hero-t">Every service on the tailnet, one name away.</h1>
 <p class="lede">Each name below is its own address: <span class="mono">&lt;name&gt;.{TS}</span>. Type to find one, press Enter to open it.</p>
 <div class="search"><label class="sr" for="q">Filter services</label>
-<div class="sbox">{_svg("search", 20)}<input id="q" type="search" autocomplete="off" autofocus placeholder="Filter services… try “arr” or “proxmox”"><span id="cnt" class="scnt" data-all="{total} services">{total} services</span></div>
+<div class="sbox">{_svg("search", 20)}<input id="q" type="search" autocomplete="off" autofocus placeholder="Filter services… try “arr” or “guests”"><span id="cnt" class="scnt" data-all="{total} services">{total} services</span></div>
 <p class="hint"><span><kbd>Enter</kbd> opens the first match</span><span><kbd>Esc</kbd> clears</span><span id="next" hidden>→ <span id="next-name" class="mono"></span></span></p>
 </div></section>
-{hubs_html}
 <section aria-labelledby="svc-t">
 <div class="chipbar"><h2 id="svc-t" class="cap">Services</h2>{"".join(chips)}</div>
 {"".join(sections)}
 <div id="empty" class="empty" hidden><p class="t">Nothing on the tailnet matches “<span id="empty-q"></span>”.</p>
-<p class="s">Search covers names, descriptions and categories.</p>
+<p class="s">Search covers names, descriptions, live stats and categories.</p>
 <button type="button" id="clear">Clear the filter</button></div>
 </section>
 </main>
@@ -1534,8 +1563,8 @@ def render_home():
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
-    # The hub collectors run FIRST: home's modals and hub links are built from what
-    # they gather into HUB_DATA / HUB_SUMMARY.
+    # The collectors run FIRST: home's tile stats, section totals and modals are
+    # built from what they gather into HUB_DATA.
     for collect in (collect_proxmox, collect_servarr, collect_containers, collect_zigbee):
         collect()
     out = render_home()

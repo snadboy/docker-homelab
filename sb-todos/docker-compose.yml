@@ -1,0 +1,18 @@
+# SB Todos: offline-first task manager PWA (static, nginx). Syncs through SB Save.
+# Source: https://github.com/snadboy/sb-todos (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new sb-todos commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up). sb-game-deploy.sh does this.
+services:
+  sb-todos:
+    image: ghcr.io/snadboy/sb-todos:25c7c3d7ef2ed2048a491d3697778a70cefd8ecb
+    container_name: sb-todos
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sbtodos"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

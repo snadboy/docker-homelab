@@ -114,9 +114,10 @@ condition:
       {% if trigger.id == 'UNAVAILABLE' %}
         true
       {% else %}
-        {% set last = states('stated.' ~ stated_key) %}
-        {{ last in ('unknown', 'unavailable', 'none') or
-           cooldown_seconds <= (as_timestamp(now()) - as_timestamp(last)) }}
+        {# stated's TTL expiry resets the value to "" — anything that isn't
+           a timestamp means no cooldown is running #}
+        {% set last = as_timestamp(states('stated.' ~ stated_key), none) %}
+        {{ last is none or cooldown_seconds <= (as_timestamp(now()) - last) }}
       {% endif %}
 
 action:
@@ -127,7 +128,7 @@ action:
     then:
       - action: stated.set
         data:
-          key: "{{ stated_key }}"
+          name: "{{ stated_key }}"
           value: "{{ now().isoformat() }}"
           ttl: 300
 

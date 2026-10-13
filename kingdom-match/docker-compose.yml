@@ -1,0 +1,18 @@
+# SB Kingdom Match: match-3 with castle restoration (static PWA on nginx).
+# Source: https://github.com/snadboy/kingdom-match (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new kingdom-match commit SHA (and bump the app's
+# CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
+services:
+  kingdom-match:
+    image: ghcr.io/snadboy/kingdom-match:3b365bdc567ac69e9bb947d1abe1acbff201a520
+    container_name: kingdom-match
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=kingdommatch"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"

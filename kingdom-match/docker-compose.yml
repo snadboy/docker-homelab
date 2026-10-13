@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up).
 services:
   kingdom-match:
-    image: ghcr.io/snadboy/kingdom-match:d23f007908eb76b16f444e7ef0c55bb62c1ad9ca
+    image: ghcr.io/snadboy/kingdom-match:a4df4afdd3dffe56193a42e93422490d2b6c6e22
     container_name: kingdom-match
     restart: unless-stopped
     environment:

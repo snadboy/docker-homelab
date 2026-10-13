@@ -5,7 +5,7 @@
 # Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change.
 services:
   sb-save:
-    image: ghcr.io/snadboy/sb-save:d0ce412eeaba07bd5cb13384d47a64b22e1a1c16
+    image: ghcr.io/snadboy/sb-save:425e324e09d0297820bd024493b7f7e1f276dd12
     container_name: sb-save
     restart: unless-stopped
     environment:

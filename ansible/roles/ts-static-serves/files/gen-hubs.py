@@ -529,7 +529,7 @@ HOME_CATEGORIES = [
     ("Network & storage", ["unifi", "unifi-toolkit", "wan-pin", "technitium",
                            "media", "unas-able", "unas-baker"]),
     ("Automation & workflows", ["semaphore", "windmill"]),
-    ("Apps & personal", ["pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
+    ("Apps & personal", ["sbtodos", "pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
                          "firefly", "firefly-import", "termix", "pdf"]),
     ("Games", ["cubeloop", "loopsort", "squadblitz", "crowncrush", "hearts", "sbsave"]),
 ]
@@ -604,6 +604,7 @@ HOME_META = {
     "crowncrush":           ("https://crowncrush.swallow-spectrum.ts.net/icons/icon-192.png", "SB Crown Crush — match-3"),
     "hearts":               ("https://hearts.swallow-spectrum.ts.net/icons/icon-192.png", "SB Hearts — card game with a coach"),
     "loopsort":             ("https://loopsort.swallow-spectrum.ts.net/icons/icon-192.png", "SB Loop Sort — truck & belt sorting puzzle"),
+    "sbtodos":              ("https://sbtodos.swallow-spectrum.ts.net/icons/icon-192.png", "SB Todos — tasks, projects & plans"),
     "sbsave":               (SBSAVE_ICON, "SB Save — cloud saves for SB games"),
 }
 

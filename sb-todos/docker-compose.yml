@@ -6,7 +6,7 @@
 # CACHE_VERSION/APP_VERSION so installed PWAs pick it up). sb-game-deploy.sh does this.
 services:
   sb-todos:
-    image: ghcr.io/snadboy/sb-todos:a935c08f67d21f10544f4f09fba038632d6e8129
+    image: ghcr.io/snadboy/sb-todos:eb68b8325f91bfd63d267f2cf25556cd2672e702
     container_name: sb-todos
     restart: unless-stopped
     environment:

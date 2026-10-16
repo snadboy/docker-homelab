@@ -31,6 +31,16 @@ services:
       # rclone config DIRECTORY, read-write (token refresh persistence) for
       # the gdrive:Ingest mailbox remote.
       - /home/snadboy/.config/rclone:/etc/pkdb
+    # Non-secret wiring. Secrets (ANTHROPIC/VOYAGE keys, PKDB_MCP_TOKEN) come
+    # from the shareables .env via the mount above — the server resolves them
+    # and hands the ask sandbox its keys per request.
+    environment:
+      PKDB_DASHBOARD_URL: https://pkdb.swallow-spectrum.ts.net/
+      PKDB_PWA_URL: https://pkdb-app.swallow-spectrum.ts.net/
+      # MCP ask_pkdb → egress's relay → the ask sandbox. pkdb is deliberately
+      # NOT on the `ask` network (the sandbox could then reach this API's
+      # unauthenticated write endpoints — pkdb docs/MCP.md).
+      PKDB_ASK_URL: http://egress:8485/ask
     healthcheck:
       # /healthz is a HEARTBEAT check (503 = stale tick) — container health
       # only requires the server to ANSWER; plain curl (no -f) succeeds on
@@ -39,3 +49,38 @@ services:
       interval: 30s
       timeout: 5s
       retries: 4
+
+  # ── MCP ask_pkdb sandbox (pkdb repo docs/MCP.md; mirrors its compose) ────
+  # Headless Roger runs here with the archive READ-ONLY, on an internal-only
+  # network whose only peer is `egress` (HTTPS allowlist + the relay in).
+  # No secrets configured: keys arrive per request from the main server.
+  ask:
+    image: ghcr.io/snadboy/pkdb:${PKDB_VERSION:-latest}
+    restart: unless-stopped
+    entrypoint: ["bun", "/app/tools/ask_worker.ts"]
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      NO_PROXY: localhost,127.0.0.1
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    volumes:
+      - /srv/pkdb-data:/data:ro
+    networks: [ask]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:8485/healthz"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  egress:
+    image: ghcr.io/snadboy/pkdb:${PKDB_VERSION:-latest}
+    restart: unless-stopped
+    entrypoint: ["bun", "/app/tools/egress_proxy.ts"]
+    environment:
+      PKDB_EGRESS_ALLOW: api.anthropic.com,api.voyageai.com
+      PKDB_EGRESS_FORWARD: "8485=ask:8485"
+    networks: [default, ask]
+
+networks:
+  ask:
+    internal: true

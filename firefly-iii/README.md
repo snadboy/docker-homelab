@@ -15,6 +15,19 @@ Personal finance manager with bank sync via SimpleFIN.
 docker volume create firefly-upload
 docker volume create firefly-db
 docker volume create firefly-importer-configs
+docker volume create firefly-passport
+```
+
+`firefly-passport` holds Firefly's OAuth signing keys (`oauth-private.key`,
+`oauth-public.key`, owned by uid 33, mode 600). Without it the keys are regenerated on
+every container recreate and **every personal access token stops working** — that is
+what silently broke the importer in 2026. Seed it from a running container:
+
+```bash
+for f in oauth-private.key oauth-public.key; do
+  docker cp firefly-iii:/var/www/html/storage/$f - | docker run --rm -i -v firefly-passport:/k alpine tar -x -C /k
+done
+docker run --rm -v firefly-passport:/k alpine sh -c 'chown -R 33:33 /k && chmod 700 /k && chmod 600 /k/*'
 ```
 
 ### Generate Secrets
@@ -44,15 +57,36 @@ Navigate to https://firefly.isnadboy.com and register. First user becomes admin.
 1. Login to Firefly III
 2. Go to **Profile** -> **OAuth** -> **Personal Access Tokens**
 3. Create new token (description: "Data Importer")
-4. Copy token and add as `IMPORTER_ACCESS_TOKEN` in Portainer stack env
+4. Copy token and add as `IMPORTER_ACCESS_TOKEN` in `.env`, then `docker compose up -d firefly-importer`
 
 ### 3. Configure SimpleFIN (US Bank Sync)
 
 1. Go to https://beta-bridge.simplefin.org/
 2. Create account and link banks (~$1.50/month)
 3. Get access token
-4. Add as `SIMPLEFIN_TOKEN` in Portainer stack env
+4. Add as `SIMPLEFIN_TOKEN` in `.env`
 5. Restart firefly-importer container
+
+### 4. Nightly auto-import
+
+`firefly-cron` runs `firefly-cron.sh` (container TZ is UTC):
+
+| UTC | Job |
+|---|---|
+| 05:00 | `cron` — Firefly's `/api/v1/cron/$STATIC_CRON_TOKEN` (recurring transactions, bills) |
+| 06:00 | `import` — `/autoimport` over every config JSON in the `firefly-importer-configs` volume |
+
+Each run logs one line (`docker logs firefly-cron`). To give the import something to do,
+run one SimpleFIN import by hand in the importer UI, download its configuration JSON at
+the end, and copy it into the volume:
+
+```bash
+docker cp simplefin.json firefly-importer:/var/www/html/storage/configurations/
+```
+
+The JSON contains the SimpleFIN access URL, so treat it as a secret. Set `KUMA_PUSH_URL`
+in `.env` to an Uptime Kuma push monitor's URL to get a heartbeat after each successful
+import. Test a job by hand with `docker exec firefly-cron sh /firefly-cron.sh import`.
 
 ## Backup
 

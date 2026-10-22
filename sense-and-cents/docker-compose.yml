@@ -1,0 +1,62 @@
+# Sense and Cents: household finance (SimpleFIN -> Postgres -> FastAPI).
+# Source: https://github.com/snadboy/sense-and-cents (private; utilities is logged in to ghcr).
+#
+# Deployed BY HAND on utilities from the ~/docker-homelab clone (like firefly-iii):
+#   cd ~/docker-homelab && git pull && cd sense-and-cents && docker compose up -d
+# Secrets live in .env next to this file (see .env.example), never in git.
+# Pinned to a build SHA, not :latest; bump the tag to ship a new version.
+services:
+  sense:
+    image: ghcr.io/snadboy/sense-and-cents:44775d288a2e1904fa271318abc70cde15744167
+    container_name: sense-and-cents
+    restart: unless-stopped
+    depends_on:
+      sense-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+psycopg://sense:${DB_PASSWORD}@sense-db:5432/sense
+      - SIMPLEFIN_ACCESS_URL=${SIMPLEFIN_ACCESS_URL}
+      - EXCLUDE_ACCOUNTS=${EXCLUDE_ACCOUNTS:-}
+      - SYNC_TIME=${SYNC_TIME:-05:30}
+      - TZ=America/Chicago
+      - KUMA_PUSH_URL=${KUMA_PUSH_URL:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sense"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"
+    ports:
+      - "5020:8000"
+    networks:
+      - sense-internal
+
+  sense-db:
+    image: postgres:16-alpine
+    container_name: sense-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=sense
+      - POSTGRES_USER=sense
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sense"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - sense-db:/var/lib/postgresql/data
+    networks:
+      - sense-internal
+
+networks:
+  sense-internal:
+    name: sense-internal
+
+volumes:
+  sense-db:
+    name: sense-db

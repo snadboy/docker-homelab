@@ -23,6 +23,10 @@ services:
       - TZ=America/Chicago
       - TRUSTED_PROXIES=**
       - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN}
+      # OAuth signing keys live on a volume: regenerating them on every recreate
+      # silently invalidates every personal access token (incl. the importer's)
+      - PASSPORT_PRIVATE_KEY_FILE=/var/www/html/storage/passport/oauth-private.key
+      - PASSPORT_PUBLIC_KEY_FILE=/var/www/html/storage/passport/oauth-public.key
       - LOG_CHANNEL=stack
       - APP_LOG_LEVEL=notice
       - AUDIT_LOG_LEVEL=emergency
@@ -44,6 +48,7 @@ services:
       - MAIL_MAILER=log
     volumes:
       - firefly-upload:/var/www/html/storage/upload
+      - firefly-passport:/var/www/html/storage/passport:ro
     networks:
       - firefly-internal
 
@@ -117,6 +122,8 @@ networks:
 
 volumes:
   firefly-upload:
+    external: true
+  firefly-passport:
     external: true
   firefly-db:
     external: true

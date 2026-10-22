@@ -22,6 +22,7 @@ services:
       - DEFAULT_LOCALE=en_US
       - TZ=America/Chicago
       - TRUSTED_PROXIES=**
+      - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN}
       - LOG_CHANNEL=stack
       - APP_LOG_LEVEL=notice
       - AUDIT_LOG_LEVEL=emergency
@@ -84,6 +85,8 @@ services:
       - AUTO_IMPORT_SECRET=${AUTO_IMPORT_SECRET:-}
       - CAN_POST_AUTOIMPORT=true
       - CAN_POST_FILES=true
+      # firefly-cron imports every config JSON saved here
+      - IMPORT_DIR_ALLOWLIST=/var/www/html/storage/configurations
     volumes:
       - firefly-importer-configs:/var/www/html/storage/configurations
     networks:
@@ -96,15 +99,15 @@ services:
     depends_on:
       - firefly-iii
       - firefly-importer
-    command: >
-      sh -c "
-        (echo '0 5 * * * wget -qO- http://firefly-iii:8080/api/v1/cron/${STATIC_CRON_TOKEN}';
-         echo '0 6 * * * wget -qO- --post-data= http://firefly-importer:8080/autoimport?secret=${AUTO_IMPORT_SECRET}') | crontab - &&
-        crond -f -l 8
-      "
+    command: ["/bin/sh", "/firefly-cron.sh", "start"]
     environment:
       - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN}
       - AUTO_IMPORT_SECRET=${AUTO_IMPORT_SECRET}
+      - IMPORT_DIR=/var/www/html/storage/configurations
+      # Uptime Kuma push URL, pinged after each successful import (empty = off)
+      - KUMA_PUSH_URL=${KUMA_PUSH_URL:-}
+    volumes:
+      - ./firefly-cron.sh:/firefly-cron.sh:ro
     networks:
       - firefly-internal
 

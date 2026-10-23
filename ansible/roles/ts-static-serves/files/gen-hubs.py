@@ -530,7 +530,7 @@ HOME_CATEGORIES = [
                            "media", "unas-able", "unas-baker"]),
     ("Automation & workflows", ["semaphore", "windmill"]),
     ("Apps & personal", ["sbtodos", "pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
-                         "firefly", "firefly-import", "sense", "termix", "pdf"]),
+                         "firefly", "firefly-import", "sense", "simplefin", "termix", "pdf"]),
     ("Games", ["cubeloop", "loopsort", "squadblitz", "crowncrush", "hearts", "sbsave"]),
 ]
 
@@ -538,6 +538,13 @@ HOME_CATEGORIES = [
 # blurb falls back to where the service actually runs, and a slug the CDN does not
 # have degrades to a letter badge.
 SBSAVE_ICON = ('<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="sbsv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7b5cf0"/><stop offset="1" stop-color="#3d2a9e"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#sbsv)"/><path d="M20 45h25a9 9 0 0 0 1-18 13 13 0 0 0-25-3 10.5 10.5 0 0 0-1 21z" fill="#fff"/><path d="M25.5 35.5l5 5 9-10" fill="none" stroke="#e8b923" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+
+# Sites outside the tailnet that belong next to a service here (an account to manage,
+# a vendor console). Listed in HOME_CATEGORIES like any service, linked to the URL,
+# tagged External, never probed and not counted in the "N of M serving" pill.
+HOME_LINKS = {
+    "simplefin": ("https://beta-bridge.simplefin.org/", "SimpleFIN Bridge - bank connections for Sense and Firefly"),
+}
 
 HOME_META = {
     "ha":                   ("home-assistant", "Home Assistant"),
@@ -1457,6 +1464,13 @@ def render_home():
     host = os.uname().nodename
 
     def tile(name):
+        if name in HOME_LINKS:
+            url, desc = HOME_LINKS[name]
+            return (f'<a class="tile" href="{html.escape(url)}" data-name="{html.escape(name)}" '
+                    f'data-k="{html.escape((name + " " + desc + " external").lower())}">{_ico(None, name)}'
+                    f'<span class="tbody"><span class="trow"><span class="tname">{html.escape(name)}</span></span>'
+                    f'<span class="tdesc">{html.escape(desc)}</span></span>'
+                    f'<span class="tend"><span class="tag">External</span>{_svg("out", 16, "go")}</span></a>')
         slug, blurb = HOME_META.get(name, (None, ""))
         desc = blurb or origin(name)
         ok = up.get(name, False)
@@ -1480,8 +1494,9 @@ def render_home():
 
     groups = []
     uncategorised = set(listed)
+    shown = set(listed) | set(HOME_LINKS)
     for heading, members in HOME_CATEGORIES:
-        present = [m for m in members if m in listed]
+        present = [m for m in members if m in shown]
         uncategorised -= set(present)
         if present:
             groups.append((heading, present))

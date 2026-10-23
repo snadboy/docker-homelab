@@ -7,7 +7,7 @@
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
   sense:
-    image: ghcr.io/snadboy/sense-and-cents:37021c5e38a927bb5b63c194acc0f807b6362cde
+    image: ghcr.io/snadboy/sense-and-cents:506e1b346fe6236c37868167239bd01f4aa9e182
     container_name: sense-and-cents
     restart: unless-stopped
     depends_on:
@@ -20,6 +20,12 @@ services:
       - SYNC_TIME=${SYNC_TIME:-05:30}
       - TZ=America/Chicago
       - KUMA_PUSH_URL=${KUMA_PUSH_URL:-}
+      # Claude reads attached statements (empty = attach only)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - FILES_DIR=/data/files
+    volumes:
+      # attached statements (personal financial documents): back up with sense-db
+      - sense-files:/data/files
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
       interval: 60s
@@ -60,3 +66,5 @@ networks:
 volumes:
   sense-db:
     name: sense-db
+  sense-files:
+    name: sense-files

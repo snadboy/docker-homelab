@@ -4,6 +4,8 @@
 # Deployed BY HAND on utilities from the ~/docker-homelab clone (like firefly-iii):
 #   cd ~/docker-homelab && git pull && cd sense-and-cents && docker compose up -d
 # Secrets live in .env next to this file (see .env.example), never in git.
+# Tailscale only: no host port. DockTail proxies straight to the container IP, so the
+# app and uploaded statements are not reachable from the LAN (port 5020 closed 2026-10-23).
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
   sense:
@@ -36,8 +38,6 @@ services:
       - "docktail.service.name=sense"
       - "docktail.service.port=8000"
       - "docktail.service.service-port=443"
-    ports:
-      - "5020:8000"
     networks:
       - sense-internal
 

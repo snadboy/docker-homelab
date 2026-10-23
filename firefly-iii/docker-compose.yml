@@ -1,3 +1,7 @@
+# RETIRED 2026-10-23: replaced by Sense and Cents (sense-and-cents/). Stack stopped with
+# 'docker compose down' on utilities; its external data volumes were KEPT (Firefly's hold
+# the 26 categories and 168 rules phase 2 imports; dump in utilities:~/backups/finance/).
+# Kuma monitors paused. Don't 'up' this without re-adding them to the HA outage automation.
 services:
   firefly-iii:
     image: fireflyiii/core:latest

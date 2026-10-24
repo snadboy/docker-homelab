@@ -9,7 +9,7 @@
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
   sense:
-    image: ghcr.io/snadboy/sense-and-cents:8da445d6e24e8a2160647049dd0b770714aadcd1
+    image: ghcr.io/snadboy/sense-and-cents:1f06f3f39caaec89d2f31a183db80ca54cce448d
     container_name: sense-and-cents
     restart: unless-stopped
     depends_on:
@@ -24,6 +24,10 @@ services:
       - KUMA_PUSH_URL=${KUMA_PUSH_URL:-}
       # Claude reads attached statements (empty = attach only)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # review queue suggestions (empty = defaults: claude-sonnet-5-5, 150 groups/run, 25/request)
+      - SUGGEST_MODEL=${SUGGEST_MODEL:-}
+      - SUGGEST_MAX_GROUPS=${SUGGEST_MAX_GROUPS:-}
+      - SUGGEST_BATCH_SIZE=${SUGGEST_BATCH_SIZE:-}
       - FILES_DIR=/data/files
     volumes:
       # attached statements (personal financial documents): back up with sense-db

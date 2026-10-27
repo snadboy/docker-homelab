@@ -17,6 +17,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |
 | bedrock | 11 | hawser-edge agent | **stirling-pdf only** — see the warning below |
 | fetch | 12 | hawser-edge agent | sabnzbd |
+| edge | 14 | hawser-edge agent | cloudflare-plex, cloudflare-overseerr |
 
 > **Retired 2026-07:** Traefik and the **cadre** VM (106, pve-maxwell, stopped, onboot=0).
 > All ingress is Tailscale VIP services (`*.swallow-spectrum.ts.net`, managed by DockTail
@@ -24,12 +25,12 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 > gone — do not re-add it. `snadboy.revp.*` compose labels are inert leftovers.
 > zigbee2mqtt moved off cadre: house → utilities, laundry + office → edge.
 
-> ⚠️ **edge (VM 120, pve-euler) is NOT in Dockhand** — no environment, no agent
-> (verified 2026-10-27; Dockhand's "hawser-edge"/"edge-agent" is the agent connection
-> type, not this VM). Its stacks — `cloudflare-plex`, `cloudflare-overseerr` and the
-> retired, stopped `zigbee2mqtt-{office,laundry}` — run from a plain copy in
-> `~/docker-homelab/` on edge. **Pushing a change to them deploys nothing:** scp the
-> compose file over and `docker compose pull && docker compose up -d` there.
+> **edge (VM 120, pve-euler) joined Dockhand 2026-10-27** as env 14 (hawser agent,
+> named volume `hawser_stacks`). Only the two Cloudflare tunnels are git stacks (ids 40/41,
+> `TUNNEL_TOKEN` held as a secret stack env var). The retired `zigbee2mqtt-{office,laundry}`
+> are deliberately **not** registered — auto-update would start them. Dockhand's
+> "hawser-edge"/"edge-agent" is the agent connection type, not this VM. The old hand-run
+> copies in `~/docker-homelab/` on edge are stale; don't `compose up` from there.
 
 > ⚠️ **`pwa-appserver`, `windmill` and `pulse` are NOT Dockhand stacks** (verified
 > 2026-09-21 against Dockhand's real DB — this table previously claimed they were).

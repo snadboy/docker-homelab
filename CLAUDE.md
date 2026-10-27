@@ -31,6 +31,11 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 > are deliberately **not** registered — auto-update would start them. Dockhand's
 > "hawser-edge"/"edge-agent" is the agent connection type, not this VM. The old hand-run
 > copies in `~/docker-homelab/` on edge are stale; don't `compose up` from there.
+> **No docktail on edge** (removed 2026-10-27): nothing there is published as a Tailscale
+> service, and it sat unhealthy on an orphaned `/run/tailscale` mount. edge is also not in
+> `docktail_hosts`. If edge ever needs to publish a service, add it to that group and run
+> `tailscaled-runtime-dir.yml` *before* starting docktail. The old compose dir is parked at
+> `~/docker-homelab/docktail.removed-20261027` on edge.
 
 > ⚠️ **`pwa-appserver`, `windmill` and `pulse` are NOT Dockhand stacks** (verified
 > 2026-09-21 against Dockhand's real DB — this table previously claimed they were).

@@ -953,18 +953,31 @@ function fold(forced){
  allBtn.querySelector('.i-fold').hidden=all;
  allBtn.querySelector('.i-unfold').hidden=!all;
 }
+// A service's name matches anywhere (`arr` finds sonarr); the rest of its text
+// only at the start of a word, so `edge` finds the VM and not pkdb's "knowledge".
+const reEsc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function guestStat(a,m,t,hit){
+ const st=a.querySelector('.tstat');if(!st||!a.dataset.g)return;
+ if(st.dataset.s===undefined)st.dataset.s=st.textContent;
+ const base=(a.querySelector('.tdesc').textContent+' '+st.dataset.s).toLowerCase();
+ const g=m&&t&&!a.dataset.name.includes(t)&&!hit(base)?a.dataset.g.split('|').filter(hit):[];
+ st.textContent=g.length?g.join(', '):st.dataset.s;st.title=st.textContent;
+}
 function apply(){
  const t=q.value.trim().toLowerCase();let total=0;const per={};target=null;
+ const re=t?new RegExp('(^|[^a-z0-9])'+reEsc(t)):null;
+ const hit=k=>re.test(k);
+ const tileHit=a=>a.dataset.name.includes(t)||hit(a.dataset.k);
  secs.forEach(s=>{
   const tiles=[...s.querySelectorAll('.tile')];
   // A section-name (or old hub-name) hit expands the section ONLY when no row
   // inside it matched -- otherwise `arr` drags plex and sabnzbd in just because
   // the old hub was called servarr, while `proxmox` (no service is called that)
   // still shows the nodes instead of nothing.
-  const rowHit=!!t&&tiles.some(a=>a.dataset.k.includes(t));
+  const rowHit=!!t&&tiles.some(tileHit);
   const useAll=!!t&&!rowHit&&s.dataset.k.includes(t);
   let shown=0;
-  tiles.forEach(a=>{const m=!t||useAll||a.dataset.k.includes(t);a.hidden=!m;a.classList.remove('hit');if(m)shown++;});
+  tiles.forEach(a=>{const m=!t||useAll||tileHit(a);a.hidden=!m;a.classList.remove('hit');guestStat(a,m,t,hit);if(m)shown++;});
   per[s.dataset.cat]=shown;total+=shown;
   const vis=shown>0&&(cat==='all'||cat===s.dataset.cat);
   s.hidden=!vis;
@@ -1297,14 +1310,15 @@ def _hub_containers():
 def _live_stats():
     """Numbers for the tiles and section headers, from what the collectors gathered.
 
-    Returns (tiles, summary, inventory):
+    Returns (tiles, summary, inventory, guests):
       tiles     {service: (text, tone)}   the stat beside a tile's name
       summary   {heading: [(value, label, tone)]}   totals in a section's header
       inventory {heading: (hub, value)}   the button that opens a modal
+      guests    {node: ["VM edge", ...]}  a PVE node's guests, so search finds them
     tone is "" (plain), "ok", "warn", "bad" or "mute". Anything a collector could not
     reach is simply left out, so its tile shows no stat rather than a wrong one.
     """
-    tiles, summary, inventory = {}, {}, {}
+    tiles, summary, inventory, guests = {}, {}, {}, {}
 
     status = (HUB_DATA.get("servarr") or {}).get("status")
     if status:
@@ -1370,6 +1384,7 @@ def _live_stats():
                 tiles[nd["name"]] = ("unreachable", "bad")
                 continue
             ng = len(nd["guests"])
+            guests[nd["name"]] = [f"{g[0]} {g[2]}" for g in nd["guests"]]
             off = sum(1 for g in nd["guests"] if g[3] != "running")
             tiles[nd["name"]] = (f"{ng} guest{'' if ng == 1 else 's'}" + (f" · {off} off" if off else ""),
                                  "warn" if off else "")
@@ -1404,7 +1419,7 @@ def _live_stats():
             (f"{reach}/{len(hosts)}", "Docker hosts", "ok" if reach == len(hosts) else "bad")]
         inventory["Containers & monitoring"] = ("containers", f"{running}/{len(rows)}")
 
-    return tiles, summary, inventory
+    return tiles, summary, inventory, guests
 
 HUB_BUILDERS = {"proxmox": _hub_proxmox, "containers": _hub_containers}
 
@@ -1459,7 +1474,7 @@ def render_home():
     # from whether a hub VIP exists -- that is what lets the hub VIPs be retired
     # without the drill-downs disappearing with them.
     hubs = {n: h for n in HUB_ORDER for h in [HUB_BUILDERS[n]()] if h}
-    stats, summaries, inventories = _live_stats()
+    stats, summaries, inventories, node_guests = _live_stats()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %Z").strip()
     host = os.uname().nodename
 
@@ -1485,8 +1500,12 @@ def render_home():
         stat_html = (f'<span class="tstat{" " + tone if tone else ""}" title="{html.escape(stat)}">'
                      f'{html.escape(stat)}</span>') if stat else ""
         # The stat is searchable too: `leaving`, `off` or `unreachable` finds tiles.
+        # So are a PVE node's guests (data-g): `edge` finds euler, and the stat
+        # then names the guest that matched.
+        guests = node_guests.get(name, [])
+        gattr = f' data-g="{html.escape("|".join(guests).lower())}"' if guests else ""
         return (f'<a class="tile{"" if ok else " off"}" href="https://{name}.{TS}" data-name="{html.escape(name)}" '
-                f'data-k="{html.escape((name + " " + desc + " " + stat).lower())}">{_ico(slug, name)}'
+                f'data-k="{html.escape(" ".join([name, desc, stat] + guests).lower())}"{gattr}>{_ico(slug, name)}'
                 f'<span class="tbody"><span class="trow"><span class="tname">{html.escape(name)}</span>{stat_html}</span>'
                 f'<span class="tdesc">{html.escape(desc)}</span></span>'
                 f'<span class="tend">{tag}<span class="d d-{"ok" if ok else "mute"}" '

@@ -14,7 +14,6 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 |------|-----------------|------------|------------|
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub |
 | arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
-| edge | — | hawser-edge agent | zigbee2mqtt-laundry, zigbee2mqtt-office |
 | plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |
 | bedrock | 11 | hawser-edge agent | **stirling-pdf only** — see the warning below |
 | fetch | 12 | hawser-edge agent | sabnzbd |
@@ -24,6 +23,13 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 > labels / ts-static-serves). The `*.isnadboy.com` wildcard DNS record is intentionally
 > gone — do not re-add it. `snadboy.revp.*` compose labels are inert leftovers.
 > zigbee2mqtt moved off cadre: house → utilities, laundry + office → edge.
+
+> ⚠️ **edge (VM 120, pve-euler) is NOT in Dockhand** — no environment, no agent
+> (verified 2026-10-27; Dockhand's "hawser-edge"/"edge-agent" is the agent connection
+> type, not this VM). Its stacks — `cloudflare-plex`, `cloudflare-overseerr` and the
+> retired, stopped `zigbee2mqtt-{office,laundry}` — run from a plain copy in
+> `~/docker-homelab/` on edge. **Pushing a change to them deploys nothing:** scp the
+> compose file over and `docker compose pull && docker compose up -d` there.
 
 > ⚠️ **`pwa-appserver`, `windmill` and `pulse` are NOT Dockhand stacks** (verified
 > 2026-09-21 against Dockhand's real DB — this table previously claimed they were).

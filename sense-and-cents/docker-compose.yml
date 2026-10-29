@@ -9,7 +9,7 @@
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
   sense:
-    image: ghcr.io/snadboy/sense-and-cents:b88c3d8377260dc8dbea8e5ea8f253fd419367af
+    image: ghcr.io/snadboy/sense-and-cents:1d23e716866e83b97ed2a6becf625d218b8e7573
     container_name: sense-and-cents
     restart: unless-stopped
     depends_on:

@@ -530,7 +530,7 @@ HOME_CATEGORIES = [
                            "media", "unas-able", "unas-baker"]),
     ("Automation & workflows", ["semaphore", "windmill"]),
     ("Apps & personal", ["sbtodos", "pkdb", "pkdb-app", "pwa", "claude", "aoe", "actual",
-                         "firefly", "firefly-import", "sense", "simplefin", "termix", "pdf"]),
+                         "firefly", "firefly-import", "cents", "simplefin", "termix", "pdf"]),
     ("Games", ["cubeloop", "loopsort", "squadblitz", "crowncrush", "hearts", "sbsave"]),
 ]
 
@@ -604,7 +604,7 @@ HOME_META = {
     "actual":               ("actual-budget", "Actual Budget"),
     "firefly":              ("firefly-iii", "Firefly III"),
     "firefly-import":       ("firefly-iii", "Firefly III data importer"),
-    "sense":                (None, "Sense and Cents - household finance"),
+    "cents":                (None, "Cents and Sensibility - household finance"),
     "termix":               (None, "Web terminal"),
     "pdf":                  ("stirling-pdf", "Stirling PDF tools"),
     "cubeloop":             ("https://cubeloop.swallow-spectrum.ts.net/icons/icon-192.png", "SB Cube Loop — loop-sort puzzle"),

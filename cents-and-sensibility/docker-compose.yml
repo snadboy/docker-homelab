@@ -1,22 +1,22 @@
-# Sense and Cents: household finance (SimpleFIN -> Postgres -> FastAPI).
-# Source: https://github.com/snadboy/sense-and-cents (private; utilities is logged in to ghcr).
+# Cents and Sensibility (was Sense and Cents until 2026-11-01): household finance (SimpleFIN -> Postgres -> FastAPI).
+# Source: https://github.com/snadboy/cents-and-sensibility (private; utilities is logged in to ghcr).
 #
 # Deployed BY HAND on utilities from the ~/docker-homelab clone (like firefly-iii):
-#   cd ~/docker-homelab && git pull && cd sense-and-cents && docker compose up -d
+#   cd ~/docker-homelab && git pull && cd cents-and-sensibility && docker compose up -d
 # Secrets live in .env next to this file (see .env.example), never in git.
 # Tailscale only: no host port. DockTail proxies straight to the container IP, so the
 # app and uploaded statements are not reachable from the LAN (port 5020 closed 2026-10-23).
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
-  sense:
-    image: ghcr.io/snadboy/sense-and-cents:71339a895d7a0f96504d886b4725d93609a588f5
-    container_name: sense-and-cents
+  cents:
+    image: ghcr.io/snadboy/cents-and-sensibility:6fa62e69953bd09020ead2377eb5a17173da76b9
+    container_name: cents-and-sensibility
     restart: unless-stopped
     depends_on:
-      sense-db:
+      cents-db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql+psycopg://sense:${DB_PASSWORD}@sense-db:5432/sense
+      - DATABASE_URL=postgresql+psycopg://sense:${DB_PASSWORD}@cents-db:5432/sense
       - SIMPLEFIN_ACCESS_URL=${SIMPLEFIN_ACCESS_URL}
       - EXCLUDE_ACCOUNTS=${EXCLUDE_ACCOUNTS:-}
       - SYNC_TIME=${SYNC_TIME:-05:30}
@@ -39,15 +39,15 @@ services:
       retries: 3
     labels:
       - "docktail.service.enable=true"
-      - "docktail.service.name=sense"
+      - "docktail.service.name=cents"
       - "docktail.service.port=8000"
       - "docktail.service.service-port=443"
     networks:
-      - sense-internal
+      - cents-internal
 
-  sense-db:
+  cents-db:
     image: postgres:16-alpine
-    container_name: sense-db
+    container_name: cents-db
     restart: unless-stopped
     environment:
       - POSTGRES_DB=sense
@@ -61,12 +61,13 @@ services:
     volumes:
       - sense-db:/var/lib/postgresql/data
     networks:
-      - sense-internal
+      - cents-internal
 
 networks:
-  sense-internal:
-    name: sense-internal
+  cents-internal:
+    name: cents-internal
 
+# the data keeps its original names (database, user and volumes 'sense'): renaming them means moving the data
 volumes:
   sense-db:
     name: sense-db

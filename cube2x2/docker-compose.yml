@@ -7,7 +7,7 @@
 # VERSION in the app's web/sw.js so installed PWAs pick it up.
 services:
   cube2x2:
-    image: ghcr.io/snadboy/cube2x2:sha-d6ca2e7
+    image: ghcr.io/snadboy/cube2x2:sha-6181315
     container_name: cube2x2
     restart: unless-stopped
     environment:

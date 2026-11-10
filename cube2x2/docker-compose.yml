@@ -1,0 +1,26 @@
+# 2x2 Solver: animated beginner-method 2x2 cube walkthrough, from a scramble or a
+# photographed cube (three.js PWA on FastAPI).
+# Source: https://github.com/snadboy/cube2x2 (private; bedrock is logged in to ghcr).
+#
+# Pinned to a build, NOT :latest -- Dockhand only redeploys on a git change, so to ship
+# a new version bump this tag to the new cube2x2 build (sha-<7-char commit>) and bump
+# VERSION in the app's web/sw.js so installed PWAs pick it up.
+services:
+  cube2x2:
+    image: ghcr.io/snadboy/cube2x2:sha-9b9b5ad
+    container_name: cube2x2
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      # named, not a bind: the image runs as uid 1000 and a fresh named volume keeps
+      # /app/logs owned by it
+      - cube2x2-logs:/app/logs
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=cube"
+      - "docktail.service.port=8000"
+      - "docktail.service.service-port=443"
+
+volumes:
+  cube2x2-logs:

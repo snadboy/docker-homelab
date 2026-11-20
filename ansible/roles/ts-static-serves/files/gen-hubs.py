@@ -341,20 +341,21 @@ def collect_containers():
 # exited on `edge`), and their VIP service definitions were deleted, so the cards
 # were advertising links that could not resolve. Do not re-add them — see
 # ~/projects/docs/thread-matter.md / the Z2M estate note.
+# basement removed 2026-11-20: its SLZB-MR1U coordinator went off the network
+# 2026-11-03 and was retired; its only device (the SDR ZBMicro) left 2026-11-04.
 Z2M_INSTANCES = [
     ("zigbee2mqtt-upstairs", "utilities", 8082, "zigbee2mqtt-upstairs"),
-    ("zigbee2mqtt-basement", "utilities", 8086, "zigbee2mqtt-basement"),
 ]
 
 # SLZB radios: (label, model, ip, coordinator tcp port). Laundry sits on the
 # 192.168.10.0/24 VLAN, not the main LAN - the advertiser can still reach it.
 # (label, model, ip, coordinator tcp port, role). Physical locations confirmed by the
 # user 2026-09-01 - HA's area labels for these are WRONG and must not be trusted.
-# The SLZB-06M spares and the SLZB-06Mg24U were physically removed 2026-10-02; the
-# two MR1Us below are the only SLZB radios left in the house.
+# The SLZB-06M spares and the SLZB-06Mg24U were physically removed 2026-10-02, and
+# the basement (laundry) MR1U was retired 2026-11-20; the upstairs MR1U is the only
+# SLZB radio left in the house.
 SLZB_RADIOS = [
     ("slzb-mr1u-upstairs", "SLZB-MR1U", "192.168.86.130", 7638, "upstairs (office) - coordinator, ch 20"),
-    ("slzb-mr1u-basement", "SLZB-MR1U", "192.168.86.245", 7638, "basement (laundry) - coordinator, ch 25, PoE"),
 ]
 
 def _icmp(ip):
@@ -515,8 +516,7 @@ CATEGORY_HUBS = {
 HUB_DATA = {}
 
 HOME_CATEGORIES = [
-    ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "zigbee2mqtt-basement",
-                           "slzb-upstairs", "slzb-basement",
+    ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "slzb-upstairs",
                            "homelab-bar", "trmnl"]),
     ("Media", ["plex", "plex-recent", "jellyfin", "tautulli", "sonarr", "radarr",
                "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
@@ -549,12 +549,10 @@ HOME_LINKS = {
 HOME_META = {
     "ha":                   ("home-assistant", "Home Assistant"),
     "zigbee2mqtt-upstairs": ("zigbee2mqtt", "Z2M — upstairs (office) coordinator"),
-    "zigbee2mqtt-basement": ("zigbee2mqtt", "Z2M — basement (laundry) coordinator"),
-    # The adapter hardware behind those two Z2M servers (SLZB-OS web UI). Blurbs
+    # The adapter hardware behind that Z2M server (SLZB-OS web UI). Blurbs
     # are explicit because a missing HOME_META entry falls back to showing where
     # the service runs, which renders as a bare IP.
     "slzb-upstairs":        (None, "SLZB-MR1U radio — office (Zigbee + Thread)"),
-    "slzb-basement":        (None, "SLZB-MR1U radio — laundry (Zigbee)"),
     "homelab-bar":          (None, "RPi rack-panel dashboard"),
     "trmnl":                (None, "BYOS TRMNL e-ink server"),
     "plex":                 ("plex", "Plex Media Server"),

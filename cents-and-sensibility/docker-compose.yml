@@ -9,7 +9,7 @@
 # Pinned to a build SHA, not :latest; bump the tag to ship a new version.
 services:
   cents:
-    image: ghcr.io/snadboy/cents-and-sensibility:7b7a040814a8c985a5b8ad44097d142a2dcffcf9
+    image: ghcr.io/snadboy/cents-and-sensibility:36193ec730ef0876f4c79674bbf4131760043969
     container_name: cents-and-sensibility
     restart: unless-stopped
     depends_on:

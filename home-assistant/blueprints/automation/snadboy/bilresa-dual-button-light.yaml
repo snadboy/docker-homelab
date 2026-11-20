@@ -1,0 +1,210 @@
+blueprint:
+  name: BILRESA Dual Button Light
+  description: >-
+    Control a light with an IKEA BILRESA (E2489) dual button remote via Matter.
+
+    Single tap steps through brightness presets: the LARGE button steps up
+    (off/below-preset -> preset%, at-or-above-preset -> 100%) and the SMALL
+    button steps down (above-preset -> preset%, at-or-below-preset -> off).
+
+    Press-and-hold ramps brightness smoothly: LARGE up, SMALL down. Ramp uses
+    instant micro-steps (no transition) because Tapo/Matter bulbs ignore the
+    transition duration and fade at a fixed slow rate — instant steps track
+    cleanly and avoid stutter. Release stops the ramp at the current level.
+
+    Pick the two "Button" event entities of the BILRESA device.
+  domain: automation
+  author: snadboy
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    buttons:
+      name: BILRESA buttons
+      icon: mdi:remote
+      input:
+        large_button:
+          name: Large button
+          description: Event entity of the large button — usually "Button (1)"
+          selector:
+            entity:
+              domain: event
+              integration: matter
+        small_button:
+          name: Small button
+          description: Event entity of the small button — usually "Button (2)"
+          selector:
+            entity:
+              domain: event
+              integration: matter
+    light:
+      name: Light
+      icon: mdi:lightbulb
+      input:
+        target_light:
+          name: Light(s) to control
+          selector:
+            entity:
+              domain: light
+              multiple: true
+    settings:
+      name: Settings
+      icon: mdi:cog
+      collapsed: true
+      input:
+        preset_pct:
+          name: Low preset / threshold
+          description: >-
+            The low brightness preset, and the threshold that decides tap
+            direction. Large tap: below this -> this; at/above -> 100%.
+            Small tap: above this -> this; at/below -> off.
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 99
+              step: 1
+              unit_of_measurement: "%"
+        step_pct:
+          name: Hold step size
+          description: Brightness change per micro-step while holding
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 25
+              step: 1
+              unit_of_measurement: "%"
+        step_delay:
+          name: Hold step interval
+          description: Seconds between micro-steps while holding (smaller = faster ramp)
+          default: 0.3
+          selector:
+            number:
+              min: 0.1
+              max: 1
+              step: 0.05
+              unit_of_measurement: s
+        dim_floor_pct:
+          name: Hold dim floor
+          description: Press-and-hold dim stops here instead of turning off (use the small tap to turn off).
+          default: 1
+          selector:
+            number:
+              min: 1
+              max: 50
+              step: 1
+              unit_of_measurement: "%"
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  lights: !input target_light
+  preset_pct: !input preset_pct
+  step_pct: !input step_pct
+  step_delay: !input step_delay
+  dim_floor_pct: !input dim_floor_pct
+
+triggers:
+  - trigger: state
+    entity_id: !input large_button
+    id: large
+  - trigger: state
+    entity_id: !input small_button
+    id: small
+
+conditions:
+  # Ignore availability flaps and restarts — only react to real button events
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none
+         and trigger.to_state.state not in ['unknown', 'unavailable']
+         and trigger.from_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable'] }}
+
+actions:
+  - variables:
+      event_type: "{{ trigger.to_state.attributes.event_type }}"
+      # Current brightness of the target as 0-100%, or 0 when off
+      cur_pct: >-
+        {% set bs = expand(lights) | selectattr('state', 'eq', 'on')
+             | map(attribute='attributes.brightness') | map('int', 0) | list %}
+        {{ ((bs | max) / 2.55) | round(0) | int if bs else 0 }}
+  - choose:
+      # LARGE single tap — step up the ladder
+      - conditions:
+          - condition: trigger
+            id: large
+          - condition: template
+            value_template: "{{ event_type == 'multi_press_1' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ cur_pct < preset_pct }}"
+            then:
+              - action: light.turn_on
+                target:
+                  entity_id: !input target_light
+                data:
+                  brightness_pct: "{{ preset_pct }}"
+            else:
+              - action: light.turn_on
+                target:
+                  entity_id: !input target_light
+                data:
+                  brightness_pct: 100
+      # SMALL single tap — step down the ladder
+      - conditions:
+          - condition: trigger
+            id: small
+          - condition: template
+            value_template: "{{ event_type == 'multi_press_1' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ cur_pct > preset_pct }}"
+            then:
+              - action: light.turn_on
+                target:
+                  entity_id: !input target_light
+                data:
+                  brightness_pct: "{{ preset_pct }}"
+            else:
+              - action: light.turn_off
+                target:
+                  entity_id: !input target_light
+      # LARGE hold — smooth ramp up via instant micro-steps
+      - conditions:
+          - condition: trigger
+            id: large
+          - condition: template
+            value_template: "{{ event_type == 'long_press' }}"
+        sequence:
+          - repeat:
+              count: "{{ [ ((100 - cur_pct) / step_pct) | round(0, 'ceil') | int, 1 ] | max }}"
+              sequence:
+                - action: light.turn_on
+                  target:
+                    entity_id: !input target_light
+                  data:
+                    brightness_pct: "{{ [ cur_pct + step_pct * repeat.index, 100 ] | min }}"
+                - delay: "{{ step_delay }}"
+      # SMALL hold — smooth ramp down via instant micro-steps
+      - conditions:
+          - condition: trigger
+            id: small
+          - condition: template
+            value_template: "{{ event_type == 'long_press' }}"
+        sequence:
+          - repeat:
+              count: "{{ [ ((cur_pct - dim_floor_pct) / step_pct) | round(0, 'ceil') | int, 1 ] | max }}"
+              sequence:
+                - action: light.turn_on
+                  target:
+                    entity_id: !input target_light
+                  data:
+                    brightness_pct: "{{ [ cur_pct - step_pct * repeat.index, dim_floor_pct ] | max }}"
+                - delay: "{{ step_delay }}"
+    # long_release matches no branch: with mode: restart, the release event
+    # simply cancels a running ramp. Steps are instant, so the light is
+    # already at the last commanded level — no explicit "freeze" needed.

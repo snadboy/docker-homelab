@@ -22,6 +22,8 @@ services:
       - SYNC_TIME=${SYNC_TIME:-05:30}
       - TZ=America/Chicago
       - KUMA_PUSH_URL=${KUMA_PUSH_URL:-}
+      # tailnet logins allowed in (comma-separated); everyone else, and tagged devices, get a 403
+      - ALLOWED_USERS=${ALLOWED_USERS:-}
       # Claude reads attached statements (empty = attach only)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       # review queue suggestions (empty = defaults: claude-sonnet-5-5, 150 groups/run, 25/request)

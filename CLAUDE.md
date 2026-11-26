@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/snadboy/docker-homelab (main)
 **Local:** `/home/snadboy/projects/docker-homelab`
-**Last Updated:** 2026-07-29
+**Last Updated:** 2026-11-26
 
 ---
 
@@ -13,7 +13,7 @@ Stacks are managed by **Dockhand** (hawser agents on each host). Push to git →
 | Host | Dockhand Env ID | Connection | Key Stacks |
 |------|-----------------|------------|------------|
 | utilities | 1 ("Utilities") | local socket — Dockhand runs on utilities itself, no agent needed | semaphore, uptime-kuma, dockhand, gotify, homepage, beszel hub |
-| arr | 3 | hawser-edge agent | sonarr, radarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
+| arr | 3 | hawser-edge agent | sonarr, radarr, lidarr, prowlarr, overseerr, tautulli, agregarr, tracearr, bazarr, maintainerr, wizarr |
 | plex | 8 | hawser-edge agent | plex, transcoding-gpu-benchmark |
 | bedrock | 11 | hawser-edge agent | **stirling-pdf only** — see the warning below |
 | fetch | 12 | hawser-edge agent | sabnzbd |
@@ -148,6 +148,17 @@ Deploy is then: copy `pwa-appserver/docker-compose.yml` to
 - ⚠️ **It contends with Plex for that same iGPU.** The benchmark saturates the GPU by design, so a run will degrade or stall live Plex hardware transcodes. Run it when nobody is watching.
 - ⚠️ **Exposure is the STATIC serve path, not DockTail** — plex-lxc has no Tailscale node and no docktail agent. `gpu-benchmark` lives in `ansible/roles/ts-static-serves/defaults/main.yml` targeting `http://192.168.86.40:8088`, advertised by tsvc-able / tsvc-baker (same as `plex` itself). The service name was kept across the move so the URL, the `ts-svc: gpu-benchmark` Kuma monitor and the servarr hub card all survived.
 - The servarr hub probes it with a direct LAN `http://192.168.86.40:8088/` call from the advertiser (`_http_up` in `gen-hubs.py`), not over SSH like the docker-host apps — there is no Tailscale node to SSH into.
+
+**lidarr** (`lidarr/docker-compose.yml`) — music manager, the Sonarr/Radarr counterpart (added 2026-11-26)
+- `lscr.io/linuxserver/lidarr:latest` (3.1.6 at install), port **8686**, external volume `lidarr-data`. Dockhand env **3** (arr), git_stacks id **43**. DockTail service `lidarr.swallow-spectrum.ts.net`.
+- Root folder `/music` = `/mnt/media/Music` on arr = `/volume1/multimedia/Music` on syn-media (33 artist folders, ripped CDs from 2019). **The existing library was NOT imported** at install — adding artists is what makes Lidarr monitor and download, so that was left as a deliberate choice.
+- Download client: SABnzbd via the Tailscale Service on 443 + SSL, same as Sonarr/Radarr, category **`audio`** (SAB's stock category; there is no `music` category). No remote path mapping: `/downloads` is the same share in both containers.
+- Indexers come from **Prowlarr** (application id 8, full sync, categories 3000-3060). Only NZBFinder and NZBgeek carry audio; AnimeTosho is not synced.
+- API is **v1**, not v3 (`/api/v1/...`). Key: see shareables .env `LIDARR_API_KEY`, `LIDARR_URL`.
+- **Explicit network subnet `10.201.0.0/24`** in the compose, so this stack did not take a slot from the bridge-pool countdown below. Reuse the next `10.201.x.0/24` for further arr stacks until `default-address-pools` is set.
+- On the servarr hub (Managers card, queue count) and the home index via `gen-hubs.py`.
+- **Seerr (the `overseerr` container, v3.5.2) has no Lidarr support** — `GET /api/v1/settings/lidarr` is 404 where `/settings/radarr` is 401. Music cannot be requested through it.
+- **Not done:** no `ts-svc: lidarr` Kuma monitor and no entry in the HA outage-push automation yet.
 
 **wizarr** (`wizarr/docker-compose.yml`) — Plex invitation / user-onboarding portal (added 2026-08-02)
 - `ghcr.io/wizarrrr/wizarr:latest` (v2026.7.1), container port **5690** → host 5690 on arr, external volume `wizarr-data` mounted at `/data` (the entrypoint creates `/data/database`). TS service `wizarr.swallow-spectrum.ts.net` (DockTail); `APP_URL` is baked into compose so generated invite links use the tailnet name.
@@ -293,7 +304,7 @@ Plus `plex-stereo` every 6 h on the Plex LXC (adds AAC 2.0 to new multichannel-o
 media), and Maintainerr's own auto-delete rules. Check
 `~/projects/docs/scheduled-work.md` before concluding anything was manual.
 
-**Skills:** `/sonarr` · `/radarr` · `/sabnzbd` · `/overseerr` · `/agregarr` ·
+**Skills:** `/sonarr` · `/radarr` · (no `/lidarr` skill yet) · `/sabnzbd` · `/overseerr` · `/agregarr` ·
 `/arr-monitor` · `/arr-troubleshoot` · `/plex-dedup` · `/tautulli` · `/dockhand`
 
 **Never do this**

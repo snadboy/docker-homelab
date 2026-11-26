@@ -23,6 +23,7 @@ PBS_NODES = [("alexandria", "pbs-alexandria"), ("svalbard", "pbs-svalbard")]
 SERVARR = [
     ("Indexers",   [("Prowlarr", "prowlarr", "prowlarr")]),
     ("Managers",   [("Sonarr", "sonarr", "sonarr"), ("Radarr", "radarr", "radarr"),
+                    ("Lidarr", "lidarr", "lidarr"),
                     ("Bazarr", "bazarr", "bazarr"), ("Agregarr", "agregarr", None)]),
     ("Requests",   [("Overseerr", "overseerr", "overseerr")]),
     ("Access",     [("Wizarr", "wizarr", "wizarr")]),  # Plex invites / user onboarding
@@ -204,6 +205,7 @@ code(){ curl -s -o /dev/null -w '%{http_code}' -m5 "http://localhost:$1/" 2>/dev
 num(){ grep -oE "\"$1\" *: *\"?[0-9]+" | head -1 | grep -oE '[0-9]+$'; }
 k=$(xk sonarr); q=$(curl -s -m6 "http://localhost:8989/api/v3/queue?apikey=$k" | num totalRecords); echo "sonarr|$(code 8989)|queue=${q}"
 k=$(xk radarr); q=$(curl -s -m6 "http://localhost:7878/api/v3/queue?apikey=$k" | num totalRecords); echo "radarr|$(code 7878)|queue=${q}"
+k=$(xk lidarr); q=$(curl -s -m6 "http://localhost:8686/api/v1/queue?apikey=$k" | num totalRecords); echo "lidarr|$(code 8686)|queue=${q}"
 echo "prowlarr|$(code 9696)|"
 echo "bazarr|$(code 6767)|"
 echo "agregarr|$(code 7171)|"
@@ -236,7 +238,7 @@ def _rate(kbps):
     return f"{kb/1024:.1f} MB/s" if kb >= 1024 else f"{kb:.0f} KB/s"
 
 def _fmt_stat(svc, kv):
-    if svc in ("sonarr", "radarr"):
+    if svc in ("sonarr", "radarr", "lidarr"):
         q = kv.get("queue")
         return f"{q} in queue" if q not in (None, "") else ""
     if svc == "overseerr":
@@ -519,7 +521,7 @@ HOME_CATEGORIES = [
     ("Home & automation", ["ha", "zigbee2mqtt-upstairs", "slzb-upstairs",
                            "homelab-bar", "trmnl"]),
     ("Media", ["plex", "plex-recent", "jellyfin", "tautulli", "sonarr", "radarr",
-               "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
+               "lidarr", "prowlarr", "bazarr", "sabnzbd", "overseerr", "agregarr", "tracearr",
                "maintainerr", "wizarr", "gpu-benchmark"]),
     ("Virtualization & backup", ["euler", "gauss", "maxwell", "faraday",
                                  "alexandria", "svalbard", "pve-api"]),
@@ -561,6 +563,7 @@ HOME_META = {
     "tautulli":             ("tautulli", "Plex stats and history"),
     "sonarr":               ("sonarr", "TV"),
     "radarr":               ("radarr", "Movies"),
+    "lidarr":               ("lidarr", "Music"),
     "prowlarr":             ("prowlarr", "Indexers"),
     "bazarr":               ("bazarr", "Subtitles"),
     "sabnzbd":              ("sabnzbd", "Usenet downloader"),
@@ -1341,7 +1344,7 @@ def _live_stats():
                 tone = "warn"
             tiles[svc] = (text, tone)
         n, n_up = len(status), sum(1 for v in status.values() if v.get("up"))
-        queues = [q for q in (kvint("sonarr", "queue"), kvint("radarr", "queue")) if q is not None]
+        queues = [q for q in (kvint("sonarr", "queue"), kvint("radarr", "queue"), kvint("lidarr", "queue")) if q is not None]
         queue = sum(queues) if queues else None
         pending, leaving = kvint("overseerr", "pending"), kvint("maintainerr", "leaving")
         summary["Media"] = [
